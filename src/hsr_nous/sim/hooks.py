@@ -305,6 +305,14 @@ class HookRuntime:
             m = st2.modifiers.get(str(modifier_id))
             return float(m.stacks) if m is not None else 0.0
 
+        def modifier_duration(target: Any, modifier_id: str) -> float:
+            # 目标持有的 modifier 剩余时长；目标解析与 stacks/has_modifier 同通道，查无返回 0。
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
+            m = st2.modifiers.get(str(modifier_id))
+            return float(m.duration) if m is not None else 0.0
+
         def sum_stacks(modifier_id: Any, side: Any = "enemy") -> float:
             # 当前在场单位指定 modifier 的总层数（720-Degree Review 跨 Grunt 聚合首实例）。
             side_name = str(side)
@@ -725,6 +733,7 @@ class HookRuntime:
             return float(value) if isinstance(value, (int, float)) else 0.0
 
         return {"stacks": stacks, "sum_stacks": sum_stacks,
+                "modifier_duration": modifier_duration,
                 "enemies_alive": enemies_alive, "has_modifier": has_modifier,
                 "count": count, "unique_sources": unique_sources,
                 "mechanic_chance": mechanic_chance, "actor_type_of": actor_type_of,
@@ -982,7 +991,12 @@ class HookRuntime:
                     raise ValueError(
                         f"set_dynamic_value 目标 {t2.actor.actor_id!r} 无敌方 policy 运行态")
                 value = self._hook_amount(eff["amount"], st, payload, target_st=t2)
-                runtime.setdefault("dynamic_values", {})[key] = float(value)
+                if key == "current_phase":
+                    if not float(value).is_integer():
+                        raise ValueError(f"current_phase 必须为整数，得到 {value!r}")
+                    runtime["current_phase"] = int(value)
+                else:
+                    runtime.setdefault("dynamic_values", {})[key] = float(value)
         elif t == "refund_bank":
             # bank 返还（16 §16.12 糖展开原语）：<rid>_bank → <rid> clamp 回填——
             # ③防递归：from_bank=True（不回流）；多出作废（银行全清，钉字面口径）
@@ -1564,7 +1578,7 @@ class HookRuntime:
                         modifier_id=mod.modifier_id, modifier_type=mod.modifier_type,
                         debuff_kind=mod.debuff_kind, control_kind=mod.control_kind,
                         dot_element=mod.dot_element, dispellable=mod.dispellable, kind=kind,
-                        name=mod.name)
+                        name=mod.name, source=mod.source_id)
                     ctx = self._hook_ctx(st, payload)
                     ctx["mod"] = mod_ns
                     if self._engine._expr.evaluate(

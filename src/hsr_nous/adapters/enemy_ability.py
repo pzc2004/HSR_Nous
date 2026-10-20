@@ -14,32 +14,76 @@ from hsr_nous.sim_schema.config_ai import dynamic_value_hash
 
 #: 纯表现/动画节点。含机制 TaskList 的动画节点不在此列，由专门处理器递归。
 IGNORED_TASK_TYPES = frozenset({
+    "RPG.GameCore.AnimSetParameter",
+    "RPG.GameCore.ChangeTargetModifierEffectState",
+    "RPG.GameCore.CharacterChangePhase",
     "RPG.GameCore.DamagePerformFinish",
+    "RPG.GameCore.DebugLog",
     "RPG.GameCore.GlobalMainIntensityEffect",
+    "RPG.GameCore.HideLevelStage",
+    "RPG.GameCore.HideModifierEffect",
     "RPG.GameCore.LookAt",
+    "RPG.GameCore.MakeCharacterHUDVisible",
+    "RPG.GameCore.ModifierAttachEffect",
     "RPG.GameCore.MoveToTargetList",
+    "RPG.GameCore.MoveToTargetPosition",
+    "RPG.GameCore.PlayTimeline",
+    "RPG.GameCore.RadialBlurCurveEffect",
     "RPG.GameCore.RadialBlurEffect",
     "RPG.GameCore.RemoveEffect",
+    "RPG.GameCore.ResetHeadLookAt",
+    "RPG.GameCore.ScaleCharacterModel",
+    "RPG.GameCore.SetAttachmentScale",
+    "RPG.GameCore.SetAttachmentVisibility",
+    "RPG.GameCore.SetBattleAchievement",
     "RPG.GameCore.SetEffectAnimSpeed",
+    "RPG.GameCore.SetEffectAnimatorTrigger",
+    "RPG.GameCore.SetEntityPosition",
     "RPG.GameCore.SetEntityVisible",
+    "RPG.GameCore.SetMonsterEnergyBarState",
+    "RPG.GameCore.SetSimulationSpeedEnable",
+    "RPG.GameCore.SetSkillTargetFormationByPos",
+    "RPG.GameCore.SetTeamFormation",
+    "RPG.GameCore.SetTeamRootOffset",
+    "RPG.GameCore.ShowBattleUI",
+    "RPG.GameCore.ShowEntityFloatMessage",
     "RPG.GameCore.ShowSkillTextDialog",
+    "RPG.GameCore.ShowUIPage",
     "RPG.GameCore.SkillExecutionStart",
     "RPG.GameCore.SkillPerformFinish",
+    "RPG.GameCore.SyncMonsterLightByCameraDir",
+    "RPG.GameCore.TargetTimeSlow",
     "RPG.GameCore.TriggerEffect",
     "RPG.GameCore.TriggerAnimState",
+    "RPG.GameCore.TriggerSound",
     "RPG.GameCore.VCameraConfigChange",
+    "RPG.GameCore.WaitAnimEvent",
     "RPG.GameCore.WaitAnimState",
     "RPG.GameCore.WaitSecond",
+    "RPG.GameCore.WaitTimelineFinish",
 })
 
 #: 注册表即节点覆盖矩阵；值为 AbilityCompiler 方法名。
 TASK_HANDLERS = {
     "RPG.GameCore.AddModifier": "_compile_add_modifier",
     "RPG.GameCore.DamageByAttackProperty": "_compile_damage",
+    "RPG.GameCore.DefineDynamicValue": "_compile_define_dynamic",
     "RPG.GameCore.ForceKill": "_compile_force_kill",
+    "RPG.GameCore.IncludeTaskListTemplate": "_compile_include_tasks",
     "RPG.GameCore.LoseHPByRatio": "_compile_lose_hp",
+    "RPG.GameCore.LoopExecuteTaskList": "_compile_loop",
+    "RPG.GameCore.PredicateTaskList": "_compile_predicate_tasks",
+    "RPG.GameCore.Retarget": "_compile_retarget",
+    "RPG.GameCore.RemoveModifier": "_compile_remove_modifier",
+    "RPG.GameCore.RemoveSelfModifier": "_compile_remove_self_modifier",
     "RPG.GameCore.SetActionDelay": "_compile_action_delay",
     "RPG.GameCore.SetDieImmediately": "_compile_set_die",
+    "RPG.GameCore.SetDynamicValue": "_compile_define_dynamic",
+    "RPG.GameCore.SetDynamicValueByAddValue": "_compile_dynamic_add",
+    "RPG.GameCore.SetDynamicValueByProperty": "_compile_property_value",
+    "RPG.GameCore.SetMonsterPhase": "_compile_monster_phase",
+    "RPG.GameCore.SummonMonster": "_compile_summon_monster",
+    "RPG.GameCore.SwitchCaseByDynamicValue": "_compile_switch",
     "RPG.GameCore.TriggerAbility": "_compile_trigger_ability",
     "RPG.GameCore.TriggerAnimStateWithMove": "_compile_animation_events",
     "RPG.GameCore.TurnInsertAbility": "_compile_trigger_ability",
@@ -50,6 +94,12 @@ EVENT_HANDLERS = {
 }
 
 _ELEMENT = {"Thunder": "thunder", "Lightning": "thunder"}
+
+
+def _is_camera_ability(name: Any) -> bool:
+    text = str(name or "")
+    return (text.endswith("_Camera") or "_Camera_" in text
+            or ("_Camera" in text and text.rsplit("_Camera", 1)[1].isdigit()))
 
 
 def _element(raw: Any) -> str:
@@ -180,8 +230,20 @@ class _Context:
     mode: str
     skill: Dict[str, Any]
     event: str = "on_action"
+    condition: str = "true"
     damages: List[Dict[str, Any]] = field(default_factory=list)
     effects: List[Dict[str, Any]] = field(default_factory=list)
+    pre_effects: List[Dict[str, Any]] = field(default_factory=list)
+    seen_damage: bool = False
+    conditional_damage: bool = False
+    hit_effects: List[Dict[str, Any]] = field(default_factory=list)
+    loop_depth: int = 0
+    retarget: Any = None
+    retarget_damage: bool = False
+    retarget_damage_records: List[Dict[str, Any]] = field(default_factory=list)
+    current_modifier: str = ""
+    dynamic_writes: set[str] = field(default_factory=set)
+    summons: List[Dict[str, Any]] = field(default_factory=list)
     unsupported: List[Dict[str, str]] = field(default_factory=list)
     handled: List[str] = field(default_factory=list)
 
@@ -196,17 +258,23 @@ class AbilityCompiler:
         sources: Dict[str, Any],
         *,
         semantics: Optional[Dict[str, Dict[str, Any]]] = None,
+        level: int = 80,
     ) -> None:
         self.enemy_id = str(enemy_id)
+        self.level = int(level)
         self.skills = {str(s.get("trigger_key")): s for s in skills if s.get("trigger_key")}
         self.sources = sources
         self.config = sources.get("character_config") or {}
         self.abilities = sources.get("abilities") or {}
         self.modifiers = sources.get("modifiers") or {}
         self.semantics = semantics or {}
+        self.custom_values = sources.get("custom_values") or {}
+        self.custom_value_tags = sources.get("custom_value_tags") or []
+        self.monster_template_id = str(sources.get("monster_template_id") or self.enemy_id)
         self.config_skills = {
             str(s.get("Name")): s for s in self.config.get("SkillList") or [] if s.get("Name")
         }
+        self.dynamic_keys, self.written_dynamic_keys = self._scan_dynamic_keys()
         self.dynamic_symbols = self._character_symbols()
 
     def _character_symbols(self) -> Dict[int, Any]:
@@ -228,6 +296,42 @@ class AbilityCompiler:
         issue = {"path": path, "node_type": node_type, "reason": reason}
         if issue not in ctx.unsupported:
             ctx.unsupported.append(issue)
+
+    @staticmethod
+    def _add_effect(ctx: _Context, effect: Dict[str, Any]) -> None:
+        if ctx.condition != "true":
+            effect = {**effect, "_condition": ctx.condition}
+        if ctx.loop_depth and effect.get("effect_type") == "apply_modifier":
+            if effect not in ctx.hit_effects:
+                ctx.hit_effects.append(effect)
+            return
+        if (ctx.mode == "action" and not ctx.seen_damage
+                and effect.get("effect_type") != "set_hp_to_percent"):
+            ctx.pre_effects.append(effect)
+        else:
+            ctx.effects.append(effect)
+
+    @staticmethod
+    def _make_hooks(ctx: _Context, base_condition: str, *,
+                    event: Optional[str] = None,
+                    effects: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+        groups: List[Tuple[str, List[Dict[str, Any]]]] = []
+        selected = ctx.effects if effects is None else effects
+        for effect in selected:
+            condition = str(effect.get("_condition") or "true")
+            clean = {key: value for key, value in effect.items() if key != "_condition"}
+            if not groups or groups[-1][0] != condition:
+                groups.append((condition, []))
+            groups[-1][1].append(clean)
+        hooks = []
+        for condition, grouped in groups:
+            hooks.append({
+                "event": event or ctx.event,
+                "condition": base_condition if condition == "true"
+                else f"({base_condition}) and ({condition})",
+                "effects": grouped,
+            })
+        return hooks
 
     def _value(self, raw: Any, ctx: _Context, path: str,
                symbols: Optional[Dict[int, Any]] = None) -> Any:
@@ -263,7 +367,7 @@ class AbilityCompiler:
 
     def _compile_ability(self, name: str, ctx: _Context, path: str,
                          stack: Tuple[str, ...]) -> None:
-        if name.endswith("_Camera"):
+        if _is_camera_ability(name):
             return
         ability = self.abilities.get(name)
         if ability is None:
@@ -282,13 +386,724 @@ class AbilityCompiler:
         if not name:
             self._issue(ctx, path, str(task.get("$type")), "缺 AbilityName")
             return
-        self._compile_ability(str(name), ctx, path, stack)
+        flags = set(task.get("AbortBehaviorFlags") or [])
+        if flags:
+            previous = ctx.condition
+            conditions = []
+            for flag in sorted(flags):
+                if flag in {"STAT_CTRL", "STAT_Confine"}:
+                    conditions.append("not controlled($self.actor_id)")
+                elif flag == "Break":
+                    conditions.append("not broken_of($self.actor_id)")
+                else:
+                    self._issue(ctx, path, "AbortBehaviorFlags", f"未注册中止旗标：{flag}")
+                    return
+            ctx.condition = self._and_condition(previous, " and ".join(conditions))
+            self._compile_ability(str(name), ctx, path, stack)
+            ctx.condition = previous
+        else:
+            self._compile_ability(str(name), ctx, path, stack)
 
     def _compile_animation_events(self, task: Dict[str, Any], ctx: _Context,
                                   path: str, stack: Tuple[str, ...]) -> None:
         for index, event in enumerate(task.get("EventList") or []):
             self._compile_tasks(event.get("TaskList") or [], ctx,
                                 f"{path}/EventList/{index}/TaskList", stack)
+
+    def _compile_include_tasks(self, task: Dict[str, Any], ctx: _Context,
+                               path: str, stack: Tuple[str, ...]) -> None:
+        if set(task) - {"$type", "Name"}:
+            self._issue(ctx, path, str(task.get("$type")), "带参数 TaskListTemplate 尚未注册")
+            return
+        template_name = str(task.get("Name") or "")
+        owner = next((name for name in reversed(stack) if name in self.abilities), "")
+        container = (self.abilities.get(owner) if owner
+                     else self.modifiers.get(ctx.current_modifier) or {})
+        rows = container.get("TaskListTemplate") or []
+        template = next((row for row in rows if row.get("Name") == template_name), None)
+        if template is None:
+            self._issue(ctx, path, str(task.get("$type")),
+                        f"局部 TaskListTemplate 缺失或属未收编全局作用域：{template_name}")
+            return
+        scope = owner or ctx.current_modifier or "<unknown>"
+        key = f"{scope}/TaskListTemplate/{template_name}"
+        if key in stack:
+            self._issue(ctx, path, str(task.get("$type")), f"TaskListTemplate 循环引用：{key}")
+            return
+        self._compile_tasks(template.get("TaskList") or [], ctx, f"{path}:{key}", stack + (key,))
+
+    def _compile_loop(self, task: Dict[str, Any], ctx: _Context,
+                      path: str, stack: Tuple[str, ...]) -> None:
+        count = self._number(task.get("MaxLoopCount"), ctx, f"{path}/MaxLoopCount")
+        if count is None or count < 1 or int(count) != count:
+            self._issue(ctx, path, str(task.get("$type")), "循环次数必须是正整数")
+            return
+        for index in range(int(count)):
+            ctx.loop_depth += 1
+            self._compile_tasks(task.get("TaskList") or [], ctx,
+                                f"{path}/Loop/{index}/TaskList", stack)
+            ctx.loop_depth -= 1
+
+    def _presentation_only(self, tasks: Iterable[Dict[str, Any]]) -> bool:
+        """条件分支是否纯表现；只有整棵子树都可证明无机制效果时才可忽略."""
+        for task in tasks or []:
+            node_type = str(task.get("$type") or "")
+            if node_type in IGNORED_TASK_TYPES:
+                continue
+            if node_type == "RPG.GameCore.TriggerAbility":
+                raw = task.get("AbilityName")
+                name = (raw or {}).get("Value") if isinstance(raw, dict) else raw
+                if _is_camera_ability(name):
+                    continue
+                return False
+            if node_type == "RPG.GameCore.TriggerAnimStateWithMove":
+                if all(self._presentation_only(event.get("TaskList") or [])
+                       for event in task.get("EventList") or []):
+                    continue
+                return False
+            if node_type == "RPG.GameCore.PredicateTaskList":
+                if (self._presentation_only(task.get("SuccessTaskList") or [])
+                        and self._presentation_only(task.get("FailedTaskList") or [])):
+                    continue
+                return False
+            return False
+        return True
+
+    def _visual_tasks(self, tasks: Iterable[Dict[str, Any]]) -> bool:
+        for task in tasks or []:
+            node_type = str(task.get("$type") or "")
+            if node_type in IGNORED_TASK_TYPES or node_type in {
+                    "RPG.GameCore.RemoveModifier", "RPG.GameCore.RemoveSelfModifier"}:
+                continue
+            if node_type == "RPG.GameCore.TriggerAbility":
+                raw = task.get("AbilityName")
+                name = (raw or {}).get("Value") if isinstance(raw, dict) else raw
+                if _is_camera_ability(name):
+                    continue
+                return False
+            if node_type == "RPG.GameCore.TriggerAnimStateWithMove":
+                if all(self._visual_tasks(event.get("TaskList") or [])
+                       for event in task.get("EventList") or []):
+                    continue
+                return False
+            if node_type == "RPG.GameCore.PredicateTaskList":
+                if (self._visual_tasks(task.get("SuccessTaskList") or [])
+                        and self._visual_tasks(task.get("FailedTaskList") or [])):
+                    continue
+                return False
+            return False
+        return True
+
+    def _visual_modifier(self, definition: Dict[str, Any]) -> bool:
+        return all(self._visual_tasks(callback.get("CallbackConfig") or [])
+                   for callback in definition.get("_CallbackList") or [])
+
+    def _modifier_used_in_predicates(self, name: str) -> bool:
+        def walk(value: Any) -> bool:
+            if isinstance(value, dict):
+                if value.get("$type") == "RPG.GameCore.ByIsContainModifier":
+                    raw = value.get("ModifierName")
+                    wanted = raw.get("Value") if isinstance(raw, dict) else raw
+                    if str(wanted) == name:
+                        return True
+                return any(walk(child) for child in value.values())
+            if isinstance(value, list):
+                return any(walk(child) for child in value)
+            return False
+        return any(walk(ability) for ability in self.abilities.values())
+
+    @staticmethod
+    def _and_condition(left: str, right: str) -> str:
+        if left == "true":
+            return right
+        if right == "true":
+            return left
+        return f"({left}) and ({right})"
+
+    @staticmethod
+    def _negate_condition(expression: str) -> str:
+        return f"not {expression}" if " " not in expression else f"not ({expression})"
+
+    @staticmethod
+    def _compare_operator(raw: Any) -> Optional[str]:
+        return {"Equal": "==", "NotEqual": "!=", "Greater": ">",
+                "GreaterEqual": ">=", "Less": "<", "LessEqual": "<="}.get(str(raw or "Equal"))
+
+    @staticmethod
+    def _predicate_target(alias: str) -> Optional[str]:
+        return {"ParamEntity": "$it", "AbilityTargetEntity": "$event.target",
+                "Caster": "$self.actor_id", "ModifierOwnerEntity": "$self.actor_id",
+                "": "$self.actor_id"}.get(alias)
+
+    def _static_monster_predicate(self, predicate: Dict[str, Any]) -> Optional[bool]:
+        """仅供属性编译期选支：怪物 ID 及其布尔组合可在生成期唯一求值."""
+        node_type = str((predicate or {}).get("$type") or "")
+        if node_type == "RPG.GameCore.ByCompareMonsterID":
+            if self._alias(predicate) not in {"", "Caster", "ModifierOwnerEntity"}:
+                return None
+            raw = predicate.get("TargetMonsterID")
+            if isinstance(raw, dict) and raw.get("IsDynamic"):
+                return None
+            value = _fixed(raw)
+            if not _is_number(value):
+                return None
+            result = str(self.enemy_id) == str(int(value))
+            return not result if predicate.get("Inverse") else result
+        if node_type in {"RPG.GameCore.ByAnd", "RPG.GameCore.ByAny"}:
+            values = [self._static_monster_predicate(child)
+                      for child in predicate.get("PredicateList") or []]
+            if not values or any(value is None for value in values):
+                return None
+            return all(values) if node_type.endswith("ByAnd") else any(values)
+        if node_type == "RPG.GameCore.ByNot":
+            value = self._static_monster_predicate(predicate.get("Predicate") or {})
+            return None if value is None else not value
+        return None
+
+    def _predicate_expr(self, predicate: Dict[str, Any], ctx: _Context,
+                        path: str) -> Optional[str]:
+        node_type = str((predicate or {}).get("$type") or "")
+        alias = self._alias(predicate)
+        target = self._predicate_target(alias)
+        if node_type == "RPG.GameCore.ByCompareDynamicValue":
+            if target is None:
+                self._issue(ctx, path, node_type, f"动态值谓词目标未注册：{alias}")
+                return None
+            raw_key = predicate.get("DynamicKey") or {}
+            key = raw_key.get("Value") if isinstance(raw_key, dict) else raw_key
+            compare = self._number(predicate.get("CompareValue"), ctx, f"{path}/CompareValue")
+            operator = self._compare_operator(predicate.get("CompareType"))
+            if not key or compare is None or operator is None:
+                self._issue(ctx, path, node_type, "动态值键/比较值/比较符未注册")
+                return None
+            if str(key) in ctx.dynamic_writes:
+                self._issue(ctx, path, node_type, "同一技能写入后读取动态值会命中旧事件快照")
+                return None
+            namespace = "$self" if target == "$self.actor_id" else target
+            return f"dynamic_of({namespace}, '{key}') {operator} {compare}"
+        if node_type == "RPG.GameCore.ByCompareMonsterPhase":
+            if alias not in {"", "Caster", "ModifierOwnerEntity"}:
+                self._issue(ctx, path, node_type, f"阶段谓词目标未注册：{alias}")
+                return None
+            if "current_phase" in ctx.dynamic_writes:
+                self._issue(ctx, path, node_type, "同一技能递增后读取阶段会命中旧事件快照")
+                return None
+            compare = self._number(predicate.get("CompareValue"), ctx, f"{path}/CompareValue")
+            operator = self._compare_operator(predicate.get("CompareType"))
+            if compare is None or operator is None:
+                self._issue(ctx, path, node_type, "阶段比较值/比较符未注册")
+                return None
+            return f"dynamic_of($self, 'current_phase') {operator} {compare}"
+        if node_type == "RPG.GameCore.ByCompareMonsterID":
+            if alias not in {"", "Caster", "ModifierOwnerEntity"}:
+                self._issue(ctx, path, node_type, f"怪物 ID 谓词目标未注册：{alias}")
+                return None
+            monster_id = self._number(predicate.get("TargetMonsterID"), ctx, f"{path}/TargetMonsterID")
+            if monster_id is None:
+                return None
+            expr = "1 == 1" if str(self.enemy_id) == str(int(monster_id)) else "1 == 0"
+            return self._negate_condition(expr) if predicate.get("Inverse") else expr
+        if node_type == "RPG.GameCore.ByCompareMonsterTemplateID":
+            if alias not in {"", "Caster", "ModifierOwnerEntity"}:
+                self._issue(ctx, path, node_type, f"怪物模板 ID 谓词目标未注册：{alias}")
+                return None
+            monster_id = self._number(
+                predicate.get("TargetMonsterTemplateID"), ctx, f"{path}/TargetMonsterTemplateID")
+            if monster_id is None:
+                return None
+            expr = "1 == 1" if self.monster_template_id == str(int(monster_id)) else "1 == 0"
+            return self._negate_condition(expr) if predicate.get("Inverse") else expr
+        if node_type == "RPG.GameCore.ByCheckCustomValueBool":
+            if target is None:
+                self._issue(ctx, path, node_type, f"CustomValueBool 目标未注册：{alias}")
+                return None
+            raw_key = predicate.get("Key") or {}
+            if raw_key.get("Value") is not None:
+                tags = [str(raw_key["Value"])]
+            else:
+                try:
+                    key_hash = int(raw_key.get("Hash"))
+                except (TypeError, ValueError):
+                    self._issue(ctx, path, node_type, "CustomValueBool 缺有效 Key.Hash")
+                    return None
+                tags = [tag for tag in self.custom_value_tags
+                        if dynamic_value_hash(str(tag)) == key_hash]
+            if len(tags) != 1 or "'" in tags[0]:
+                self._issue(ctx, path, node_type, "CustomValueBool 哈希缺失、冲突或含非法字符")
+                return None
+            expr = f"in_group({target}, '{tags[0]}')"
+            return self._negate_condition(expr) if predicate.get("Inverse") else expr
+        if node_type == "RPG.GameCore.ByCompareModifierValue":
+            raw_name = predicate.get("ModifierName")
+            name = (raw_name.get("Value") if isinstance(raw_name, dict) else raw_name) \
+                or ctx.current_modifier
+            value_type = predicate.get("ValueType")
+            if value_type not in {"Layer", "LifeTime"} or target is None or not name:
+                self._issue(ctx, path, node_type, "modifier 数值类型/目标/名称未注册")
+                return None
+            compare = self._number(predicate.get("CompareValue"), ctx, f"{path}/CompareValue")
+            operator = self._compare_operator(predicate.get("CompareType"))
+            if compare is None or operator is None:
+                self._issue(ctx, path, node_type, "modifier 数值比较值/比较符未注册")
+                return None
+            definition = self.modifiers.get(str(name)) or {}
+            modifier_id = self._modifier_id(
+                str(name), definition, str(ctx.skill.get("skill_id") or self.enemy_id))
+            reader = "stacks" if value_type == "Layer" else "modifier_duration"
+            return f"{reader}({target}, '{modifier_id}') {operator} {compare}"
+        if node_type == "RPG.GameCore.ByContainBehaviorFlag":
+            if target is None:
+                self._issue(ctx, path, node_type, f"BehaviorFlag 目标未注册：{alias}")
+                return None
+            flag = predicate.get("Flag")
+            if flag == "Shield":
+                expr = f"has_shield({target})"
+            elif flag in {"STAT_CTRL", "STAT_Confine"}:
+                expr = f"controlled({target})"
+            elif flag == "Break":
+                expr = f"broken_of({target})"
+            else:
+                self._issue(ctx, path, node_type, f"未注册 BehaviorFlag：{flag}")
+                return None
+            return self._negate_condition(expr) if predicate.get("Inverse") else expr
+        if node_type == "RPG.GameCore.ByIsContainModifier":
+            if target is None:
+                self._issue(ctx, path, node_type, f"modifier 谓词目标未注册：{alias}")
+                return None
+            raw = predicate.get("ModifierName") or {}
+            name = raw.get("Value") if isinstance(raw, dict) else raw
+            definition = self.modifiers.get(str(name)) or {}
+            modifier_id = self._modifier_id(
+                str(name), definition, str(ctx.skill.get("skill_id") or self.enemy_id))
+            expr = f"has_modifier({target}, '{modifier_id}')"
+            return self._negate_condition(expr) if predicate.get("Inverse") else expr
+        if node_type == "RPG.GameCore.ByCompareTarget":
+            other = str((predicate.get("CompareType") or {}).get("Alias") or "")
+            if target is None or other != "Caster":
+                self._issue(ctx, path, node_type, f"目标比较未注册：{alias} / {other}")
+                return None
+            return (f"{target} != $self.actor_id" if predicate.get("Inverse")
+                    else f"{target} == $self.actor_id")
+        if node_type == "RPG.GameCore.ByCompareHPRatio":
+            if target is None:
+                self._issue(ctx, path, node_type, f"HP 比例谓词目标未注册：{alias}")
+                return None
+            compare = self._number(predicate.get("CompareValue"), ctx, f"{path}/CompareValue")
+            operator = self._compare_operator(predicate.get("CompareType"))
+            if compare is None or operator is None:
+                self._issue(ctx, path, node_type, "HP 比例比较值/比较符未注册")
+                return None
+            return f"({target}.hp / {target}.max_hp) {operator} {compare}"
+        if node_type in {"RPG.GameCore.ByCompareCharacterNumber", "RPG.GameCore.ByCompareTargetCount"}:
+            if predicate.get("Predicate"):
+                self._issue(ctx, path, node_type, "带过滤的人数谓词尚未注册")
+                return None
+            if node_type == "RPG.GameCore.ByCompareTargetCount" and not predicate.get("AliveOnly"):
+                self._issue(ctx, path, node_type, "只支持 AliveOnly=true 的存活人数谓词")
+                return None
+            count_expr = {
+                "AllTeammate": "enemies_alive()", "AllDarkTeam": "enemies_alive()",
+                "AllTeamMember": "enemies_alive()",
+                "AllDarkTeam - Caster": "(enemies_alive() - 1)",
+                "AllEnemy": "count($team.actor_id)", "AllLightTeam": "count($team.actor_id)",
+            }.get(alias)
+            raw_compare = (predicate.get("CompareNumber")
+                           if node_type == "RPG.GameCore.ByCompareCharacterNumber"
+                           else predicate.get("Number"))
+            compare = self._number(raw_compare, ctx, f"{path}/CompareNumber")
+            operator = self._compare_operator(predicate.get("CompareType"))
+            if count_expr is None or compare is None or operator is None:
+                self._issue(ctx, path, node_type, f"人数谓词目标/比较值未注册：{alias}")
+                return None
+            return f"{count_expr} {operator} {compare}"
+        if node_type in {"RPG.GameCore.ByAnd", "RPG.GameCore.ByAny"}:
+            joiner = " and " if node_type.endswith("ByAnd") else " or "
+            parts = [self._predicate_expr(child, ctx, f"{path}/PredicateList/{index}")
+                     for index, child in enumerate(predicate.get("PredicateList") or [])]
+            if not parts or any(part is None for part in parts):
+                return None
+            return "(" + joiner.join(parts) + ")"
+        if node_type == "RPG.GameCore.ByNot":
+            child = self._predicate_expr(predicate.get("Predicate") or {}, ctx, f"{path}/Predicate")
+            return self._negate_condition(child) if child is not None else None
+        self._issue(ctx, path, node_type or "<missing $type>", "未注册条件谓词")
+        return None
+
+    def _damage_only_records(self, tasks: Iterable[Dict[str, Any]], ctx: _Context,
+                             path: str, stack: Tuple[str, ...]) -> Optional[List[Dict[str, Any]]]:
+        """在隔离上下文中验证任务树是否仅含主动伤害，不污染正式效果/写入状态."""
+        if ctx.condition != "true":
+            return None
+        probe = _Context(
+            mode=ctx.mode, skill=ctx.skill, event=ctx.event, condition=ctx.condition,
+            loop_depth=ctx.loop_depth, retarget=ctx.retarget,
+            current_modifier=ctx.current_modifier, dynamic_writes=set(ctx.dynamic_writes),
+        )
+        self._compile_tasks(tasks, probe, path, stack)
+        if (probe.unsupported or probe.effects or probe.pre_effects or probe.hit_effects
+                or probe.summons or probe.retarget_damage or probe.conditional_damage
+                or probe.dynamic_writes != ctx.dynamic_writes or not probe.damages):
+            return None
+        return probe.damages
+
+    def _compile_predicate_tasks(self, task: Dict[str, Any], ctx: _Context,
+                                 path: str, stack: Tuple[str, ...]) -> None:
+        if (self._presentation_only(task.get("SuccessTaskList") or [])
+                and self._presentation_only(task.get("FailedTaskList") or [])):
+            return
+        predicate = self._predicate_expr(task.get("Predicate") or {}, ctx, f"{path}/Predicate")
+        if predicate is None:
+            self._issue(ctx, path, str(task.get("$type")), "条件谓词或分支未完整支持")
+            return
+        success = self._damage_only_records(
+            task.get("SuccessTaskList") or [], ctx, f"{path}/SuccessTaskList", stack)
+        failed = self._damage_only_records(
+            task.get("FailedTaskList") or [], ctx, f"{path}/FailedTaskList", stack)
+        if success is not None and success == failed:
+            # 两支规范化伤害完全相同：条件与伤害无关，只在原位置结算一次。
+            self._compile_tasks(task.get("SuccessTaskList") or [], ctx,
+                                f"{path}/SharedDamage", stack)
+            return
+        base = ctx.condition
+        for branch, tasks in (("SuccessTaskList", task.get("SuccessTaskList") or []),
+                              ("FailedTaskList", task.get("FailedTaskList") or [])):
+            condition = predicate if branch == "SuccessTaskList" else self._negate_condition(predicate)
+            ctx.condition = self._and_condition(base, condition)
+            before = len(ctx.damages)
+            self._compile_tasks(tasks, ctx, f"{path}/{branch}", stack)
+            if len(ctx.damages) != before:
+                self._issue(ctx, f"{path}/{branch}", "ConditionalDamage",
+                            "条件伤害尚未由 Action/Hook 时序表达")
+                del ctx.damages[before:]
+        ctx.condition = base
+
+    def _compile_retarget(self, task: Dict[str, Any], ctx: _Context,
+                          path: str, stack: Tuple[str, ...]) -> None:
+        alias = self._alias(task)
+        pool = {"AllTeammate": "enemies", "AllDarkTeam": "enemies",
+                "AllEnemy": "allies", "AllLightTeam": "allies",
+                "CasterSummonedMinions": "enemies"}.get(alias)
+        number = self._number(task.get("MaxNumber"), ctx, f"{path}/MaxNumber") \
+            if "MaxNumber" in task else None
+        if (pool is None or (number is not None and (number < 1 or int(number) != number))):
+            self._issue(ctx, path, str(task.get("$type")), "Retarget 目标池/正整数上限未注册")
+            return
+        # Ability 缺省 MaxNumber 是取全部候选；ConfigAI 的单目标 target_override 限制不适用。
+        spec: Dict[str, Any] = {"pool": pool}
+        if number is not None:
+            spec["take"] = int(number)
+        if alias == "CasterSummonedMinions":
+            spec["where"] = "$it.summoner_id == $self.actor_id"
+        if task.get("ByRandom"):
+            spec["mode"] = "random"
+        predicate = task.get("Predicate")
+        if predicate:
+            predicate_type = str(predicate.get("$type") or "")
+            if predicate_type == "RPG.GameCore.ByIsPropertyValueMinOrMax":
+                compare_alias = self._alias({"TargetType": predicate.get("CompareTargetType")})
+                if (predicate.get("PropertyRatioType") != "HPRatio" or compare_alias != alias
+                        or predicate.get("MinOrMax") not in {"Min", "Max"}):
+                    self._issue(ctx, path, predicate_type, "Retarget 属性极值/比较池未注册")
+                    return
+                spec["order_by"] = (("-" if predicate["MinOrMax"] == "Max" else "")
+                                    + "$it.hp / $it.max_hp")
+            else:
+                where = self._predicate_expr(predicate, ctx, f"{path}/Predicate")
+                if where is None:
+                    self._issue(ctx, path, str(task.get("$type")), "Retarget 谓词未注册")
+                    return
+                if spec.get("where"):
+                    spec["where"] = self._and_condition(spec["where"], where)
+                else:
+                    spec["where"] = where
+        if not self._presentation_only(task.get("FailedTaskList") or []):
+            self._issue(ctx, path, str(task.get("$type")), "Retarget 空候选机制分支未注册")
+            return
+        previous = ctx.retarget
+        before = len(ctx.damages)
+        ctx.retarget = spec
+        self._compile_tasks(task.get("TaskList") or [], ctx, f"{path}/TaskList", stack)
+        if len(ctx.damages) != before:
+            self._issue(ctx, path, str(task.get("$type")), "Retarget 伤害目标尚未接入 Action")
+            del ctx.damages[before:]
+        ctx.retarget = previous
+
+    def _compile_dynamic_add(self, task: Dict[str, Any], ctx: _Context,
+                             path: str, stack: Tuple[str, ...]) -> None:
+        raw_key = task.get("Key") or {}
+        key = raw_key.get("Value") if isinstance(raw_key, dict) else raw_key
+        add = self._number(task.get("AddValue"), ctx, f"{path}/AddValue")
+        minimum = self._number(task.get("Min"), ctx, f"{path}/Min") if "Min" in task else None
+        maximum = self._number(task.get("Max"), ctx, f"{path}/Max") if "Max" in task else None
+        target = self._hook_target(self._alias(task), ctx)
+        if not key or add is None or target != "self":
+            self._issue(ctx, path, str(task.get("$type")), "动态加值键/增量/自指目标未注册")
+            return
+        expression = f"dynamic_of($self, '{key}') + {add}"
+        if minimum is not None:
+            expression = f"max({expression}, {minimum})"
+        if maximum is not None:
+            expression = f"min({expression}, {maximum})"
+        ctx.dynamic_writes.add(str(key))
+        self._add_effect(ctx, {
+            "effect_type": "set_dynamic_value", "target": "self",
+            "dynamic_key": str(key), "amount": expression,
+        })
+
+    def _compile_define_dynamic(self, task: Dict[str, Any], ctx: _Context,
+                                path: str, stack: Tuple[str, ...]) -> None:
+        raw_key = task.get("DynamicKey") or task.get("Key") or {}
+        key = raw_key.get("Value") if isinstance(raw_key, dict) else raw_key
+        raw_value = task["ResetValue"] if "ResetValue" in task else task.get("Value")
+        value = self._number(raw_value, ctx, f"{path}/Value") if raw_value is not None else 0
+        alias = self._alias(task)
+        if not alias and task.get("$type") == "RPG.GameCore.SetDynamicValue":
+            # 上游省略 TargetType 的 SetDynamicValue 由施放者持有；ConfigAI 也从自身读取该键。
+            alias = "Caster"
+        target = self._hook_target(alias, ctx)
+        if not key or value is None or target != "self":
+            self._issue(ctx, path, str(task.get("$type")), "动态键/值/自指目标未注册")
+            return
+        ctx.dynamic_writes.add(str(key))
+        self._add_effect(ctx, {
+            "effect_type": "set_dynamic_value", "target": "self",
+            "dynamic_key": str(key), "amount": value,
+        })
+
+    def _compile_property_value(self, task: Dict[str, Any], ctx: _Context,
+                                path: str, stack: Tuple[str, ...]) -> None:
+        key = str(task.get("DynamicKey") or "")
+        alias = self._alias({"TargetType": task.get("ReadTargetType")})
+        ref = {"Caster": "$self.actor_id", "ModifierOwnerEntity": "$self.actor_id",
+               "AbilityTargetEntity": "$event.target"}.get(alias)
+        stat = {
+            "MaxHP": ("max_hp_of", ""),
+            "CurrentHP": ("hp_of", ""),
+            "BaseAttack": ("base_stat_of", "atk"),
+            "BaseSpeed": ("base_stat_of", "spd"),
+        }.get(task.get("Value"))
+        if not key or ref is None or stat is None:
+            self._issue(ctx, path, str(task.get("$type")),
+                        f"属性动态键/读取目标/属性未注册：{key} / {alias} / {task.get('Value')}")
+            return
+        function, stat_name = stat
+        expression = (f"{function}({ref})" if not stat_name
+                      else f"{function}({ref}, '{stat_name}')")
+        ctx.dynamic_writes.add(key)
+        self._add_effect(ctx, {
+            "effect_type": "set_dynamic_value", "target": "self",
+            "dynamic_key": key, "amount": expression,
+        })
+
+    def _scan_dynamic_keys(self) -> Tuple[set[str], set[str]]:
+        """收集 Ability/Modifier/ConfigAI 全部动态键及所有 Set/Define 写入键."""
+        all_keys: set[str] = set()
+        written_keys: set[str] = set()
+        containers = [*self.abilities.values(), *self.modifiers.values(), self.sources.get("config_ai")]
+
+        def walk(value: Any) -> None:
+            if isinstance(value, dict):
+                node_type = str(value.get("$type") or "")
+                for field in ("DynamicKey", "Key", "ToDynamicKey", "FromDynamicKey"):
+                    raw = value.get(field)
+                    candidate = raw.get("Value") if isinstance(raw, dict) else raw
+                    if candidate is not None and str(candidate):
+                        all_keys.add(str(candidate))
+                        if field != "FromDynamicKey" and node_type.startswith((
+                                "RPG.GameCore.SetDynamicValue", "RPG.GameCore.DefineDynamicValue")):
+                            written_keys.add(str(candidate))
+                for child in value.values():
+                    walk(child)
+            elif isinstance(value, list):
+                for child in value:
+                    walk(child)
+
+        for container in containers:
+            walk(container)
+        return all_keys, written_keys
+
+    def _custom_value_is_readonly(self, name: str) -> bool:
+        return name not in self.written_dynamic_keys
+
+    def _switch_value(self, raw: Any, ctx: _Context, path: str) -> Optional[float]:
+        if not isinstance(raw, dict) or not raw.get("IsDynamic"):
+            return self._number(raw, ctx, path)
+        expr = raw.get("PostfixExpr") or {}
+        hashes = expr.get("DynamicHashes") or []
+        if expr.get("OpCodes") != "AQAR" or expr.get("FixedValues") or len(hashes) != 1:
+            self._issue(ctx, path, "SwitchCaseByDynamicValue", "Switch 只支持 AQAR 单动态值")
+            return None
+        try:
+            key_hash = int(hashes[0])
+        except (TypeError, ValueError):
+            self._issue(ctx, path, "SwitchCaseByDynamicValue", "Switch 哈希无效")
+            return None
+        matches = [(name, value) for name, value in self.custom_values.items()
+                   if dynamic_value_hash(str(name)) == key_hash]
+        hash_names = {name for name in self.dynamic_keys
+                      if dynamic_value_hash(str(name)) == key_hash}
+        if (len(matches) > 1 or len(hash_names) > 1
+                or (matches and key_hash in self.dynamic_symbols)
+                or (matches and any(name != matches[0][0] for name in hash_names))):
+            self._issue(ctx, path, "SwitchCaseByDynamicValue", "动态键/CustomValue 哈希命名空间冲突")
+            return None
+        if key_hash in self.dynamic_symbols:
+            value = self.dynamic_symbols[key_hash]
+            if not _is_number(value):
+                self._issue(ctx, path, "SwitchCaseByDynamicValue", "运行时 Switch 尚未注册")
+                return None
+            return value
+        if not matches:
+            self._issue(ctx, path, "SwitchCaseByDynamicValue", "CustomValue 哈希缺失或冲突")
+            return None
+        name, value = matches[0]
+        if not self._custom_value_is_readonly(name):
+            self._issue(ctx, path, "SwitchCaseByDynamicValue",
+                        f"可变 CustomValue 的运行时 Switch 尚未注册：{name}")
+            return None
+        value = value or 0
+        if not _is_number(value):
+            self._issue(ctx, path, "SwitchCaseByDynamicValue", f"CustomValue 非数值：{name}")
+            return None
+        return value
+
+    def _compile_switch(self, task: Dict[str, Any], ctx: _Context,
+                        path: str, stack: Tuple[str, ...]) -> None:
+        switch_value = self._switch_value(task.get("Switch"), ctx, f"{path}/Switch")
+        if switch_value is None:
+            return
+        cases: List[Tuple[float, List[Dict[str, Any]]]] = []
+        seen = set()
+        for index, row in enumerate(task.get("CaseTaskList") or []):
+            case_value = self._number(row.get("Case"), ctx, f"{path}/CaseTaskList/{index}/Case")
+            if case_value is None:
+                self._issue(ctx, path, "SwitchCaseByDynamicValue", "Case 必须是静态数值")
+                return
+            if case_value in seen:
+                self._issue(ctx, path, "SwitchCaseByDynamicValue", f"Case 值重复：{case_value}")
+                return
+            seen.add(case_value)
+            cases.append((case_value, row.get("TaskList") or []))
+        selected = next((tasks for value, tasks in cases if value == switch_value),
+                        task.get("DefaultTaskList") or [])
+        self._compile_tasks(selected, ctx, f"{path}/Selected", stack)
+
+    def _compile_monster_phase(self, task: Dict[str, Any], ctx: _Context,
+                               path: str, stack: Tuple[str, ...]) -> None:
+        if task.get("SetMode") != "Inc":
+            self._issue(ctx, path, str(task.get("$type")),
+                        f"只支持 SetMode=Inc，得到 {task.get('SetMode')!r}")
+            return
+        ctx.dynamic_writes.add("current_phase")
+        self._add_effect(ctx, {
+            "effect_type": "set_dynamic_value", "target": "self",
+            "dynamic_key": "current_phase",
+            "amount": "dynamic_of($self, 'current_phase') + 1",
+        })
+
+    def _compile_summon_monster(self, task: Dict[str, Any], ctx: _Context,
+                                path: str, stack: Tuple[str, ...]) -> None:
+        rows = task.get("SummonMonsterDataList") or []
+        if not rows:
+            self._issue(ctx, path, str(task.get("$type")), "SummonMonsterDataList 为空")
+            return
+        for index, row in enumerate(rows):
+            raw_id = row.get("MonsterID")
+            if "MonsterIDFromCustomValue" in row:
+                try:
+                    key_hash = int((row.get("MonsterIDFromCustomValue") or {}).get("Hash"))
+                except (TypeError, ValueError):
+                    self._issue(ctx, f"{path}/{index}", "SummonMonster", "CustomValue 哈希缺失")
+                    continue
+                values = [value for name, value in self.custom_values.items()
+                          if dynamic_value_hash(str(name)) == key_hash]
+                if not values or any(value != values[0] for value in values[1:]):
+                    self._issue(ctx, f"{path}/{index}", "SummonMonster",
+                                "CustomValue 怪物 ID 哈希缺失或冲突")
+                    continue
+                raw_id = values[0]
+            monster_id = self._number(raw_id, ctx, f"{path}/{index}/MonsterID")
+            delay = self._number(row.get("DelayRatio", 0), ctx, f"{path}/{index}/DelayRatio")
+            if monster_id is None or delay is None:
+                continue
+            if int(monster_id) != monster_id:
+                self._issue(ctx, f"{path}/{index}", "SummonMonster", "怪物 ID 必须为整数")
+                continue
+            if delay != 0:
+                self._issue(ctx, f"{path}/{index}", "SummonMonster",
+                            "非零召唤 DelayRatio 尚未接入行动时序")
+                continue
+            summon_id = f"{int(monster_id)}__{self.enemy_id}_s{len(ctx.summons) + 1}"
+            ctx.summons.append({
+                "summon_id": summon_id, "enemy_template": str(int(monster_id)),
+                "level": self.level,
+            })
+            self._add_effect(ctx, {"effect_type": "summon", "summon_id": summon_id})
+
+    def _ability_adds_modifier(self, ability_name: str, modifier_name: str,
+                               seen: Optional[set] = None) -> bool:
+        seen = set() if seen is None else seen
+        if ability_name in seen or ability_name not in self.abilities:
+            return False
+        seen.add(ability_name)
+
+        def walk(value: Any) -> bool:
+            if isinstance(value, dict):
+                node_type = str(value.get("$type") or "")
+                if node_type == "RPG.GameCore.AddModifier":
+                    raw = value.get("ModifierName")
+                    name = raw.get("Value") if isinstance(raw, dict) else raw
+                    if str(name) == modifier_name:
+                        return True
+                if node_type in {"RPG.GameCore.TriggerAbility", "RPG.GameCore.TurnInsertAbility"}:
+                    raw = value.get("AbilityName")
+                    child = raw.get("Value") if isinstance(raw, dict) else raw
+                    if child and self._ability_adds_modifier(str(child), modifier_name, seen):
+                        return True
+                return any(walk(child) for child in value.values())
+            if isinstance(value, list):
+                return any(walk(child) for child in value)
+            return False
+
+        return walk(self.abilities[ability_name])
+
+    def _compile_remove_self_modifier(self, task: Dict[str, Any], ctx: _Context,
+                                      path: str, stack: Tuple[str, ...]) -> None:
+        if not ctx.current_modifier:
+            self._issue(ctx, path, str(task.get("$type")), "RemoveSelfModifier 缺少当前 modifier 名")
+            return
+        self._add_effect(ctx, {
+            "effect_type": "remove_modifier", "target": "self",
+            "modifier_id": ctx.current_modifier,
+        })
+
+    def _compile_remove_modifier(self, task: Dict[str, Any], ctx: _Context,
+                                 path: str, stack: Tuple[str, ...]) -> None:
+        raw = task.get("ModifierName")
+        name = (raw or {}).get("Value") if isinstance(raw, dict) else raw
+        if str(name) in {"OneMore", "OneMorePerTurn"} and self.modifiers.get(str(name)) is None:
+            # grant_extra_turn 不产生 modifier 实例，内建 OneMore 清理无需 DSL 状态。
+            return
+        definition = self.modifiers.get(str(name)) or {}
+        target = self._hook_target(self._alias(task), ctx)
+        if target is None:
+            self._issue(ctx, path, str(task.get("$type")),
+                        f"摘除目标未注册：{self._alias(task)}")
+            return
+        trigger = str(ctx.skill.get("trigger_key") or "")
+        entry = str((self.config_skills.get(trigger) or {}).get("EntryAbility") or "")
+        if ("STAT_DOT" in set(definition.get("BehaviorFlagList") or [])
+                and not self._ability_adds_modifier(entry, str(name))):
+            self._issue(ctx, path, str(task.get("$type")), "跨技能 DoT 摘除未能绑定来源技能")
+            return
+        skill_id = str(ctx.skill.get("skill_id") or self.enemy_id)
+        effect = {
+            "effect_type": "remove_modifier", "target": target,
+            "modifier_id": self._modifier_id(str(name), definition, skill_id),
+        }
+        if task.get("OnlyRemoveCasterAdded"):
+            effect["filter"] = "$mod.source == $self.actor_id"
+        self._add_effect(ctx, effect)
 
     @staticmethod
     def _alias(task: Dict[str, Any]) -> str:
@@ -297,7 +1112,9 @@ class AbilityCompiler:
             return str(target.get("Alias") or target.get("TargetType") or "")
         return str(target or "")
 
-    def _hook_target(self, alias: str) -> Any:
+    def _hook_target(self, alias: str, ctx: Optional[_Context] = None) -> Any:
+        if alias == "ParamEntity":
+            return ctx.retarget if ctx is not None else None
         return {
             "Caster": "self",
             "ModifierOwnerEntity": "self",
@@ -306,6 +1123,8 @@ class AbilityCompiler:
             "AllDarkTeam": "all_enemies",
             "AllEnemy": "all_allies",
             "AllLightTeam": "all_allies",
+            "CasterSummonedMinions": {
+                "pool": "enemies", "where": "$it.summoner_id == $self.actor_id"},
             "AbilityTargetAdjoinEntity": {
                 "pool": "allies", "where": "is_adjacent($it, $event.target)"},
         }.get(alias)
@@ -320,6 +1139,9 @@ class AbilityCompiler:
         ratio = self._number(attack.get("DamagePercentage"), ctx, f"{path}/DamagePercentage")
         if ratio is None:
             return
+        ctx.seen_damage = True
+        if ctx.condition != "true":
+            ctx.conditional_damage = True
         record = {
             "alias": alias,
             "ratio": ratio,
@@ -330,8 +1152,21 @@ class AbilityCompiler:
             "stance_value": self._number(attack["StanceValue"], ctx, f"{path}/StanceValue")
             if "StanceValue" in attack else None,
         }
+        if ctx.retarget is not None:
+            ctx.retarget_damage = True
+            ctx.retarget_damage_records.append(record)
+            effect = {
+                "effect_type": "deal_damage", "target": ctx.retarget,
+                "damage_type": record["element"],
+                "scaling_hp" if record["formula"] == "ByMaxHP" else "scaling_atk": ratio,
+                "toughness_dmg": (record["stance_value"] if record["stance_value"] is not None
+                                  else float(ctx.skill.get("sp_hit_base") or 0)
+                                  * (record["stance_ratio"] or 0)),
+            }
+            self._add_effect(ctx, effect)
+            return
         if ctx.mode == "event":
-            target = self._hook_target(alias)
+            target = self._hook_target(alias, ctx)
             if target is None:
                 self._issue(ctx, path, "TargetAlias", f"未注册事件目标别名：{alias}")
                 return
@@ -341,20 +1176,96 @@ class AbilityCompiler:
                 "scaling_hp" if record["formula"] == "ByMaxHP" else "scaling_atk": ratio,
                 "toughness_dmg": record["stance_value"] or 0,
             }
-            ctx.effects.append(effect)
+            self._add_effect(ctx, effect)
         else:
             ctx.damages.append(record)
+
+    def _compile_builtin_modifier(self, name: str, task: Dict[str, Any], ctx: _Context,
+                                  path: str) -> bool:
+        if name not in {"MCommon_Confine", "MCommon_FatigueRatio", "MCommon_CTRL_Crazy",
+                         "MCommon_FastAction", "WMonster_TY_Elite01_00_Skill07_Mark"}:
+            return False
+        target = self._hook_target(self._alias(task), ctx)
+        chance = self._number(task.get("Chance", 1), ctx, f"{path}/Chance")
+        duration = self._number(task.get("LifeTime", 0), ctx, f"{path}/LifeTime")
+        if target is None or chance is None or duration is None:
+            self._issue(ctx, path, "BuiltinModifier", f"内建 modifier 目标/概率/时长未注册：{name}")
+            return True
+        skill_id = str(ctx.skill.get("skill_id") or self.enemy_id)
+        base = {
+            "duration": int(duration), "max_stack": 1, "stack_mode": "refresh", "dispellable": True,
+        }
+        if name == "WMonster_TY_Elite01_00_Skill07_Mark":
+            modifier = {"modifier_id": name, "name": name, "modifier_type": "debuff", **base}
+        elif name == "MCommon_CTRL_Crazy":
+            modifier = {
+                "modifier_id": "ENEMY_OUTRAGE", "name": "Outrage", "modifier_type": "debuff",
+                "debuff_kind": "control", "control_kind": "outrage", **base,
+            }
+        elif name == "MCommon_Confine":
+            modifier = {
+                "modifier_id": f"ENEMY_{skill_id}_IMPRISON", "name": "Imprisonment",
+                "modifier_type": "debuff", "debuff_kind": "control", "control_kind": "imprison",
+                **base,
+            }
+            raw_ratio = (task.get("DynamicValues") or {}).get("MDF_ActionDelayRatio")
+            ratio = self._value(raw_ratio, ctx, f"{path}/MDF_ActionDelayRatio")
+            if ratio is None:
+                return True
+            modifier["on_apply"] = [{
+                "effect_type": "delay_action", "target": "self",
+                "amount": f"({ratio}) * 100" if isinstance(ratio, str) else ratio * 100,
+            }]
+        elif name == "MCommon_FastAction":
+            modifier = {
+                "modifier_id": f"ENEMY_{skill_id}_STORMRIDE", "name": "Stormride",
+                "modifier_type": "buff",
+                "on_apply": [{"effect_type": "immediate_action", "target": "self"}],
+                **base,
+            }
+        else:
+            raw_value = (task.get("DynamicValues") or {}).get("MDF_PropertyValue")
+            value = self._value(raw_value, ctx, f"{path}/MDF_PropertyValue")
+            if value is None:
+                return True
+            modifier = {
+                "modifier_id": f"ENEMY_{skill_id}_WEAKEN", "name": "Weaken",
+                "modifier_type": "debuff",
+                **({"stat_exprs": {"all_dmg": f"-({value})"}} if isinstance(value, str)
+                   else {"stat_effects": {"all_dmg": -value}}),
+                **base,
+            }
+        self._add_effect(ctx, {
+            "effect_type": "apply_modifier", "target": target,
+            "apply_chance": chance, "modifier": modifier,
+        })
+        return True
 
     def _compile_add_modifier(self, task: Dict[str, Any], ctx: _Context,
                               path: str, stack: Tuple[str, ...]) -> None:
         raw = task.get("ModifierName")
         name = (raw or {}).get("Value") if isinstance(raw, dict) else raw
+        if (str(name) == "MCommon_Servant" and self._alias(task) == "CasterSummonedMinions"
+                and self.modifiers.get(str(name)) is None):
+            # 内建 Servant 标记与 summon spec 的 summoner_id 同义，不另造重复 modifier。
+            return
+        if str(name) in {"OneMore", "OneMorePerTurn"} and self.modifiers.get(str(name)) is None:
+            target = self._hook_target(self._alias(task), ctx)
+            if target is None:
+                self._issue(ctx, path, "TargetAlias", "OneMore 目标未注册")
+                return
+            self._add_effect(ctx, {"effect_type": "grant_extra_turn", "target": target})
+            return
+        if self._compile_builtin_modifier(str(name), task, ctx, path):
+            return
         definition = self.modifiers.get(str(name))
         if definition is None:
             self._issue(ctx, path, str(task.get("$type")), f"modifier 定义缺失：{name}")
             return
+        if self._visual_modifier(definition) and not self._modifier_used_in_predicates(str(name)):
+            return
         flags = set(definition.get("BehaviorFlagList") or [])
-        target = self._hook_target(self._alias(task))
+        target = self._hook_target(self._alias(task), ctx)
         if target is None:
             self._issue(ctx, path, "TargetAlias", f"未注册 modifier 目标：{self._alias(task)}")
             return
@@ -365,10 +1276,19 @@ class AbilityCompiler:
             modifier = self._compile_property_modifier(name, task, definition, ctx, path)
         if modifier is None or chance is None:
             return
-        ctx.effects.append({
+        self._add_effect(ctx, {
             "effect_type": "apply_modifier", "target": target,
             "apply_chance": chance, "modifier": modifier,
         })
+
+    @staticmethod
+    def _modifier_id(name: str, definition: Dict[str, Any], skill_id: str) -> str:
+        kind = next((str(flag).split("STAT_DOT_", 1)[1] for flag in
+                     definition.get("BehaviorFlagList") or []
+                     if str(flag).startswith("STAT_DOT_")), "")
+        if "AttackSign" in set(definition.get("BehaviorFlagList") or []):
+            return f"ENEMY_{skill_id}_LOCK_ON"
+        return f"ENEMY_{skill_id}_{kind.upper()}" if kind else name
 
     def _modifier_defaults(self, name: str, task: Dict[str, Any], definition: Dict[str, Any],
                            ctx: _Context, path: str) -> Optional[Dict[str, Any]]:
@@ -387,10 +1307,11 @@ class AbilityCompiler:
         if stack_mode is None:
             self._issue(ctx, path, "ModifierStacking", f"未注册叠加语义：{stacking}")
             return None
+        flags = set(definition.get("BehaviorFlagList") or [])
         return {
             "duration": int(duration), "max_stack": int(maximum), "stacks": int(stacks),
-            "stack_mode": stack_mode,
-            "dispellable": "CannotDispel" not in set(definition.get("BehaviorFlagList") or []),
+            "stack_mode": stack_mode, "dispellable": "CannotDispel" not in flags,
+            **({"remove_on_source_death": True} if "RemoveWhenCasterDead" in flags else {}),
         }
 
     def _compile_dot(self, name: str, task: Dict[str, Any], definition: Dict[str, Any],
@@ -427,15 +1348,17 @@ class AbilityCompiler:
             self._issue(ctx, path, "ModifierDOT", "OnPhase1 缺 DoT DamageByAttackProperty")
             return None
         attack = damage.get("AttackProperty") or {}
-        ratio = self._value(attack.get("DamageValue"), ctx, f"{path}/DOT/DamageValue", symbols)
+        raw_ratio = attack["DamageValue"] if "DamageValue" in attack else attack.get("DamagePercentage")
+        ratio = self._value(raw_ratio, ctx, f"{path}/DOT/DamageValue", symbols)
         if ratio is None:
+            self._issue(ctx, path, "ModifierDOT", "DoT 伤害倍率缺失或无法解析")
             return None
         kind = next((str(flag).split("STAT_DOT_", 1)[1] for flag in
                      definition.get("BehaviorFlagList") or [] if str(flag).startswith("STAT_DOT_")),
                     "dot")
         skill_id = str(ctx.skill.get("skill_id") or self.enemy_id)
         return {
-            "modifier_id": f"ENEMY_{skill_id}_{kind.upper()}",
+            "modifier_id": self._modifier_id(name, definition, skill_id),
             "name": kind.capitalize(), "modifier_type": "dot",
             "dot_element": _element(attack.get("DamageType")),
             "dot_ratio_expr": ratio if isinstance(ratio, str) else str(ratio),
@@ -446,6 +1369,19 @@ class AbilityCompiler:
     def _compile_property_modifier(self, name: str, task: Dict[str, Any],
                                    definition: Dict[str, Any], ctx: _Context,
                                    path: str) -> Optional[Dict[str, Any]]:
+        callbacks = definition.get("_CallbackList") or []
+        if "AttackSign" in set(definition.get("BehaviorFlagList") or []) and all(
+                callback.get("Event") == "OnCreate" and not callback.get("CallbackConfig")
+                for callback in callbacks):
+            defaults = self._modifier_defaults(name, task, definition, ctx, path)
+            if defaults is None:
+                return None
+            defaults["stack_mode"] = "replace"
+            skill_id = str(ctx.skill.get("skill_id") or self.enemy_id)
+            return {
+                "modifier_id": self._modifier_id(name, definition, skill_id),
+                "name": name, "modifier_type": "debuff", "lock_on": True, **defaults,
+            }
         defaults = self._modifier_defaults(name, task, definition, ctx, path)
         if defaults is None:
             return None
@@ -454,34 +1390,77 @@ class AbilityCompiler:
             value = self._value(raw, ctx, f"{path}/DynamicValues/{key}")
             if value is not None:
                 symbols[dynamic_value_hash(str(key))] = value
-        stats: Dict[str, str] = {}
-        supported = False
-        for callback in definition.get("_CallbackList") or []:
-            if callback.get("Event") != "OnStack":
-                continue
-            for item in callback.get("CallbackConfig") or []:
+        stats: Dict[str, Any] = {}
+        toughness_lock = False
+        has_cleanup = False
+        previous_modifier = ctx.current_modifier
+        previous_condition = ctx.condition
+        ctx.current_modifier = name
+
+        def visit_stack(tasks: Iterable[Dict[str, Any]]) -> None:
+            nonlocal toughness_lock
+            for item in tasks:
                 node_type = str(item.get("$type") or "")
-                if node_type == "RPG.GameCore.SetDynamicValueByModifierValue":
+                if node_type == "RPG.GameCore.PredicateTaskList":
+                    branch = self._static_monster_predicate(item.get("Predicate") or {})
+                    if branch is None:
+                        self._issue(ctx, path, node_type, "OnStack 属性分支不能由怪物 ID 静态判定")
+                        continue
+                    visit_stack(item.get("SuccessTaskList" if branch else "FailedTaskList") or [])
+                elif node_type == "RPG.GameCore.SetDynamicValueByModifierValue":
                     if item.get("ValueType") == "Layer":
                         symbols[dynamic_value_hash(str(item.get("DynamicKey")))] = \
                             "max(1, $modifier.stacks)"
                 elif node_type == "RPG.GameCore.StackProperty":
-                    stat = {"AllDamageTypeTakenRatio": "vulnerability"}.get(item.get("Property"))
+                    stat = {
+                        "AllDamageTypeAddedRatio": "all_dmg",
+                        "AllDamageTypeTakenRatio": "vulnerability",
+                        "AttackAddedRatio": "atk_pct",
+                        "SpeedAddedRatio": "spd_pct",
+                        "SpeedDelta": "spd",
+                    }.get(item.get("Property"))
                     if stat is None:
                         self._issue(ctx, path, node_type, f"未注册属性：{item.get('Property')}")
                         continue
                     value = self._value(item.get("PropertyValue"), ctx,
                                         f"{path}/StackProperty/{stat}", symbols)
                     if value is not None:
-                        stats[stat] = value if isinstance(value, str) else str(value)
-                        supported = True
-        if not supported:
+                        stats[stat] = value
+                elif node_type == "RPG.GameCore.StackWeakness":
+                    all_elements = {"Physical", "Fire", "Ice", "Thunder", "Wind", "Quantum", "Imaginary"}
+                    if item.get("OPType") != "Protected" or set(item.get("WeakList") or []) != all_elements:
+                        self._issue(ctx, path, node_type, "只支持全七属性 WeakList 的 Protected 韧性锁")
+                        continue
+                    toughness_lock = True
+
+        for callback in callbacks:
+            event = callback.get("Event")
+            if event in {"OnPhase2", "OnStage"}:
+                before = len(ctx.effects)
+                ctx.current_modifier = name
+                ctx.condition = self._and_condition(
+                    previous_condition, f"has_modifier($self.actor_id, '{name}')")
+                self._compile_tasks(callback.get("CallbackConfig") or [], ctx,
+                                    f"{path}/{event}", ())
+                has_cleanup = has_cleanup or len(ctx.effects) > before
+                ctx.condition = previous_condition
+                ctx.current_modifier = previous_modifier
+                continue
+            if event == "OnStack":
+                visit_stack(callback.get("CallbackConfig") or [])
+        ctx.current_modifier = previous_modifier
+        if not stats and not has_cleanup and not self._visual_modifier(definition):
             self._issue(ctx, path, "Modifier", f"未注册 modifier 语义：{name}")
             return None
         skill_id = str(ctx.skill.get("skill_id") or self.enemy_id)
+        stat_effects = {key: value for key, value in stats.items() if not isinstance(value, str)}
+        stat_exprs = {key: value for key, value in stats.items() if isinstance(value, str)}
         return {
-            "modifier_id": f"ENEMY_{skill_id}_{name.upper()}",
-            "name": name, "modifier_type": "debuff", "stat_exprs": stats, **defaults,
+            "modifier_id": self._modifier_id(name, definition, skill_id),
+            "name": name, "modifier_type": "debuff" if stats else "buff",
+            **({"stat_effects": stat_effects} if stat_effects else {}),
+            **({"stat_exprs": stat_exprs} if stat_exprs else {}),
+            **({"toughness_lock": True} if toughness_lock else {}), **defaults,
         }
 
     def _compile_lose_hp(self, task: Dict[str, Any], ctx: _Context,
@@ -490,38 +1469,42 @@ class AbilityCompiler:
             self._issue(ctx, path, str(task.get("$type")), f"未注册 RatioType：{task.get('RatioType')}")
             return
         ratio = self._value(task.get("Ratio"), ctx, f"{path}/Ratio")
-        target = self._hook_target(self._alias(task))
+        target = self._hook_target(self._alias(task), ctx)
         if ratio is None or target is None:
             self._issue(ctx, path, "TargetAlias", f"未注册自伤目标：{self._alias(task)}")
             return
         amount = _binary("*", _atom("$self.max_hp" if target == "self" else "$target.max_hp"),
                          _atom(ratio))
-        ctx.effects.append({"effect_type": "drain_hp", "target": target,
+        self._add_effect(ctx, {"effect_type": "drain_hp", "target": target,
                             "amount": _format(amount), "drain_ratio": 0.0})
 
     def _compile_action_delay(self, task: Dict[str, Any], ctx: _Context,
                               path: str, stack: Tuple[str, ...]) -> None:
         raw = task["NormalizedValue"] if "NormalizedValue" in task else task.get("Value")
         value = self._number(raw, ctx, f"{path}/Value")
-        target = self._hook_target(self._alias(task))
+        alias = self._alias(task)
+        target = self._hook_target(alias, ctx)
+        semantic = self.semantics.get(str(ctx.skill.get("trigger_key")), {})
+        if alias == "AllTeammate" and "apart from this unit" in str(semantic.get("desc") or ""):
+            target = {"pool": "enemies", "where": "$it.actor_id != $self.actor_id"}
         if value != 0 or target is None:
             self._issue(ctx, path, str(task.get("$type")), "只支持归零立即行动与已注册目标")
             return
-        ctx.effects.append({"effect_type": "immediate_action", "target": target})
+        self._add_effect(ctx, {"effect_type": "immediate_action", "target": target})
 
     def _compile_set_die(self, task: Dict[str, Any], ctx: _Context,
                          path: str, stack: Tuple[str, ...]) -> None:
         if ctx.event == "on_kill":
             return
-        ctx.effects.append({"effect_type": "set_hp_to_percent", "target": "self", "percent": 0.0})
+        self._add_effect(ctx, {"effect_type": "set_hp_to_percent", "target": "self", "percent": 0.0})
 
     def _compile_force_kill(self, task: Dict[str, Any], ctx: _Context,
                             path: str, stack: Tuple[str, ...]) -> None:
-        target = self._hook_target(self._alias(task))
+        target = self._hook_target(self._alias(task), ctx)
         if target is None:
             self._issue(ctx, path, "TargetAlias", f"未注册击杀目标：{self._alias(task)}")
             return
-        ctx.effects.append({"effect_type": "set_hp_to_percent", "target": target, "percent": 0.0})
+        self._add_effect(ctx, {"effect_type": "set_hp_to_percent", "target": target, "percent": 0.0})
 
     def _target_type(self, config_skill: Dict[str, Any]) -> Optional[str]:
         info = config_skill.get("TargetInfo") or {}
@@ -532,6 +1515,8 @@ class AbilityCompiler:
             return "blast" if info.get("SubTargetType") == "TargetAdjoinEntity" else "single"
         if target == "AllEnemy":
             return "aoe"
+        if target == "FriendSelect":
+            return "ally_single"
         return None
 
     def _action(self, ctx: _Context, config_skill: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -548,10 +1533,22 @@ class AbilityCompiler:
             "action_type": "skill", "target_type": target_type,
             "energy_gain": 0, "energy_grant": float(semantic.get("energy") or 0.0),
         }
+        if not ctx.damages and ctx.retarget_damage:
+            first = ctx.retarget_damage_records[0]
+            toughness = (first["stance_value"] if first["stance_value"] is not None
+                         else float(skill.get("sp_hit_base") or 0) * (first["stance_ratio"] or 0))
+            action = {
+                "action_id": action["action_id"], "name": action["name"],
+                "action_type": action["action_type"], "target_type": action["target_type"],
+                "damage_type": first["element"],
+                "toughness_dmg": int(toughness) if toughness.is_integer() else toughness,
+                "energy_gain": action["energy_gain"], "energy_grant": action["energy_grant"],
+            }
+            return action
         if not ctx.damages:
-            if skill.get("damage_type") or skill.get("param_list"):
+            if skill.get("damage_type"):
                 self._issue(ctx, "DamageByAttackProperty", "DamageMissing",
-                            "MonsterSkillConfig 声明伤害/倍率，但 Ability 未编译出伤害")
+                            "MonsterSkillConfig 声明伤害属性，但 Ability 未编译出伤害")
                 return None
             return action
         main = [d for d in ctx.damages if d["alias"] in {
@@ -560,10 +1557,16 @@ class AbilityCompiler:
             self._issue(ctx, "DamageByAttackProperty", "Damage", "主动技能缺主目标 ATK 伤害")
             return action
         first = main[0]
-        if any(d["ratio"] != first["ratio"] or d["element"] != first["element"] for d in main):
-            self._issue(ctx, "DamageByAttackProperty", "Damage", "多段倍率/元素不一致，需显式序列语义")
+        if any(d["element"] != first["element"] for d in main):
+            self._issue(ctx, "DamageByAttackProperty", "Damage", "多段元素不一致，需显式序列语义")
             return action
-        toughness = float(skill.get("sp_hit_base") or 0) * (first["stance_ratio"] or 0)
+
+        def segment_toughness(record: Dict[str, Any]) -> float:
+            if record["stance_value"] is not None:
+                return float(record["stance_value"])
+            return float(skill.get("sp_hit_base") or 0) * (record["stance_ratio"] or 0)
+
+        toughness = segment_toughness(first)
         action = {
             "action_id": action["action_id"], "name": action["name"],
             "action_type": action["action_type"], "target_type": action["target_type"],
@@ -573,12 +1576,22 @@ class AbilityCompiler:
         }
         if len(main) > 1:
             action["instances"] = len(main)
+            if any(d["ratio"] != first["ratio"] or d["stance_ratio"] != first["stance_ratio"]
+                   or d["stance_value"] != first["stance_value"] for d in main):
+                action["instance_variants"] = []
+                for record in main:
+                    value = segment_toughness(record)
+                    action["instance_variants"].append({
+                        "scaling": [{"atk": record["ratio"]}],
+                        "toughness_dmg": int(value) if value.is_integer() else value,
+                    })
         blast = [d for d in ctx.damages if d["alias"] == "AbilityTargetAdjoinEntity"]
         if blast:
             if len(blast) > 1 or blast[0]["element"] != first["element"]:
                 self._issue(ctx, "DamageByAttackProperty", "Damage", "副目标多段/元素语义未注册")
                 return action
-            action["scaling_blast"] = [{"atk": blast[0]["ratio"]}]
+            if blast[0]["ratio"] != first["ratio"]:
+                action["scaling_blast"] = [{"atk": blast[0]["ratio"]}]
         return action
 
     def compile_skill(self, trigger_key: str) -> Dict[str, Any]:
@@ -595,18 +1608,24 @@ class AbilityCompiler:
             else:
                 self._compile_ability(str(entry), ctx, trigger_key, ())
         action = self._action(ctx, config_skill or {}) if skill is not None else None
-        hooks = []
-        if ctx.effects and skill is not None:
-            hooks.append({
-                "event": "on_action",
-                "condition": (f"$event.actor == $self.actor_id and "
-                              f"$event.action_id == '{skill['skill_id']}'"),
-                "effects": ctx.effects,
-            })
+        if not ctx.damages:
+            ctx.effects = ctx.pre_effects + ctx.effects
+            ctx.pre_effects = []
+        hooks = self._make_hooks(
+            ctx, f"$event.source == $self.actor_id and $event.action_id == '{skill['skill_id']}'",
+            event="on_become_target", effects=ctx.pre_effects
+        ) if ctx.pre_effects and ctx.damages and skill is not None else []
+        hooks.extend(self._make_hooks(
+            ctx, f"$event.actor == $self.actor_id and $event.action_id == '{skill['skill_id']}'"
+        ) if ctx.effects and skill is not None else [])
+        if ctx.hit_effects and skill is not None:
+            hooks.extend(self._make_hooks(
+                ctx, f"$event.source == $self.actor_id and $event.action_id == '{skill['skill_id']}'",
+                event="after_being_hit", effects=ctx.hit_effects))
         return {
             "ok": not ctx.unsupported and action is not None,
-            "action": action, "hooks": hooks, "unsupported": ctx.unsupported,
-            "handled": sorted(set(ctx.handled)),
+            "action": action, "hooks": hooks, "summons": ctx.summons,
+            "unsupported": ctx.unsupported, "handled": sorted(set(ctx.handled)),
         }
 
     def _compile_deathrattle(self, callback: Dict[str, Any], ctx: _Context,
@@ -636,12 +1655,10 @@ class AbilityCompiler:
                     ctx.handled.append(event)
                     getattr(self, method_name)(callback, ctx,
                                                f"{ability_name}/{modifier_name}/{index}", ())
-        hooks = []
-        if ctx.effects:
-            hooks.append({"event": "on_kill", "condition": "$event.target == $self.actor_id",
-                          "effects": ctx.effects})
+        hooks = self._make_hooks(ctx, "$event.target == $self.actor_id") if ctx.effects else []
         return {"ok": not ctx.unsupported and bool(hooks), "action": None, "hooks": hooks,
-                "unsupported": ctx.unsupported, "handled": sorted(set(ctx.handled))}
+                "summons": ctx.summons, "unsupported": ctx.unsupported,
+                "handled": sorted(set(ctx.handled))}
 
     def _ability_dynamic_hashes(self, name: str, seen: Optional[set] = None) -> set:
         """收集 Ability 及其嵌套引用的动态哈希，用于被动→SkillParam 结构绑定."""
@@ -697,13 +1714,14 @@ class AbilityCompiler:
         """编译整只敌人的主动与已注册被动，并给出完整覆盖审计."""
         actions: List[Dict[str, Any]] = []
         hooks: List[Dict[str, Any]] = []
+        summons: List[Dict[str, Any]] = []
         unsupported: List[Dict[str, str]] = []
         handled: set = set()
         deferred: List[str] = []
         results: Dict[str, Any] = {}
         if not self.config:
             return {
-                "ok": False, "actions": [], "hooks": [],
+                "ok": False, "actions": [], "hooks": [], "summons": [],
                 "unsupported": [{
                     "owner": self.enemy_id, "path": "JsonConfig",
                     "node_type": "CharacterConfig", "reason": "CharacterConfig 缺失",
@@ -716,6 +1734,7 @@ class AbilityCompiler:
             if result.get("action"):
                 actions.append(result["action"])
             hooks.extend(result.get("hooks") or [])
+            summons.extend(result.get("summons") or [])
             handled.update(result.get("handled") or [])
             unsupported.extend({"owner": owner, **issue}
                                for issue in result.get("unsupported") or [])
@@ -747,7 +1766,7 @@ class AbilityCompiler:
             str(name) for name in self.config.get("AbilityList") or []
             if self._has_supported_event(self.abilities.get(str(name)) or {}))
         for ability_name in sorted(passive_candidates):
-            if ability_name.endswith("_Camera"):
+            if _is_camera_ability(ability_name):
                 continue
             if ability_name.startswith("Monster_Common_"):
                 deferred.append(ability_name)
@@ -774,6 +1793,7 @@ class AbilityCompiler:
         return {
             "ok": not unsupported and bool(actions or hooks),
             "actions": actions, "hooks": hooks,
+            "summons": list({spec["summon_id"]: spec for spec in summons}.values()),
             "unsupported": unsupported, "deferred": sorted(deferred),
             "handled": sorted(handled), "skill_results": results,
         }

@@ -45,6 +45,8 @@ def _compare(actual: float, expected: float, compare_type: str) -> bool:
 def config_ai_dynamic_value(engine: Any, actor_id: str, key: str) -> float:
     """按 ConfigAI 运行态、已核初值与缺省规则读取动态值."""
     runtime = engine._enemy_policy_state.get(actor_id, {})
+    if key == "current_phase":
+        return float(runtime.get("current_phase", 1))
     values = runtime.get("dynamic_values", {})
     if key in values:
         return float(values[key])

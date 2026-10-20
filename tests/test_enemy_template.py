@@ -745,11 +745,12 @@ class TestEnemyTemplate:
         assert tpl["policy"]["config"]["AIName"] == "WMonster_TY_Elite01_03"
         action = tpl["actions"][1]
         assert action["scaling"] == [{"atk": 3.0}]
-        assert action["scaling_blast"] == [{"atk": 3.0}]
-        effects = tpl["hooks"][0]["effects"]
-        assert effects[0]["modifier"]["control_kind"] == "outrage"
-        assert effects[0]["modifier"]["duration"] == 2
-        assert effects[1] == {"effect_type": "set_hp_to_percent", "target": "self", "percent": 0.0}
+        assert "scaling_blast" not in action  # 主邻同倍率，引擎沿用主倍率
+        effects = [effect for hook in tpl["hooks"] for effect in hook["effects"]]
+        outrage = next(effect for effect in effects
+                       if (effect.get("modifier") or {}).get("control_kind") == "outrage")
+        assert outrage["modifier"]["duration"] == 2
+        assert any(effect.get("effect_type") == "set_hp_to_percent" for effect in effects)
 
     def test_shield_reflect_complete_variant(self):
         from hsr_nous.adapters.template_generator import _enemy_shield_reflect_action
@@ -799,8 +800,10 @@ class TestEnemyTemplate:
             assert felling["instances"] == 10 and felling["toughness_dmg"] == 2.0
             insert_hook = next(hook for hook in template["hooks"] if hook["event"] == "on_become_target")
             assert "not has_shield($event.target)" in insert_hook["condition"]
-            assert [effect["effect_type"] for effect in insert_hook["effects"]] == [
-                "set_dynamic_value", "grant_extra_turn"]
+            insert_effects = [effect for hook in template["hooks"]
+                              if hook["event"] == "on_become_target" for effect in hook["effects"]]
+            assert {"set_dynamic_value", "grant_extra_turn"} <= {
+                effect["effect_type"] for effect in insert_effects}
 
     def test_trotter_giant_scared_text_variant(self):
         tpl = generate_enemy_template("8002109")

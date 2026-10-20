@@ -348,6 +348,12 @@ def _ability_index(tbgd_dir: Optional[str] = None) -> Dict[str, Any]:
     return {"abilities": abilities, "modifiers": modifiers, "invalid_files": invalid_files}
 
 
+def _is_camera_ability(name: Any) -> bool:
+    text = str(name or "")
+    return (text.endswith("_Camera") or "_Camera_" in text
+            or ("_Camera" in text and text.rsplit("_Camera", 1)[1].isdigit()))
+
+
 def _config_refs(value: Any):
     """提取编译所需的嵌套 Ability / modifier 引用；Camera 是纯表现层，不入闭包."""
     if isinstance(value, dict):
@@ -355,7 +361,7 @@ def _config_refs(value: Any):
         if node_type in {"RPG.GameCore.TriggerAbility", "RPG.GameCore.TurnInsertAbility"}:
             raw = value.get("AbilityName")
             name = raw.get("Value") if isinstance(raw, dict) else raw
-            if name and not str(name).endswith("_Camera"):
+            if name and not _is_camera_ability(name):
                 yield "ability", str(name)
         elif node_type == "RPG.GameCore.AddModifier":
             raw = value.get("ModifierName")
@@ -398,12 +404,25 @@ def get_enemy_ability_sources(
         return {"character_config": None, "abilities": {}, "modifiers": {},
                 "ability_sources": {}, "source_files": [],
                 "missing_abilities": [], "missing_modifiers": [], "ambiguous": []}
+    detail = get_enemy_detail(enemy_id, tbgd_dir=tbgd_dir) or {}
+    instance_values = {
+        str(item["BFLIFKBEOPJ"]): item.get("MNDFOPKBHKP")
+        for item in detail.get("CustomValues") or [] if item.get("BFLIFKBEOPJ") is not None
+    }
+    custom_values = dict(config.get("CustomValues") or {})
+    custom_values.update(instance_values)
+    monster_template_id = str(
+        (detail.get("_template") or {}).get("MonsterTemplateID")
+        or detail.get("MonsterTemplateID") or enemy_id)
+    ai = get_enemy_ai(enemy_id, tbgd_dir=tbgd_dir) or {}
+    ai_path = ai.get("ai_path_override") or ai.get("ai_path")
+    config_ai = get_enemy_ai_config(ai_path, tbgd_dir=tbgd_dir) if ai_path else None
     required = {
         str(skill.get("EntryAbility")) for skill in config.get("SkillList") or []
         if skill.get("EntryAbility")
     }
     required.update(str(name) for name in config.get("AbilityList") or [])
-    required = {name for name in required if not name.endswith("_Camera")}
+    required = {name for name in required if not _is_camera_ability(name)}
     index = _ability_index(tbgd_dir)
     abilities: Dict[str, Any] = {}
     modifiers: Dict[str, Any] = {}
@@ -458,6 +477,10 @@ def get_enemy_ability_sources(
         "missing_modifiers": sorted(missing_modifiers),
         "ambiguous": sorted(ambiguous),
         "invalid_files": list(index["invalid_files"]),
+        "custom_values": custom_values,
+        "custom_value_tags": list_custom_value_tags(tbgd_dir=tbgd_dir),
+        "monster_template_id": monster_template_id,
+        "config_ai": config_ai,
     }
 
 

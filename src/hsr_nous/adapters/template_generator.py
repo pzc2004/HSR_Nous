@@ -628,7 +628,6 @@ _ENEMY_MISSING_RATIO_DIRECT = {
     "403202701": ("Let Blank Wishes Become Whole", 1.5),
     "403302403": ("Cast Marble", 4.5),
     "501211001": ("Capture", 2.8),
-    "501303101": ("The Stroke", 2.0),
     "501301204": ("Time to Rock!", 5.0),
     "801503009": ("May This Journey Lead You to Destruction", 5.6),
 }
@@ -1960,10 +1959,12 @@ def _enemy_first_bloom_action(
     action_id = str(raw.get("skill_id"))
     if (action_id != "502201001" or raw.get("trigger_key") != "Skill01"
             or semantic.get("name") != "First Bloom" or semantic.get("type") != "Support"
-            or semantic.get("desc") != (
+            or semantic.get("desc") not in {
                 'Grants 1 stack of 502401004 to "Paramount Bliss Inverted: Illwish Archlotus." '
-                "(Max 10 Stacks)")
-            or raw.get("param_list")):
+                "(Max 10 Stacks)",
+                'Grants 1 stack of 502401004 to "Paramount Bliss Inverted: Illwish Archlotus." '
+                "(Max 10/20 Stacks on Normal/Complete)",
+            } or raw.get("param_list")):
         return None
     action = {
         "action_id": action_id, "name": "First Bloom", "action_type": "skill",
@@ -12710,7 +12711,7 @@ def generate_enemy_template(
 
     raw_skills = get_enemy_skills(enemy_id, tbgd_dir=tbgd_dir)
     ability_compiler = AbilityCompiler(
-        enemy_id, raw_skills, get_enemy_ability_sources(enemy_id, tbgd_dir=tbgd_dir))
+        enemy_id, raw_skills, get_enemy_ability_sources(enemy_id, tbgd_dir=tbgd_dir), level=level)
     active_raw = [
         sk for sk in raw_skills
         if not str(sk.get("trigger_key") or "").startswith(("Passive", "SkillP"))
@@ -12783,20 +12784,71 @@ def generate_enemy_template(
             for raw in active_raw:
                 if str(raw["skill_id"]) not in conversion_ids:
                     continue
+                legacy_matches = []
+                for semantic in semantic_skills:
+                    action, hooks, summons = _enemy_convert_skill(
+                        raw, semantic, name_en, detail, get_monster_meta, level, raw_config,
+                        semantic_catalog=semantic_skills)
+                    if action is not None:
+                        legacy_matches.append((semantic, action, hooks, summons))
                 matches = []
                 for semantic in semantic_skills:
                     trigger = str(raw.get("trigger_key") or "")
                     ability_compiler.semantics[trigger] = semantic
                     compiled = ability_compiler.compile_skill(trigger)
-                    if compiled["ok"]:
-                        # 完整支持的主动技能默认走结构化 Ability；Fandom 只补文本语义。
-                        action, hooks, summons = compiled["action"], compiled["hooks"], []
-                    else:
-                        action, hooks, summons = _enemy_convert_skill(
-                            raw, semantic, name_en, detail, get_monster_meta, level, raw_config,
-                            semantic_catalog=semantic_skills)
-                    if action is not None:
-                        matches.append((semantic, action, hooks, summons))
+                    semantic_compatible = (not compiled["summons"]
+                                           or "summon" in str(semantic.get("desc") or "").lower())
+                    legacy = next((match for match in legacy_matches if match[0] is semantic), None)
+                    if compiled["ok"] and semantic_compatible and legacy is not None:
+                        legacy_action = legacy[1]
+                        action_keys = (
+                            "target_type", "damage_type", "scaling", "toughness_dmg",
+                            "instances", "instance_variants", "available_if", "resource_gain",
+                        )
+                        generic_blast = (compiled["action"].get(
+                            "scaling_blast", compiled["action"].get("scaling"))
+                            if compiled["action"].get("target_type") in {"blast", "bounce_blast"}
+                            else None)
+                        legacy_blast = (legacy_action.get(
+                            "scaling_blast", legacy_action.get("scaling"))
+                            if legacy_action.get("target_type") in {"blast", "bounce_blast"}
+                            else None)
+                        generic_effects = [effect for hook in compiled["hooks"]
+                                           for effect in hook["effects"]]
+                        legacy_effects = [effect for hook in legacy[2]
+                                          for effect in hook["effects"]]
+
+                        def effect_matches(old, new) -> bool:
+                            if not isinstance(old, dict) or not isinstance(new, dict):
+                                return old == new
+                            return all(key in new and effect_matches(value, new[key])
+                                       for key, value in old.items() if key != "name")
+
+                        remaining_effects = list(generic_effects)
+                        effects_covered = True
+                        for legacy_effect in legacy_effects:
+                            matched = next((index for index, generic_effect in enumerate(remaining_effects)
+                                            if effect_matches(legacy_effect, generic_effect)), None)
+                            if matched is None:
+                                effects_covered = False
+                                break
+                            remaining_effects.pop(matched)
+                        generic_summons = [spec["enemy_template"] for spec in compiled["summons"]]
+                        legacy_summons = [spec["enemy_template"] for spec in legacy[3]]
+                        summons_covered = all(
+                            generic_summons.count(key) >= legacy_summons.count(key)
+                            for key in set(legacy_summons))
+                        if (any(compiled["action"].get(key) != legacy_action.get(key)
+                                for key in action_keys) or generic_blast != legacy_blast
+                                or not effects_covered or not summons_covered):
+                            # 行动与附加效果须一致；不把近似映射或缺件结果升级成新事实。
+                            matches.append(legacy)
+                        else:
+                            # 语义兼容的完整主动技能走结构化 Ability；Fandom 只补文本。
+                            matches.append((semantic, compiled["action"], compiled["hooks"],
+                                            compiled["summons"]))
+                    elif legacy is not None:
+                        matches.append(legacy)
                 candidates[str(raw["skill_id"])] = matches
             # 一个语义不得服务多个原始技能；冲突时只保留原始顺序也能对齐的那一条。
             for semantic in active_semantics:
@@ -12853,6 +12905,14 @@ def generate_enemy_template(
                         raw_result = _enemy_local_legend_third_orbit_raw_action(raw)
                         if raw_result is not None:
                             matches = [(None, raw_result, [], [])]
+                    if not matches:
+                        # 无可用文本映射时不借语义命名；完整结构证据仍可独立生成 raw-only 技能。
+                        trigger = str(raw.get("trigger_key") or "")
+                        ability_compiler.semantics[trigger] = {}
+                        compiled_raw = ability_compiler.compile_skill(trigger)
+                        if compiled_raw["ok"]:
+                            matches = [(None, compiled_raw["action"], compiled_raw["hooks"],
+                                        compiled_raw["summons"])]
                     if not matches:
                         continue
                 _semantic, action, hooks, summons = matches[0]

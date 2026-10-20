@@ -21,16 +21,20 @@ from hsr_nous.pipeline.paths import annotator_dir, library_dir, sim_templates_di
 def _load_enemy(enemy_id: str) -> Dict[str, Any]:
     """独立取数口，测试可替换为小 fixture；生产全部来自 pipeline/旧模板回归锚."""
     from hsr_nous.adapters.template_generator import generate_enemy_template
-    from hsr_nous.pipeline.enemies.loader import get_enemy_ability_sources, get_enemy_skills
+    from hsr_nous.pipeline.enemies.loader import (
+        get_enemy_ability_sources, get_enemy_mechanics, get_enemy_skills)
 
     template = generate_enemy_template(str(enemy_id))
     skills = get_enemy_skills(str(enemy_id))
     by_id = {str(skill["skill_id"]): skill for skill in skills}
+    fdata = get_enemy_mechanics(template["name"], weakness=template.get("weakness")) or {}
+    semantic_by_name = {s.get("name"): s for s in fdata.get("skills") or []}
     semantics = {}
     for action in template.get("actions") or []:
         raw = by_id.get(str(action.get("action_id")))
         if raw and raw.get("trigger_key"):
             semantics[str(raw["trigger_key"])] = {
+                **(semantic_by_name.get(action.get("name")) or {}),
                 "name": action.get("name"), "energy": action.get("energy_grant") or 0,
             }
     return {
@@ -74,7 +78,8 @@ def crosscheck_enemy_node(enemy_id: str) -> Node:
 
 def _compiler(official: Dict[str, Any]) -> AbilityCompiler:
     return AbilityCompiler(official["id"], official["skills"], official["sources"],
-                           semantics=official.get("semantics") or {})
+                           semantics=official.get("semantics") or {},
+                           level=int(official["base_template"].get("level", 80)))
 
 
 def draft_enemy_node(enemy_id: str, workdir: Path,
@@ -88,8 +93,17 @@ def draft_enemy_node(enemy_id: str, workdir: Path,
             template["hooks"] = converted["hooks"]
         else:
             template.pop("hooks", None)
+        if converted["summons"]:
+            template["summons"] = converted["summons"]
+        else:
+            template.pop("summons", None)
         # 旧生成器的额外运行时区段若尚未由新编译器产出，不允许静默消失。
-        for section in ("summons", "capabilities", "custom_resources"):
+        if official["base_template"].get("summons") and not converted["summons"]:
+            converted["unsupported"].append({
+                "owner": "summons", "path": "summons", "node_type": "SummonCoverage",
+                "reason": "旧模板召唤物尚未由通用编译器重建",
+            })
+        for section in ("capabilities", "custom_resources"):
             if template.get(section):
                 converted["unsupported"].append({
                     "owner": section, "path": section, "node_type": "LegacySection",
@@ -209,6 +223,8 @@ def golden_enemy_node(enemy_id: str, staging_root: Optional[Path] = None) -> Nod
             mismatches.append("actions 与 AbilityCompiler 独立重算不一致")
         if (previous["tpl"].get("hooks") or []) != fresh["hooks"]:
             mismatches.append("hooks 与 AbilityCompiler 独立重算不一致")
+        if (previous["tpl"].get("summons") or []) != fresh["summons"]:
+            mismatches.append("summons 与 AbilityCompiler 独立重算不一致")
         if previous["tpl"].get("base_stats") != inputs["data_pull"]["base_template"].get("base_stats"):
             mismatches.append("base_stats 被转换层改动")
         err = "；".join(mismatches)

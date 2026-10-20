@@ -87,7 +87,8 @@ def test_enemy_full_mechanical_chain_uses_zero_llm_and_replays(tmp_path, monkeyp
 def test_enemy_unsupported_goes_human_queue_without_llm(tmp_path, monkeypatch):
     official = _official()
     official["sources"]["abilities"]["A"]["OnStart"].append({
-        "$type": "RPG.GameCore.PredicateTaskList", "SuccessTaskList": [],
+        "$type": "RPG.GameCore.PredicateTaskList",
+        "SuccessTaskList": [{"$type": "RPG.GameCore.DefineDynamicValue"}],
     })
     monkeypatch.setattr(enemy_nodes, "_load_enemy", lambda _enemy_id: official)
     llm = FakeRunner([])

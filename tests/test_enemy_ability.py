@@ -89,15 +89,459 @@ def test_unknown_task_is_structured_unsupported():
             "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "A",
         }]},
         "abilities": {"A": {"Name": "A", "OnStart": [{
-            "$type": "RPG.GameCore.PredicateTaskList", "SuccessTaskList": [],
+            "$type": "RPG.GameCore.PredicateTaskList",
+            "SuccessTaskList": [{"$type": "RPG.GameCore.DefineDynamicValue"}],
         }]}},
         "modifiers": {},
     }
     skills = [{"skill_id": "s1", "trigger_key": "Skill01", "param_list": []}]
     out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
     assert not out["ok"]
-    assert out["unsupported"][0]["node_type"] == "RPG.GameCore.PredicateTaskList"
-    assert "未注册" in out["unsupported"][0]["reason"]
+    assert any(item["node_type"] == "RPG.GameCore.PredicateTaskList"
+               for item in out["unsupported"])
+    assert any("未注册" in item["reason"] for item in out["unsupported"])
+
+
+def _predicate_skill(predicate):
+    return [{
+        "skill_id": "s1", "trigger_key": "Skill01", "param_list": [],
+    }], {
+        "character_config": {"SkillList": [{
+            "Name": "Skill01", "SkillType": "Skill",
+            "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "A",
+        }]},
+        "abilities": {"A": {"Name": "A", "OnStart": [{
+            "$type": "RPG.GameCore.PredicateTaskList", "Predicate": predicate,
+            "SuccessTaskList": [{
+                "$type": "RPG.GameCore.DefineDynamicValue",
+                "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+                "DynamicKey": {"Value": "PredicateResult"},
+                "ResetValue": {"IsDynamic": False, "FixedValue": {"Value": 1}},
+            }],
+        }]}},
+        "modifiers": {},
+    }
+
+
+def test_behavior_flag_inverse_is_not_dropped():
+    skills, sources = _predicate_skill({
+        "$type": "RPG.GameCore.ByContainBehaviorFlag",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+        "Flag": "STAT_CTRL", "Inverse": True,
+    })
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    assert "not controlled($self.actor_id)" in out["hooks"][0]["condition"]
+
+
+def test_target_count_uses_number_and_alive_only():
+    predicate = {
+        "$type": "RPG.GameCore.ByCompareTargetCount",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "AllLightTeam"},
+        "AliveOnly": True, "Number": {"IsDynamic": False, "FixedValue": {"Value": 1}},
+        "CompareType": "NotEqual",
+    }
+    skills, sources = _predicate_skill(predicate)
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    assert "count($team.actor_id) != 1" in out["hooks"][0]["condition"]
+
+    predicate["AliveOnly"] = False
+    skills, sources = _predicate_skill(predicate)
+    rejected = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert not rejected["ok"]
+    assert any("AliveOnly" in item["reason"] for item in rejected["unsupported"])
+
+
+def test_set_dynamic_value_defaults_to_caster():
+    sources = {
+        "character_config": {"SkillList": [{
+            "Name": "Skill01", "SkillType": "Skill",
+            "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "A",
+        }]},
+        "abilities": {"A": {"Name": "A", "OnStart": [{
+            "$type": "RPG.GameCore.SetDynamicValue", "ContextScope": "TargetEntity",
+            "DynamicKey": {"Value": "BattleEventFlag"},
+            "Value": {"IsDynamic": False, "FixedValue": {"Value": 1}},
+        }]}},
+        "modifiers": {},
+    }
+    skills = [{"skill_id": "s1", "trigger_key": "Skill01", "param_list": []}]
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    assert out["hooks"][0]["effects"] == [{
+        "effect_type": "set_dynamic_value", "target": "self",
+        "dynamic_key": "BattleEventFlag", "amount": 1,
+    }]
+
+
+def test_modifier_lifetime_uses_explicit_modifier_name():
+    skills, sources = _predicate_skill({
+        "$type": "RPG.GameCore.ByCompareModifierValue",
+        "ModifierName": "MMonster_W2_Mecha03_00_Overdrive_On",
+        "ValueType": "LifeTime", "CompareType": "Equal",
+        "CompareValue": {"IsDynamic": False, "FixedValue": {"Value": 1}},
+    })
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    assert ("modifier_duration($self.actor_id, 'MMonster_W2_Mecha03_00_Overdrive_On') == 1"
+            in out["hooks"][0]["condition"])
+
+
+def test_retarget_without_max_number_takes_all_candidates():
+    sources = {
+        "character_config": {"SkillList": [{
+            "Name": "Skill01", "SkillType": "Skill",
+            "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "A",
+        }]},
+        "abilities": {"A": {"Name": "A", "OnStart": [{
+            "$type": "RPG.GameCore.Retarget",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "AllEnemy"},
+            "TaskList": [{
+                "$type": "RPG.GameCore.AddModifier",
+                "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "ParamEntity"},
+                "ModifierName": {"Value": "WMonster_TY_Elite01_00_Skill07_Mark"},
+            }],
+        }]}},
+        "modifiers": {},
+    }
+    skills = [{"skill_id": "s1", "trigger_key": "Skill01", "param_list": []}]
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    assert out["hooks"][0]["effects"][0]["target"] == {"pool": "allies"}
+
+
+def test_include_local_template_and_presentation_nodes():
+    presentation = [
+        "ShowBattleUI", "HideLevelStage", "SetSimulationSpeedEnable", "TriggerSound", "DebugLog",
+        "SetMonsterEnergyBarState", "SetTeamRootOffset", "ScaleCharacterModel",
+        "SetAttachmentVisibility", "ChangeTargetModifierEffectState", "SetEntityPosition",
+        "WaitTimelineFinish", "WaitAnimEvent",
+    ]
+    sources = {
+        "character_config": {"SkillList": [{
+            "Name": "Skill01", "SkillType": "Skill",
+            "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "A",
+        }]},
+        "abilities": {"A": {
+            "Name": "A",
+            "OnStart": [{"$type": f"RPG.GameCore.{name}"} for name in presentation] + [{
+                "$type": "RPG.GameCore.IncludeTaskListTemplate", "Name": "Hit",
+            }],
+            "TaskListTemplate": [{
+                "Name": "Hit", "TaskList": [{
+                    "$type": "RPG.GameCore.RemoveModifier",
+                    "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+                    "ModifierName": {"Value": "Mark"},
+                }],
+            }],
+        }},
+        "modifiers": {"Mark": {}},
+    }
+    skills = [{"skill_id": "s1", "trigger_key": "Skill01", "param_list": []}]
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    assert out["hooks"][0]["effects"] == [{
+        "effect_type": "remove_modifier", "target": "self", "modifier_id": "Mark",
+    }]
+
+    sources["abilities"]["A"]["TaskListTemplate"][0]["TaskList"] = [{
+        "$type": "RPG.GameCore.IncludeTaskListTemplate", "Name": "Hit",
+    }]
+    rejected = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert not rejected["ok"]
+    assert any("循环引用" in item["reason"] for item in rejected["unsupported"])
+
+
+def test_monster_template_and_custom_value_bool_predicates():
+    from hsr_nous.sim_schema.config_ai import dynamic_value_hash
+
+    skills, sources = _predicate_skill({
+        "$type": "RPG.GameCore.ByCompareMonsterTemplateID",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+        "TargetMonsterTemplateID": {"IsDynamic": False, "FixedValue": {"Value": 2013010}},
+    })
+    sources["monster_template_id"] = "2013010"
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and "1 == 1" in out["hooks"][0]["condition"]
+
+    skills, sources = _predicate_skill({
+        "$type": "RPG.GameCore.ByCheckCustomValueBool",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+        "Key": {"Hash": dynamic_value_hash("Elite")}, "Inverse": True,
+    })
+    sources["custom_value_tags"] = ["Elite"]
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and "not (in_group($self.actor_id, 'Elite'))" in out["hooks"][0]["condition"]
+
+
+def test_camera_numeric_suffix_and_attack_added_ratio():
+    from hsr_nous.adapters.enemy_ability import _is_camera_ability
+
+    assert _is_camera_ability("Monster_Skill04_Camera02")
+    assert not _is_camera_ability("Monster_Skill04_Camera02_Phase")
+    sources = {
+        "character_config": {"SkillList": [{
+            "Name": "Skill01", "SkillType": "Skill",
+            "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "A",
+        }]},
+        "abilities": {"A": {"Name": "A", "OnStart": [{
+            "$type": "RPG.GameCore.AddModifier",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+            "ModifierName": {"Value": "Buff"},
+        }, {
+            "$type": "RPG.GameCore.PredicateTaskList",
+            "Predicate": {"$type": "RPG.GameCore.ByIsContainModifier",
+                          "ModifierName": {"Value": "Buff"}},
+        }]}},
+        "modifiers": {"Buff": {"_CallbackList": [{
+            "Event": "OnStack", "CallbackConfig": [{
+                "$type": "RPG.GameCore.StackProperty", "Property": "AttackAddedRatio",
+                "PropertyValue": {"IsDynamic": False, "FixedValue": {"Value": 0.2}},
+            }],
+        }]}},
+    }
+    skills = [{"skill_id": "s1", "trigger_key": "Skill01", "param_list": []}]
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    assert out["hooks"][0]["effects"][0]["modifier"]["stat_effects"] == {"atk_pct": 0.2}
+
+
+def test_property_dynamic_value_write_then_read_is_explicitly_rejected():
+    sources = {
+        "character_config": {"SkillList": [{
+            "Name": "Skill01", "SkillType": "Skill",
+            "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "A",
+        }]},
+        "abilities": {"A": {"Name": "A", "OnStart": [{
+            "$type": "RPG.GameCore.SetDynamicValueByProperty", "DynamicKey": "Owner_ATK",
+            "ReadTargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+            "Value": "BaseAttack",
+        }, {
+            "$type": "RPG.GameCore.PredicateTaskList",
+            "Predicate": {
+                "$type": "RPG.GameCore.ByCompareDynamicValue",
+                "DynamicKey": {"Value": "Owner_ATK"}, "CompareType": "GreaterEqual",
+                "CompareValue": {"IsDynamic": False, "FixedValue": {"Value": 1000}},
+            },
+            "SuccessTaskList": [{
+                "$type": "RPG.GameCore.AddModifier",
+                "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+                "ModifierName": {"Value": "Buff"},
+            }],
+        }]}},
+        "modifiers": {"Buff": {"_CallbackList": [{
+            "Event": "OnStack", "CallbackConfig": [{
+                "$type": "RPG.GameCore.StackProperty", "Property": "AttackAddedRatio",
+                "PropertyValue": {"IsDynamic": False, "FixedValue": {"Value": 0.1}},
+            }],
+        }]}},
+    }
+    skills = [{"skill_id": "s1", "trigger_key": "Skill01", "param_list": []}]
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert not out["ok"]
+    assert any("旧事件快照" in item["reason"] for item in out["unsupported"])
+
+    sources["abilities"]["A"]["OnStart"] = sources["abilities"]["A"]["OnStart"][:1]
+    accepted = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert accepted["ok"] and not accepted["unsupported"]
+    assert accepted["hooks"][0]["effects"][0] == {
+        "effect_type": "set_dynamic_value", "target": "self", "dynamic_key": "Owner_ATK",
+        "amount": "base_stat_of($self.actor_id, 'atk')",
+    }
+
+
+def test_dynamic_add_twice_and_write_read_rejected():
+    def add_task(key, value):
+        return {
+            "$type": "RPG.GameCore.SetDynamicValueByAddValue",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+            "Key": {"Value": key},
+            "AddValue": {"IsDynamic": False, "FixedValue": {"Value": value}},
+        }
+
+    sources = {
+        "character_config": {"SkillList": [{
+            "Name": "Skill01", "SkillType": "Skill",
+            "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "A",
+        }]},
+        "abilities": {"A": {"Name": "A", "OnStart": [{
+            "$type": "RPG.GameCore.DefineDynamicValue",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+            "DynamicKey": {"Value": "X"},
+            "ResetValue": {"IsDynamic": False, "FixedValue": {"Value": 1}},
+        }, add_task("X", 1), add_task("X", 1), {
+            "$type": "RPG.GameCore.PredicateTaskList",
+            "Predicate": {
+                "$type": "RPG.GameCore.ByCompareDynamicValue",
+                "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "AbilityTargetEntity"},
+                "DynamicKey": {"Value": "X"}, "CompareType": "Equal",
+                "CompareValue": {"IsDynamic": False, "FixedValue": {"Value": 1}},
+            },
+            "SuccessTaskList": [{
+                "$type": "RPG.GameCore.AddModifier",
+                "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+                "ModifierName": {"Value": "Buff"},
+            }],
+        }]}},
+        "modifiers": {"Buff": {"_CallbackList": [{
+            "Event": "OnStack", "CallbackConfig": [{
+                "$type": "RPG.GameCore.StackProperty", "Property": "AttackAddedRatio",
+                "PropertyValue": {"IsDynamic": False, "FixedValue": {"Value": 0.1}},
+            }],
+        }]}},
+    }
+    skills = [{"skill_id": "s1", "trigger_key": "Skill01", "param_list": []}]
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert not out["ok"]
+    assert any("旧事件快照" in item["reason"] for item in out["unsupported"])
+
+    sources["abilities"]["A"]["OnStart"] = sources["abilities"]["A"]["OnStart"][:3]
+    accepted = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert accepted["ok"] and not accepted["unsupported"]
+    amounts = [effect["amount"] for hook in accepted["hooks"] for effect in hook["effects"]
+               if effect["effect_type"] == "set_dynamic_value"]
+    assert amounts == [1, "dynamic_of($self, 'X') + 1", "dynamic_of($self, 'X') + 1"]
+
+
+def test_conditional_and_unconditional_writes_keep_task_order():
+    sources = {
+        "character_config": {"SkillList": [{
+            "Name": "Skill01", "SkillType": "Skill",
+            "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "A",
+        }]},
+        "abilities": {"A": {"Name": "A", "OnStart": [{
+            "$type": "RPG.GameCore.DefineDynamicValue",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+            "DynamicKey": {"Value": "X"},
+            "ResetValue": {"IsDynamic": False, "FixedValue": {"Value": 0}},
+        }, {
+            "$type": "RPG.GameCore.PredicateTaskList",
+            "Predicate": {
+                "$type": "RPG.GameCore.ByCompareMonsterID",
+                "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+                "TargetMonsterID": {"IsDynamic": False, "FixedValue": {"Value": 1}},
+            },
+            "SuccessTaskList": [{
+                "$type": "RPG.GameCore.SetDynamicValueByProperty", "DynamicKey": "X",
+                "ReadTargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+                "Value": "BaseAttack",
+            }],
+        }, {
+            "$type": "RPG.GameCore.DefineDynamicValue",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+            "DynamicKey": {"Value": "X"},
+            "ResetValue": {"IsDynamic": False, "FixedValue": {"Value": 2}},
+        }]}},
+        "modifiers": {},
+    }
+    skills = [{"skill_id": "s1", "trigger_key": "Skill01", "param_list": []}]
+    out = AbilityCompiler("1", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    amounts = [effect["amount"] for hook in out["hooks"] for effect in hook["effects"]
+               if effect["effect_type"] == "set_dynamic_value"]
+    assert amounts == [0, "base_stat_of($self.actor_id, 'atk')", 2]
+
+
+def test_abort_behavior_flag_prevents_conditional_damage_dedup():
+    damage = {
+        "$type": "RPG.GameCore.DamageByAttackProperty",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "AllEnemy"},
+        "AttackProperty": {
+            "DamageType": {"DamageType": "Fire"},
+            "DamagePercentage": {"IsDynamic": False, "FixedValue": {"Value": 2.0}},
+            "SPHitRatio": {"IsDynamic": False, "FixedValue": {"Value": 1}},
+        },
+    }
+    sources = {
+        "character_config": {"SkillList": [{
+            "Name": "Skill01", "SkillType": "Skill",
+            "TargetInfo": {"TargetType": "AllEnemy"}, "EntryAbility": "A",
+        }]},
+        "abilities": {
+            "A": {"Name": "A", "OnStart": [{
+                "$type": "RPG.GameCore.TriggerAbility", "AbilityName": {"Value": "B"},
+                "AbortBehaviorFlags": ["Break"],
+            }]},
+            "B": {"Name": "B", "OnStart": [{
+                "$type": "RPG.GameCore.PredicateTaskList",
+                "Predicate": {
+                    "$type": "RPG.GameCore.ByCompareMonsterID",
+                    "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+                    "TargetMonsterID": {"IsDynamic": False, "FixedValue": {"Value": 1}},
+                },
+                "SuccessTaskList": [damage], "FailedTaskList": [damage],
+            }]},
+        },
+        "modifiers": {},
+    }
+    skills = [{"skill_id": "s1", "trigger_key": "Skill01", "damage_type": "Fire",
+               "sp_hit_base": 10, "param_list": [2.0]}]
+    out = AbilityCompiler("1", skills, sources).compile_skill("Skill01")
+    assert not out["ok"]
+    assert any(item["node_type"] == "ConditionalDamage" for item in out["unsupported"])
+
+
+def test_skill_param_switch_selects_static_case():
+    def remove(name):
+        return {
+            "$type": "RPG.GameCore.RemoveModifier",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+            "ModifierName": {"Value": name},
+        }
+
+    sources = {
+        "character_config": {
+            "SkillList": [{
+                "Name": "Skill01", "SkillType": "Skill",
+                "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "A",
+            }],
+            "DynamicValues": {"Floats": {"7": {"ReadInfo": {
+                "Type": "SkillParam", "TriggerKey": "Skill01", "Index": 0,
+            }}}},
+        },
+        "abilities": {"A": {"Name": "A", "OnStart": [{
+            "$type": "RPG.GameCore.SwitchCaseByDynamicValue",
+            "Switch": _dynamic("AQAR", hashes=[7]),
+            "CaseTaskList": [
+                {"Case": {"IsDynamic": False, "FixedValue": {"Value": 0}},
+                 "TaskList": [remove("A")]},
+                {"Case": {"IsDynamic": False, "FixedValue": {"Value": 1}},
+                 "TaskList": [remove("B")]},
+            ],
+            "DefaultTaskList": [remove("C")],
+        }]}},
+        "modifiers": {"A": {}, "B": {}, "C": {}},
+    }
+    skills = [{"skill_id": "s1", "trigger_key": "Skill01", "param_list": [1]}]
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    assert out["hooks"][0]["effects"] == [{
+        "effect_type": "remove_modifier", "target": "self", "modifier_id": "B",
+    }]
+
+    from hsr_nous.sim_schema.config_ai import dynamic_value_hash
+
+    sources["custom_values"] = {"X": 0}
+    sources["abilities"]["A"]["OnStart"][0]["Switch"] = _dynamic(
+        "AQAR", hashes=[dynamic_value_hash("X")])
+    sources["config_ai"] = {
+        "$type": "RPG.GameCore.SetDynamicValueByHPRatio", "DynamicKey": {"Value": "X"},
+    }
+    rejected = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert not rejected["ok"]
+    assert any("可变 CustomValue" in item["reason"] for item in rejected["unsupported"])
+
+    sources["custom_values"] = {"U1zRkAF7AV": 0}
+    sources["abilities"]["A"]["OnStart"][0]["Switch"] = _dynamic(
+        "AQAR", hashes=[dynamic_value_hash("U1zRkAF7AV")])
+    sources["config_ai"] = {
+        "$type": "RPG.GameCore.SetDynamicValueByCopying",
+        "FromDynamicKey": {"Value": "A5zSTRyo3j"}, "ToDynamicKey": {"Value": "Other"},
+    }
+    rejected = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert not rejected["ok"]
+    assert any("哈希命名空间冲突" in item["reason"] for item in rejected["unsupported"])
 
 
 def test_empty_damage_ability_is_not_full_coverage():
@@ -141,6 +585,115 @@ def _semantic(enemy_id: str, name: str):
 
 
 @_need_ability
+@pytest.mark.parametrize(("enemy_id", "element"), [
+    ("5013040", "quantum"), ("5013050", "fire"),
+    ("5013060", "imaginary"), ("5013070", "physical"),
+])
+def test_readonly_custom_value_switch_selects_variant(enemy_id, element):
+    from hsr_nous.pipeline.enemies.loader import get_enemy_ability_sources, get_enemy_skills
+
+    out = AbilityCompiler(
+        enemy_id, get_enemy_skills(enemy_id), get_enemy_ability_sources(enemy_id),
+    ).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    assert out["action"]["damage_type"] == element
+    assert out["action"]["scaling"] == [{"atk": 4.0}]
+    assert out["action"]["toughness_dmg"] == 10
+
+
+@_need_ability
+def test_identical_conditional_damage_is_deduplicated():
+    from hsr_nous.pipeline.enemies.loader import get_enemy_ability_sources, get_enemy_skills
+
+    out = AbilityCompiler(
+        "2034010", get_enemy_skills("2034010"), get_enemy_ability_sources("2034010"),
+    ).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    assert out["action"]["damage_type"] == "thunder"
+    assert out["action"]["scaling"] == [{"atk": 2.0}]
+    assert out["action"]["toughness_dmg"] == 10
+    assert "instances" not in out["action"]
+
+
+@_need_ability
+def test_different_conditional_damage_stays_unsupported():
+    from hsr_nous.pipeline.enemies.loader import get_enemy_ability_sources, get_enemy_skills
+
+    out = AbilityCompiler(
+        "3024020", get_enemy_skills("3024020"), get_enemy_ability_sources("3024020"),
+    ).compile_skill("Skill02")
+    assert not out["ok"]
+    assert any(item["node_type"] == "ConditionalDamage" for item in out["unsupported"])
+
+
+@_need_ability
+@pytest.mark.parametrize(("enemy_id", "key", "expected"), [
+    ("2013010", "W2_Mecha03_00_SummonID", 2012010),
+    ("201301002", "W2_Mecha03_00_SummonID", 202202003),
+    ("1005012", "Monster_W1_CocoliaP2_00_SummonMonsterID01", 1002017),
+])
+def test_custom_value_summon_ids(enemy_id, key, expected):
+    from hsr_nous.pipeline.enemies.loader import get_enemy_ability_sources
+    from hsr_nous.sim_schema.config_ai import dynamic_value_hash
+
+    real_sources = get_enemy_ability_sources(enemy_id)
+    assert real_sources["custom_values"][key] == expected
+    sources = {
+        "character_config": {"SkillList": [{
+            "Name": "Skill01", "SkillType": "Skill",
+            "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "A",
+        }]},
+        "abilities": {"A": {"Name": "A", "OnStart": [{
+            "$type": "RPG.GameCore.SummonMonster", "SummonMonsterDataList": [{
+                "MonsterIDFromCustomValue": {"Hash": dynamic_value_hash(key)},
+            }],
+        }]}},
+        "modifiers": {}, "custom_values": real_sources["custom_values"],
+    }
+    skills = [{"skill_id": "s1", "trigger_key": "Skill01", "param_list": []}]
+    out = AbilityCompiler(enemy_id, skills, sources).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    assert [spec["enemy_template"] for spec in out["summons"]] == [str(expected)]
+
+
+@_need_ability
+def test_real_modifier_flags_map_to_existing_lifecycle_fields():
+    from hsr_nous.pipeline.enemies.loader import get_enemy_ability_sources
+
+    real = get_enemy_ability_sources("2013010")
+
+    def compile_modifier(name, dynamic_values=None):
+        sources = {
+            "character_config": {"SkillList": [{
+                "Name": "Skill01", "SkillType": "Skill",
+                "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "A",
+            }]},
+            "abilities": {"A": {"Name": "A", "OnStart": [{
+                "$type": "RPG.GameCore.AddModifier",
+                "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+                "ModifierName": {"Value": name}, "DynamicValues": dynamic_values or {},
+            }, {
+                "$type": "RPG.GameCore.PredicateTaskList",
+                "Predicate": {"$type": "RPG.GameCore.ByIsContainModifier",
+                              "ModifierName": {"Value": name}},
+            }]}},
+            "modifiers": {name: real["modifiers"][name]},
+        }
+        skills = [{"skill_id": "s1", "trigger_key": "Skill01", "param_list": []}]
+        out = AbilityCompiler("2013010", skills, sources).compile_skill("Skill01")
+        assert out["ok"] and not out["unsupported"]
+        return out["hooks"][0]["effects"][0]["modifier"]
+
+    overdrive = compile_modifier(
+        "MMonster_W2_Mecha03_00_Overdrive_On",
+        {"MDF_SpeedAddedValue": {"IsDynamic": False, "FixedValue": {"Value": 30}}},
+    )
+    assert overdrive["toughness_lock"] and overdrive["stat_effects"] == {"spd": 30}
+    sign = compile_modifier("Monster_W2_Mecha03_00_Sign")
+    assert sign["lock_on"] and sign["remove_on_source_death"]
+
+
+@_need_ability
 @pytest.mark.parametrize(("trigger", "semantic_name"), [
     ("Skill09", "Disintegration Order"), ("Skill11", "Dismantle"),
 ])
@@ -175,21 +728,69 @@ def test_direwolf_dot_matches_frozen_legacy_baseline(trigger, semantic_name):
 
 
 @_need_ability
-def test_pure_direct_skill_uses_ability_compiler(monkeypatch):
+@pytest.mark.parametrize(("enemy_id", "skill_id", "name", "ratio", "toughness", "energy"), [
+    ("2013010", "201301003", "Restraint", 3.0, 10, 10.0),
+    ("3002040", "300204003", "Wake-Up Punch", 2.5, 10, 10.0),
+    ("4022010", "402201001", "Pierce the Night Sky", 2.0, 5, 5.0),
+])
+def test_pure_direct_skill_matches_legacy_semantic_guard(
+        enemy_id, skill_id, name, ratio, toughness, energy):
     from hsr_nous.adapters import template_generator as generator
-    original = generator._enemy_convert_skill
 
-    def legacy_guard(raw, *args, **kwargs):
-        if str(raw.get("skill_id")) == "201301003":
-            raise AssertionError("完整支持的纯直伤不应回落旧转换器")
-        return original(raw, *args, **kwargs)
+    template = generator.generate_enemy_template(enemy_id)
+    action = next(a for a in template["actions"] if a["action_id"] == skill_id)
+    assert action["name"] == name
+    assert action["scaling"] == [{"atk": ratio}]
+    assert action["toughness_dmg"] == toughness and action["energy_grant"] == energy
 
-    monkeypatch.setattr(generator, "_enemy_convert_skill", legacy_guard)
-    template = generator.generate_enemy_template("2013010")
-    action = next(a for a in template["actions"] if a["action_id"] == "201301003")
-    assert action["name"] == "Restraint"
-    assert action["scaling"] == [{"atk": 3.0}]
-    assert action["toughness_dmg"] == 10 and action["energy_grant"] == 10.0
+
+@_need_ability
+def test_wake_up_alarm_compiles_immediate_action_and_shared_removals():
+    from hsr_nous.pipeline.enemies.loader import get_enemy_ability_sources, get_enemy_skills
+    semantics = _semantic("3002040", "Dreamjolt Troupe's Winder Goon")["Wake-Up Alarm"]
+    out = AbilityCompiler("3002040", get_enemy_skills("3002040"),
+                          get_enemy_ability_sources("3002040"),
+                          semantics={"Skill02": semantics}).compile_skill("Skill02")
+    assert out["ok"] and not out["unsupported"]
+    effects = out["hooks"][0]["effects"]
+    assert effects[0] == {
+        "effect_type": "immediate_action",
+        "target": {"pool": "enemies", "where": "$it.actor_id != $self.actor_id"},
+    }
+    assert [effect["modifier_id"] for effect in effects[1:]] == [
+        "MMonster_W3_Clock_00_Skill01_Charge",
+        "MMonster_W3_Clock_00_Skill01_Charge_Effect",
+    ]
+
+
+def test_camera_only_predicate_and_source_limited_removal():
+    sources = {
+        "character_config": {"SkillList": [{
+            "Name": "Skill02", "SkillType": "Skill",
+            "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "A",
+        }]},
+        "abilities": {"A": {"Name": "A", "OnStart": [{
+            "$type": "RPG.GameCore.PredicateTaskList",
+            "SuccessTaskList": [{"$type": "RPG.GameCore.TriggerAbility",
+                                 "AbilityName": {"Value": "Demo_Camera_Special"}}],
+            "FailedTaskList": [{"$type": "RPG.GameCore.TriggerAbility",
+                                "AbilityName": {"Value": "Demo_Camera"}}],
+        }]}},
+        "modifiers": {},
+    }
+    skills = [{"skill_id": "s2", "trigger_key": "Skill02", "param_list": []}]
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill02")
+    assert out["ok"] and not out["unsupported"]
+
+    sources["abilities"]["A"]["OnStart"].append({
+        "$type": "RPG.GameCore.RemoveModifier",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+        "ModifierName": {"Value": "Shared"}, "OnlyRemoveCasterAdded": True,
+    })
+    sources["modifiers"]["Shared"] = {"BehaviorFlagList": []}
+    accepted = AbilityCompiler("fake", skills, sources).compile_skill("Skill02")
+    assert accepted["ok"]
+    assert accepted["hooks"][0]["effects"][-1]["filter"] == "$mod.source == $self.actor_id"
 
 
 @_need_ability
@@ -256,8 +857,11 @@ def test_lesser_sting_deathrattle_keeps_unproven_branch_unsupported():
 
 
 @_need_ability
-def test_if_lesser_sting_missing_references_are_explicit():
+def test_if_lesser_sting_references_resolve():
     from hsr_nous.pipeline.enemies.loader import get_enemy_ability_sources
     sources = get_enemy_ability_sources("8022021")
-    assert "Monster_SW_Minion01_01_IF_Skill02_Phase01" in sources["missing_abilities"]
-    assert "Monster_SW_Minion01_01_IF_SkillP01" in sources["missing_abilities"]
+    for name in ("Monster_SW_Minion01_01_IF_Skill02_Phase01",
+                 "Monster_SW_Minion01_01_IF_SkillP01"):
+        assert name in sources["abilities"]
+        assert name not in sources["missing_abilities"]
+    assert not sources["ambiguous"]

@@ -360,7 +360,7 @@ order: "newest"              # 可选：移除顺序 newest（默认，LIFO）| 
 |------|------|
 | `modifier_id` | hook 语境与 `filter` **至少其一**（都写 = 交集；都不写编译期炸） |
 | `target` | hook 语境收（缺省 `self`；示例的 `enemy_single` 不在 hook 选择器词表） |
-| `filter`（`$mod` 绑定） | **已实现**（2026-09-07）——`$mod` 绑定待审 modifier（字段：`modifier_id` / `modifier_type` / `debuff_kind` / `control_kind` / `dot_element` / `dispellable` + 合成 `kind`——免疫判定同口径 `debuff_kind or (control if control_kind else modifier_type)`，`"$mod.kind == 'control'"` 一把罩住两写法；`dot_element` 可按 DoT 属性精确摘除，炽燃徘徊者 Dancing Cinders 解除灼烧首实例）；命中的仍仅限 `dispellable: true` 实例（见 `04_modifier.md` §4.6），按 LIFO 逐个摘除 |
+| `filter`（`$mod` 绑定） | **已实现**（2026-09-07）——`$mod` 绑定待审 modifier（字段：`modifier_id` / `modifier_type` / `debuff_kind` / `control_kind` / `dot_element` / `dispellable` / `source` + 合成 `kind`——免疫判定同口径 `debuff_kind or (control if control_kind else modifier_type)`，`"$mod.kind == 'control'"` 一把罩住两写法；`dot_element` 可按 DoT 属性精确摘除，炽燃徘徊者 Dancing Cinders 解除灼烧首实例；`source` 为施加者 actor_id，可写 `$mod.source == $self.actor_id` 对应上游 OnlyRemoveCasterAdded）；命中的仍仅限 `dispellable: true` 实例（见 `04_modifier.md` §4.6），按 LIFO 逐个摘除 |
 | `max_count` | **已实现**（2026-09-08）——逐目标截断：命中清单（LIFO 序）只摘前 N 个，须为 ≥1 整数（编译期闸）；仅配 `filter` 路径有意义（`modifier_id` 定点摘除本就一次一件，写上不改变语义） |
 | `order` | **未实现**（写了编译期炸） |
 | `reason` | hook 语境收（缺省 `"remove"`，进移除日志/事件载荷） |
@@ -966,6 +966,8 @@ on_insufficient: "fail"      # "fail" | "clamp" | "consume_all"
 ```
 
 目标必须已有敌方 policy 运行态，否则运行期报错；写入值随 `dynamic_values` 进入存档。
+保留键 `current_phase` 改写敌方 `runtime.current_phase`（不写入 `dynamic_values`），供
+`ByCompareMonsterPhase` / 阶段门控读取；其余键仍写动态值表。
 外宇宙之冰的 `XP_Ice_Elite_Powerful_Modifier` 在 `OnStack/OnDestroy` 把 `Phase_Flag`
 设为 2/1，是首个实例。
 
