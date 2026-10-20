@@ -4,8 +4,8 @@ from dataclasses import asdict, replace
 
 import pytest
 
-import hsr_nous.research_core.claims as claims_module
-from hsr_nous.research_core.artifacts import (
+import hsr_nous.research.core.claims as claims_module
+from hsr_nous.research.core.artifacts import (
     ArtifactStore,
     make_comparison_set,
     make_event_id,
@@ -13,10 +13,10 @@ from hsr_nous.research_core.artifacts import (
     make_run_id,
     run_failure_reason,
 )
-from hsr_nous.research_core.claims import ClaimValidator
-from hsr_nous.research_core.fingerprint import collect_research_fingerprint
-from hsr_nous.research_core.variants import VariantMaterializer
-from hsr_nous.research_schema import Claim, RunRecord, TrialArtifact
+from hsr_nous.research.core.claims import ClaimValidator
+from hsr_nous.research.core.fingerprint import collect_research_fingerprint
+from hsr_nous.research.core.variants import VariantMaterializer
+from hsr_nous.research.schema import Claim, RunRecord, TrialArtifact
 from tests._research_builders import make_demo_contract
 
 

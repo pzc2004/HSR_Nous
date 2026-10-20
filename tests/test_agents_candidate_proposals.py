@@ -7,9 +7,9 @@ import pytest
 
 from hsr_nous.agents import cli
 from hsr_nous.agents.dsh import DshError, DshResult
-from hsr_nous.research_permissions import open_research_gateway
-from hsr_nous.research_protocol import ProtocolValidationError
-from hsr_nous.research_schema import canonical_json
+from hsr_nous.research.permissions import open_research_gateway
+from hsr_nous.research.protocol import ProtocolValidationError
+from hsr_nous.research.schema import canonical_json
 from tests._research_builders import make_candidate_proposals, make_candidate_space
 
 

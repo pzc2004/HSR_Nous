@@ -39,7 +39,7 @@ DSH 启动时自行读取 `.env`；启动器只检查文件是否存在以选择
 - 宿主先登记预期 contract，DSH 完成后核对唯一预期调用及其成功 tool_result，再重新读取 investigation 并独立复核报告。Agent 的自然语言文本标记为 untrusted，不能替代完成态 investigation 或可信报告。
 - 跨 JavaScript 进程提交契约或提案时使用原样 JSON 字符串，避免 `600.0` 被改成 `600` 后产生不同内容身份。
 
-具体协议见 [08_agent_bridge.md](../research_schema/docs/08_agent_bridge.md)。
+具体协议见 [08_agent_bridge.md](../research/schema/docs/08_agent_bridge.md)。
 
 ## 限制
 

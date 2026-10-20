@@ -5,13 +5,13 @@ from pathlib import Path
 
 import pytest
 
-import hsr_nous.research_core.claims as claims_module
-import hsr_nous.research_core.runner as runner_module
-from hsr_nous.research_core.artifacts import ArtifactStore
-from hsr_nous.research_core.claims import ClaimValidator
-from hsr_nous.research_core.report import ReportComposer
-from hsr_nous.research_core.runner import TrialRunner
-from hsr_nous.research_schema import Claim, EvidenceLink
+import hsr_nous.research.core.claims as claims_module
+import hsr_nous.research.core.runner as runner_module
+from hsr_nous.research.core.artifacts import ArtifactStore
+from hsr_nous.research.core.claims import ClaimValidator
+from hsr_nous.research.core.report import ReportComposer
+from hsr_nous.research.core.runner import TrialRunner
+from hsr_nous.research.schema import Claim, EvidenceLink
 from tests._research_builders import make_demo_contract
 
 

@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from hsr_nous.research_core.artifacts import (
+from hsr_nous.research.core.artifacts import (
     ArtifactConflictError,
     ArtifactIntegrityError,
     ArtifactPathError,
@@ -19,13 +19,13 @@ from hsr_nous.research_core.artifacts import (
     make_run_id,
     make_trial_id,
 )
-from hsr_nous.research_core.fingerprint import (
+from hsr_nous.research.core.fingerprint import (
     collect_research_fingerprint,
     implementation_hash,
 )
-from hsr_nous.research_core.variants import VariantMaterializer
-from hsr_nous.research_protocol import resolve_protocol
-from hsr_nous.research_schema import RunRecord, canonical_bytes, content_hash
+from hsr_nous.research.core.variants import VariantMaterializer
+from hsr_nous.research.protocol import resolve_protocol
+from hsr_nous.research.schema import RunRecord, canonical_bytes, content_hash
 from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.compile.build_compiler import BuildCompiler
 from tests._research_builders import make_demo_contract, make_fingerprint
@@ -88,7 +88,7 @@ def test_variant_uses_compiler_loader_and_preserves_canonical(tmp_path):
 
 
 def test_fingerprint_binds_config_variant_and_implementation(monkeypatch, tmp_path):
-    import hsr_nous.research_core.fingerprint as fingerprint_module
+    import hsr_nous.research.core.fingerprint as fingerprint_module
 
     base = {
         "git_commit": "information-only",
@@ -131,13 +131,13 @@ def test_fingerprint_binds_config_variant_and_implementation(monkeypatch, tmp_pa
     )
 
     root = tmp_path / "source-tree"
-    for package in ("sim", "sim_schema", "research_schema", "research_protocol", "research_core"):
+    for package in ("sim", "sim_schema", "research/schema", "research/protocol", "research/core"):
         directory = root / "src" / "hsr_nous" / package
         directory.mkdir(parents=True)
         (directory / "module.py").write_text("VALUE = 1\n", encoding="utf-8")
     (root / "uv.lock").write_text("version = 1\n", encoding="utf-8")
     first = implementation_hash(root)
-    (root / "src" / "hsr_nous" / "research_core" / "module.py").write_text(
+    (root / "src" / "hsr_nous" / "research" / "core" / "module.py").write_text(
         "VALUE = 2\n", encoding="utf-8"
     )
     assert implementation_hash(root) != first
@@ -224,7 +224,7 @@ def test_store_atomic_replace_path_escape_and_metadata(tmp_path, monkeypatch):
     store = ArtifactStore(tmp_path / "artifacts")
     _, _, _, trial_id = _published_spec(store)
     record = _run_record(trial_id)
-    import hsr_nous.research_core.artifacts as artifacts_module
+    import hsr_nous.research.core.artifacts as artifacts_module
 
     real_replace = artifacts_module.os.replace
     calls = []
@@ -270,7 +270,7 @@ def test_store_rejects_noncanonical_read(tmp_path):
 
 
 def test_variant_rejects_unsafe_patch_reference_before_any_loader(monkeypatch):
-    from hsr_nous.research_protocol import ProtocolValidationError
+    from hsr_nous.research.protocol import ProtocolValidationError
 
     def forbidden_loader(*args, **kwargs):
         raise AssertionError("BuildCompiler loader must not be called")
@@ -402,7 +402,7 @@ def test_report_publish_and_read_enforce_trial_ownership(tmp_path):
 
 
 def test_event_and_modifier_evidence_links_require_run_id(tmp_path):
-    from hsr_nous.research_schema import EvidenceLink
+    from hsr_nous.research.schema import EvidenceLink
 
     store = ArtifactStore(tmp_path / "artifacts")
     for field in ("event_id", "modifier_id"):
@@ -496,7 +496,7 @@ def test_configuration_parent_hash_must_match_spec_baseline(tmp_path):
 
 def test_configuration_fingerprints_bind_team_relics_and_both_policies(monkeypatch):
     import hashlib
-    import hsr_nous.research_core.fingerprint as fingerprint_module
+    import hsr_nous.research.core.fingerprint as fingerprint_module
     from tests._research_builders import make_acheron_feet_contract, make_acheron_team_contract
 
     policy_sources = []

@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from hsr_nous.research_core.kernel import (
+from hsr_nous.research.core.kernel import (
     build_claim,
     compare,
     confidence_interval,
@@ -15,8 +15,8 @@ from hsr_nous.research_core.kernel import (
     validate_claim,
     variance,
 )
-from hsr_nous.research_protocol import PAIRED_V1
-from hsr_nous.research_schema import Claim, EvidenceLink, MetricSpec
+from hsr_nous.research.protocol import PAIRED_V1
+from hsr_nous.research.schema import Claim, EvidenceLink, MetricSpec
 from hsr_nous.sim.montecarlo import summarize
 from tests._research_builders import make_fingerprint
 

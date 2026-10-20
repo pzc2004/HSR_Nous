@@ -57,7 +57,7 @@
         serverName: nous
         transport: stdio
         command: !!js process.env.HSR_NOUS_PYTHON
-        args: ['-m', 'hsr_nous.research_permissions.mcp']
+        args: ['-m', 'hsr_nous.research.permissions.mcp']
         cwd: !!js process.env.HSR_NOUS_RESEARCH_ROOT
         env:
           HSR_NOUS_RESEARCH_ROOT: !!js process.env.HSR_NOUS_RESEARCH_ROOT

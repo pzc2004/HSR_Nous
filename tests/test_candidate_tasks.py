@@ -6,9 +6,9 @@ import time
 
 import pytest
 
-from hsr_nous.research_core import ArtifactStore, CandidateRunner, CandidateTaskManager
-from hsr_nous.research_permissions import open_research_gateway
-from hsr_nous.research_permissions.policy import CapabilityPolicy, PermissionDeniedError
+from hsr_nous.research.core import ArtifactStore, CandidateRunner, CandidateTaskManager
+from hsr_nous.research.permissions import open_research_gateway
+from hsr_nous.research.permissions.policy import CapabilityPolicy, PermissionDeniedError
 from tests._research_builders import make_candidate_set
 
 

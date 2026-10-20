@@ -5,14 +5,14 @@ from dataclasses import replace
 
 import pytest
 
-from hsr_nous.research_protocol import (
+from hsr_nous.research.protocol import (
     PAIRED_V1,
     ProtocolValidationError,
     resolve_protocol,
     validate_contract,
     validate_fingerprint,
 )
-from hsr_nous.research_schema import ExperimentArm
+from hsr_nous.research.schema import ExperimentArm
 from tests._research_builders import (
     make_contract,
     make_fingerprint,
@@ -245,7 +245,7 @@ def test_patch_template_kind_is_a_closed_vocabulary():
 
 
 def test_patch_reference_validation_is_public_and_does_not_need_templates():
-    from hsr_nous.research_protocol import validate_patch_reference
+    from hsr_nous.research.protocol import validate_patch_reference
 
     assert validate_patch_reference(make_patch()) == make_patch()
     for template_id in ("../1202", "*", "with/slash", "with space"):
@@ -258,7 +258,7 @@ def test_protocol_doc_matches_paired_v1():
 
     text = (
         Path(__file__).parent.parent
-        / "src/hsr_nous/research_schema/docs/02_protocol.md"
+        / "src/hsr_nous/research/schema/docs/02_protocol.md"
     ).read_text(encoding="utf-8")
     dev = PAIRED_V1.dev_seeds
     holdout = PAIRED_V1.holdout_seeds

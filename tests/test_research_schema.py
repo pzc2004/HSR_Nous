@@ -7,7 +7,7 @@ from dataclasses import FrozenInstanceError, dataclass, replace
 
 import pytest
 
-from hsr_nous.research_schema import (
+from hsr_nous.research.schema import (
     CLAIM_STATUSES,
     Claim,
     EvidenceLink,
@@ -153,7 +153,7 @@ def test_claim_round_trip():
 
 
 def test_trial_artifact_structured_caveats_round_trip():
-    from hsr_nous.research_schema import ComparisonSet, TrialArtifact
+    from hsr_nous.research.schema import ComparisonSet, TrialArtifact
     from tests._research_builders import make_fingerprint
 
     artifact = TrialArtifact(

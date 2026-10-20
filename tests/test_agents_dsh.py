@@ -13,8 +13,8 @@ import pytest
 from hsr_nous.agents import cli
 from hsr_nous.agents.dsh import DshError, DshResult, DshTimeoutError, run_headless
 from hsr_nous.common import repo_root
-from hsr_nous.research_permissions import open_research_gateway
-from hsr_nous.research_schema import canonical_json
+from hsr_nous.research.permissions import open_research_gateway
+from hsr_nous.research.schema import canonical_json
 from tests._research_builders import make_demo_contract
 
 

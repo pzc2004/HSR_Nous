@@ -4,9 +4,9 @@ from dataclasses import replace
 
 import pytest
 
-from hsr_nous.research_core import ArtifactIntegrityError, ArtifactStore, CandidateRunner
-from hsr_nous.research_protocol import ProtocolValidationError, validate_candidate_set
-from hsr_nous.research_schema import CandidateSet, canonical_bytes, content_hash
+from hsr_nous.research.core import ArtifactIntegrityError, ArtifactStore, CandidateRunner
+from hsr_nous.research.protocol import ProtocolValidationError, validate_candidate_set
+from hsr_nous.research.schema import CandidateSet, canonical_bytes, content_hash
 from tests._research_builders import make_acheron_candidate_set, make_candidate_set
 
 

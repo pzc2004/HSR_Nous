@@ -6,9 +6,9 @@ from pathlib import Path
 import httpx
 import pytest
 
-from hsr_nous.research_core import ArtifactStore
-from hsr_nous.research_permissions import CapabilityPolicy, PermissionDeniedError, ResearchGateway
-from hsr_nous.research_web import (
+from hsr_nous.research.core import ArtifactStore
+from hsr_nous.research.permissions import CapabilityPolicy, PermissionDeniedError, ResearchGateway
+from hsr_nous.research.web import (
     DeepSeekWebProvider,
     WebEvidenceError,
     WebEvidenceStore,
@@ -167,7 +167,7 @@ def test_query_and_result_roundtrip_and_tamper_detection(tmp_path):
     path = provider.store.root / "i" / "results" / f"{result.result_set_id}.json"
     payload = json.loads(path.read_bytes())
     payload["results"][0]["summary"] = "tampered"
-    from hsr_nous.research_schema import canonical_bytes
+    from hsr_nous.research.schema import canonical_bytes
     path.chmod(0o644)
     path.write_bytes(canonical_bytes(payload))
     with pytest.raises(WebEvidenceError):

@@ -95,13 +95,13 @@ src/hsr_nous/
 │   ├── montecarlo.py  # 多局统计聚合（roll 模式 N 局 → 伤害分布）
 │   └── compile/       # 绑定编译层（build/stage YAML → 不可变 CompiledEncounter）
 │
-├── research_schema/   # 研究契约纯数据模型 + canonical JSON（不依赖 sim）
-│   ├── README.md      # research spec 文档索引
-│   └── docs/          # 分章节研究后端规范（00_overview 起）
-├── research_protocol/ # paired-v1 固定协议解析与契约校验（不执行模拟）
-├── research_core/     # 机制 variant + 只读 artifact + 可信内核/claim/JSON 报告
-├── research_permissions/ # CapabilityPolicy + ResearchGateway/submit_claim（外部权限边界）
-├── research_web/      # 可选外部检索与证据（DeepSeek Search/Fetch provider + WebEvidenceStore）
+├── research/          # 统一研究域：契约、协议、执行、权限、外部证据与只读呈现
+│   ├── schema/        # 纯数据契约 + canonical JSON（docs 为研究规范）
+│   ├── protocol/      # paired-v1 固定协议、契约校验与候选生成（不执行模拟）
+│   ├── core/          # 执行、只读 artifact、可信计算、JSON 报告与后台 worker
+│   ├── permissions/   # CapabilityPolicy + ResearchGateway + MCP（外部权限边界）
+│   ├── web/           # 可选外部检索与证据（Search/Fetch provider + WebEvidenceStore）
+│   └── workbench/     # 只读研究台（任务、图表与证据下钻；规划中）
 ├── agents/          # 外部 Agent harness 适配（DSH headless + 工具白名单）
 
 docs/                       # 战斗规则文档（模拟器"唯一事实来源"）
@@ -124,17 +124,18 @@ data/                  # 数据目录（gitignored）
 <!-- module-boundaries -->
 | 模块 | 允许 import | 禁止 import |
 |------|------------|------------|
-| `common/` | 无 | `pipeline`, `sim_schema`, `adapters`, `sim`, `ops`, `account`, `llm`, `research_schema`, `research_protocol`, `research_core`, `research_permissions`, `research_web`（公共基座是叶子层，零项目依赖） |
+| `common/` | 无 | `pipeline`, `sim_schema`, `adapters`, `sim`, `ops`, `account`, `llm`, `research`（公共基座是叶子层，零项目依赖） |
 | `pipeline/` | `common` | `sim_schema`, `sim` |
 | `sim_schema/` | `common` | `pipeline`, `sim`, `adapters` |
 | `adapters/` | `pipeline`, `sim_schema`, `account`（账号数据适配）, `llm`（LLM 统一接入层 tribios）, `common` | `sim`（只输出 sim_schema，不调用仿真） |
 | `sim/` | `sim_schema`, `common` | `pipeline`, `adapters` |
-| `research_schema/` | 无 | `research_protocol`, `research_core`, `sim`, `pipeline`, `adapters`（纯数据契约） |
-| `research_protocol/` | `research_schema` | `research_core`, `sim`, `pipeline`, `adapters`（固定协议解析与校验，不执行模拟） |
-| `research_core/` | `research_schema`, `research_protocol`, `sim`, `sim_schema`, `common` | `pipeline`, `adapters`（执行、证据、可信计算与报告层） |
-| `research_permissions/` | `research_core`, `research_schema`, `research_protocol`, `research_web`, `common` | `sim`, `pipeline`, `adapters`（外部权限网关） |
-| `research_web/` | `research_schema`, `common` | `research_core`, `research_permissions`, `sim`, `pipeline`, `adapters`（外部检索与证据层） |
-| `agents/` | `research_schema`, `research_permissions`, `common` | `sim`, `research_core`, `pipeline`, `adapters`（外部 harness 适配，可信执行只经网关） |
+| `research/schema/` | 无 | `research/protocol`, `research/core`, `sim`, `pipeline`, `adapters`（纯数据契约） |
+| `research/protocol/` | `research/schema` | `research/core`, `sim`, `pipeline`, `adapters`（固定协议解析与校验，不执行模拟） |
+| `research/core/` | `research/schema`, `research/protocol`, `sim`, `sim_schema`, `common` | `pipeline`, `adapters`（执行、证据、可信计算与报告层） |
+| `research/permissions/` | `research/core`, `research/schema`, `research/protocol`, `research/web`, `common` | `sim`, `pipeline`, `adapters`（外部权限网关） |
+| `research/web/` | `research/schema`, `common` | `research/core`, `research/permissions`, `sim`, `pipeline`, `adapters`（外部检索与证据层） |
+| `research/workbench/` | `research/schema`, `research/permissions`, `common`, `sim`（仅 `sim.web` 本地服务与孤儿看护） | `research/core`, `agents`, `pipeline`, `adapters`（只读呈现，不直接执行） |
+| `agents/` | `research/schema`, `research/permissions`, `common` | `sim`, `research/core`, `pipeline`, `adapters`（外部 harness 适配，可信执行只经网关） |
 | `ops/` | `llm`, `adapters`, `sim`, `pipeline`, `sim_schema`, `common` | — |
 | `account/` | `common` | `sim`, `pipeline`, `adapters` |
 | `llm/` | `common` | `pipeline`, `sim_schema`, `sim`, `adapters` |
@@ -204,11 +205,11 @@ policy:
 |------|------|----------|---------|---------|
 | 项目整体 | 博识尊 | `nous` | "万物皆是疑问，一切必有解答。原为用于求解万物的星体计算机，由机器升格而成的星神。"[1] | 项目旨在求解配队配装问题 |
 | Simulator | 翁法罗斯 | `amphoreus` | 博识尊的天体神经元——权杖 δ-me13 中运行的模拟世界，通过无数次循环实验求解"生命的第一因"[2] | 通过重复模拟求解最优配装/配队 |
-| Research Protocol | 太一 | `ena` | "万事万物归于一统，共存共荣，永在「秩序」之中。"[1] | `research_protocol`：规定 paired-v1 固定协议并校验契约、seed/holdout、预算与 patch，不执行模拟；比较组与 claim 状态流转由 research_core 承接 |
-| Research Core | 克里珀 | `qlipoth` | "祂知晓大敌的吞噬迫在眉睫。因此不得不以光年为单位铸造障壁加以封印，隔绝保护尚有生机的世界。"[1] | `research_core`：强制执行协议、调用模拟器、保存只读证据、运行可信内核并校验 claim，守护可信结论的唯一通道 |
+| Research Protocol | 太一 | `ena` | "万事万物归于一统，共存共荣，永在「秩序」之中。"[1] | `research/protocol`：规定 paired-v1 固定协议并校验契约、seed/holdout、预算与 patch，不执行模拟；比较组与 claim 状态流转由 research/core 承接 |
+| Research Core | 克里珀 | `qlipoth` | "祂知晓大敌的吞噬迫在眉睫。因此不得不以光年为单位铸造障壁加以封印，隔绝保护尚有生机的世界。"[1] | `research/core`：强制执行协议、调用模拟器、保存只读证据、运行可信内核并校验 claim，守护可信结论的唯一通道 |
 | Agent（DSH 最小接入） | 阿基维利 | `akivili` | "阿基维利离开孤绝世界裴伽纳，不断开拓着宇宙未知的边界，试图找寻存在之树的端点。"[1] | `agents`：提出假设、生成研究契约并调用工具探索方案，不直接制造可信结论 |
 | Memory（规划） | 浮黎 | `fuli` | "世间再无比纯粹的记忆更加包容的存在：它记录一切，不嫌恶，不偏爱；它无私地保留每个基本的事实，每种绮丽的姿态。"[1] | `memory`：跨项目保存 claim、证据—推导关系、失败与反例，不修改原始 artifact |
-| Research Workbench（规划） | 伊德莉拉 | `idrila` | "在诡丽变幻的宇宙图景中，伊德莉拉窥见了世界存在的终极意义：人们谓之「美」的存在。"[1] | `research_workbench`：把结构化结果呈现为可读、可交互的研究文档，支持下钻、选中联动、重放与人工接管 |
+| Research Workbench（规划） | 伊德莉拉 | `idrila` | "在诡丽变幻的宇宙图景中，伊德莉拉窥见了世界存在的终极意义：人们谓之「美」的存在。"[1] | `research/workbench`：把结构化结果呈现为可读、可交互的研究文档，支持下钻、选中联动、重放与人工接管 |
 | data/ | 智库 | `data_bank` | 列车上的百科全书系统[3] | 存储角色/光锥/遗器/敌人数据 |
 
 **主要信息源：**

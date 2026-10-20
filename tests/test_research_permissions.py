@@ -5,15 +5,15 @@ from pathlib import Path
 
 import pytest
 
-import hsr_nous.research_core.claims as claims_module
-import hsr_nous.research_core.runner as runner_module
-from hsr_nous.research_core import ArtifactStore
-from hsr_nous.research_permissions import (
+import hsr_nous.research.core.claims as claims_module
+import hsr_nous.research.core.runner as runner_module
+from hsr_nous.research.core import ArtifactStore
+from hsr_nous.research.permissions import (
     CapabilityPolicy,
     PermissionDeniedError,
     ResearchGateway,
 )
-from hsr_nous.research_schema import Claim, ClaimSubmissionResult
+from hsr_nous.research.schema import Claim, ClaimSubmissionResult
 from tests._research_builders import make_demo_contract
 
 

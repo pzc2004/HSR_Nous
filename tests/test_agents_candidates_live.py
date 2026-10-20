@@ -4,7 +4,7 @@ import threading
 from http.server import ThreadingHTTPServer
 
 from hsr_nous.agents import cli
-from hsr_nous.research_schema import canonical_json
+from hsr_nous.research.schema import canonical_json
 from tests._research_builders import make_candidate_set
 from tests.test_agents_dsh_live import _MessagesHandler, _contains_tool_result
 

@@ -4,7 +4,7 @@ import anyio
 from mcp import ClientSession
 from mcp.client.stdio import stdio_client
 
-from hsr_nous.research_schema import canonical_json
+from hsr_nous.research.schema import canonical_json
 from tests._research_builders import make_candidate_proposals, make_candidate_space
 from tests.test_research_mcp import _payload, _server_parameters
 

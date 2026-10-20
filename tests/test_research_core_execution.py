@@ -4,13 +4,13 @@ from dataclasses import replace
 
 import pytest
 
-from hsr_nous.research_core import ExecutionManager
-from hsr_nous.research_core.artifacts import (
+from hsr_nous.research.core import ExecutionManager
+from hsr_nous.research.core.artifacts import (
     ArtifactConflictError,
     ArtifactPathError,
     ArtifactStore,
 )
-from hsr_nous.research_schema import ExecutionRecord, InvestigationState, canonical_bytes, content_hash
+from hsr_nous.research.schema import ExecutionRecord, InvestigationState, canonical_bytes, content_hash
 from tests._research_builders import make_demo_contract
 
 
@@ -100,8 +100,8 @@ def test_cancel_after_third_run_and_resume_only_missing(tmp_path, monkeypatch):
     assert published == 3
     assert not (store.trial_dir(investigation.trial_id) / "result.json").exists()
     # Read the retained runs directly from the frozen baseline dev prefix.
-    from hsr_nous.research_core.artifacts import make_run_id
-    from hsr_nous.research_protocol import PAIRED_V1
+    from hsr_nous.research.core.artifacts import make_run_id
+    from hsr_nous.research.protocol import PAIRED_V1
     first_three = {
         seed: store.run_path(
             investigation.trial_id, make_run_id(investigation.trial_id, "baseline", "dev", seed)
@@ -197,7 +197,7 @@ def test_execution_persistence_roundtrip_and_history_revision(tmp_path):
 
 
 def test_validate_failure_can_retry_and_succeed(tmp_path, monkeypatch):
-    import hsr_nous.research_core.execution as execution_module
+    import hsr_nous.research.core.execution as execution_module
 
     store = ArtifactStore(tmp_path / "artifacts")
     manager = ExecutionManager(store)

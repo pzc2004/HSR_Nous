@@ -9,7 +9,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import get_default_environment, stdio_client
 
 from hsr_nous.common import repo_root
-from hsr_nous.research_schema import canonical_json
+from hsr_nous.research.schema import canonical_json
 from tests._research_builders import make_demo_contract
 
 
@@ -22,7 +22,7 @@ def _server_parameters(root: Path) -> StdioServerParameters:
     })
     return StdioServerParameters(
         command=sys.executable,
-        args=["-m", "hsr_nous.research_permissions.mcp"],
+        args=["-m", "hsr_nous.research.permissions.mcp"],
         env=env,
         cwd=root,
     )

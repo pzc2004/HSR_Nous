@@ -8,8 +8,8 @@ from mcp import ClientSession
 from mcp.client.stdio import stdio_client
 import pytest
 
-from hsr_nous.research_protocol import CandidateGenerator, ProtocolValidationError
-from hsr_nous.research_schema import (
+from hsr_nous.research.protocol import CandidateGenerator, ProtocolValidationError
+from hsr_nous.research.schema import (
     CandidateProposal,
     CandidateRule,
     CandidateSpace,

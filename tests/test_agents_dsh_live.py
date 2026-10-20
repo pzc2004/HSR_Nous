@@ -5,8 +5,8 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from hsr_nous.agents import cli
-from hsr_nous.research_permissions import open_research_gateway
-from hsr_nous.research_schema import EvidenceLink, canonical_json
+from hsr_nous.research.permissions import open_research_gateway
+from hsr_nous.research.schema import EvidenceLink, canonical_json
 from tests._research_builders import make_demo_contract
 
 

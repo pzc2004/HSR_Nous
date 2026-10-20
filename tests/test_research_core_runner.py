@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-import hsr_nous.research_core.runner as runner_module
-from hsr_nous.research_core.artifacts import ArtifactIntegrityError, ArtifactStore
-from hsr_nous.research_core.runner import TrialRunner
-from hsr_nous.research_protocol import PAIRED_V1
-from hsr_nous.research_schema import canonical_bytes, content_hash
+import hsr_nous.research.core.runner as runner_module
+from hsr_nous.research.core.artifacts import ArtifactIntegrityError, ArtifactStore
+from hsr_nous.research.core.runner import TrialRunner
+from hsr_nous.research.protocol import PAIRED_V1
+from hsr_nous.research.schema import canonical_bytes, content_hash
 from tests._research_builders import make_demo_contract
 
 

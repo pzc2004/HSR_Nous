@@ -926,17 +926,17 @@ def test_readme_indexes_match_disk():
         bad.append(f"sim_schema/README.md 索引缺 {f}")
     for f in sorted(readme_idx - disk):
         bad.append(f"sim_schema/README.md 索引指向不存在的 {f}")
-    # research_schema/README.md 章节表 ↔ research_schema/docs/（同一链接提取规则）
+    # research/schema/README.md 章节表 ↔ research/schema/docs/（同一链接提取规则）
     research_readme_idx = _index_entries(
-        ROOT / "src/hsr_nous/research_schema/README.md", "docs/"
+        ROOT / "src/hsr_nous/research/schema/README.md", "docs/"
     )
     research_disk = {
-        p.name for p in (ROOT / "src/hsr_nous/research_schema/docs").glob("??_*.md")
+        p.name for p in (ROOT / "src/hsr_nous/research/schema/docs").glob("??_*.md")
     }
     for f in sorted(research_disk - research_readme_idx):
-        bad.append(f"research_schema/README.md 索引缺 {f}")
+        bad.append(f"research/schema/README.md 索引缺 {f}")
     for f in sorted(research_readme_idx - research_disk):
-        bad.append(f"research_schema/README.md 索引指向不存在的 {f}")
+        bad.append(f"research/schema/README.md 索引指向不存在的 {f}")
     # docs/README.md 目录树 ↔ docs/mechanics/
     mech_idx = _index_entries(ROOT / "docs/README.md")
     mech_disk = {p.name for p in (ROOT / "docs/mechanics").glob("??_*.md")}
@@ -972,18 +972,26 @@ BOUNDARY_ALLOWED = {
     "sim_schema": {"common"},
     "adapters": {"pipeline", "sim_schema", "account", "llm", "common"},
     "sim": {"sim_schema", "common"},
-    "research_schema": set(),
-    "research_protocol": {"research_schema"},
-    "research_core": {"research_schema", "research_protocol", "sim", "sim_schema", "common"},
-    "research_permissions": {"research_core", "research_schema", "research_protocol", "research_web", "common"},
-    "research_web": {"research_schema", "common"},
-    "agents": {"research_schema", "research_permissions", "common"},
+    "research/schema": set(),
+    "research/protocol": {"research/schema"},
+    "research/core": {"research/schema", "research/protocol", "sim", "sim_schema", "common"},
+    "research/permissions": {
+        "research/core", "research/schema", "research/protocol", "research/web", "common",
+    },
+    "research/web": {"research/schema", "common"},
+    "research/workbench": {"research/schema", "research/permissions", "common", "sim"},
+    "agents": {"research/schema", "research/permissions", "common"},
     "ops": {"llm", "adapters", "sim", "pipeline", "sim_schema", "common"},
     "account": {"common"},
     "llm": {"common"},
 }
 
-_IMPORT_RE = re.compile(r"^\s*(?:from|import)\s+hsr_nous\.([a-z_]+)", re.M)
+_IMPORT_RE = re.compile(r"^\s*(?:from|import)\s+hsr_nous\.([a-z_]+(?:\.[a-z_]+)?)", re.M)
+
+
+def _canonical_module(name: str) -> str:
+    parts = name.split(".")
+    return "/".join(parts[:2]) if parts[0] == "research" and len(parts) > 1 else parts[0]
 
 
 def _actual_edges() -> dict:
@@ -993,7 +1001,7 @@ def _actual_edges() -> dict:
         mods = set()
         for py in (ROOT / "src/hsr_nous" / mod).rglob("*.py"):
             for m in _IMPORT_RE.finditer(py.read_text(encoding="utf-8")):
-                target = m.group(1)
+                target = _canonical_module(m.group(1))
                 if target != mod and target in BOUNDARY_ALLOWED:
                     mods.add(target)
         edges[mod] = mods
@@ -1004,9 +1012,9 @@ def _agents_md_allowed() -> dict:
     """解析 AGENTS.md 模块边界表的"允许 import"列（反引号模块名）。"""
     text = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
     table = {}
-    for m in re.finditer(r"^\| `([a-z_]+)/` \| ([^|]+) \|", text, re.M):
+    for m in re.finditer(r"^\| `([a-z_/]+)/` \| ([^|]+) \|", text, re.M):
         mod, cell = m.group(1), m.group(2)
-        names = set(re.findall(r"`([a-z_]+)`", cell))
+        names = set(re.findall(r"`([a-z_/]+)`", cell))
         table[mod] = {n for n in names if n in BOUNDARY_ALLOWED}
     return table
 

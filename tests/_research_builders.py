@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from hsr_nous.research_schema import (
+from hsr_nous.research.schema import (
     CandidateProposal,
     CandidateRule,
     CandidateSet,

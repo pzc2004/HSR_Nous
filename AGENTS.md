@@ -29,13 +29,13 @@ src/hsr_nous/
 ├── adapters/      # 外部数据 → 仿真输入桥梁（模板生成器产 per-entity DSL YAML + 对象适配器）
 ├── sim/           # 纯战斗模拟器（只认识 sim_schema）
 │   └── policy_api.py  # 策略运行时（ScriptedPolicy / CompiledPolicyRuntime）
-├── research_schema/    # 研究契约纯数据模型 + canonical JSON（零项目依赖）
-│   ├── README.md       # research spec 文档索引
-│   └── docs/           # 分章节研究后端规范（00_overview 起）
-├── research_protocol/  # paired-v1 固定协议解析与契约校验（不执行模拟）
-├── research_core/      # 机制 variant + 只读 artifact + 可信内核/claim/JSON 报告
-├── research_permissions/ # CapabilityPolicy + ResearchGateway/submit_claim（外部权限边界）
-├── research_web/    # 可选外部检索与证据（DeepSeek Search/Fetch provider + WebEvidenceStore）
+├── research/      # 研究域总包：契约、协议、执行、权限、外部证据与只读呈现
+│   ├── schema/      # 纯数据契约 + canonical JSON（零项目依赖；docs 为研究规范）
+│   ├── protocol/    # paired-v1 固定协议、契约校验与候选生成（不执行模拟）
+│   ├── core/        # 执行、只读 artifact、可信计算、JSON 报告与后台 worker
+│   ├── permissions/ # CapabilityPolicy + ResearchGateway + MCP（外部权限边界）
+│   ├── web/         # 可选外部检索与证据（Search/Fetch provider + WebEvidenceStore）
+│   └── workbench/   # 只读研究台（任务、图表与证据下钻；规划中）
 ├── agents/        # 外部 Agent harness 适配（DSH headless + 工具白名单；不直接制造可信结论）
 ├── ops/           # 生产运行时与批量流水线（DAG 执行器 + 生产 DAG——打标 annotator 首租）
 └── account/       # Mihoyo 账号集成（HoYoLAB API，keyring 优先）
@@ -60,17 +60,18 @@ tests/                 # 纯测试代码（零 YAML——模板正典已全部�
 
 | 模块 | 允许 import | 禁止 import |
 |------|------------|------------|
-| `common/` | 无 | `pipeline`, `sim_schema`, `adapters`, `sim`, `ops`, `account`, `llm`, `research_schema`, `research_protocol`, `research_core`, `research_permissions`, `research_web`（公共基座是叶子层，零项目依赖） |
+| `common/` | 无 | `pipeline`, `sim_schema`, `adapters`, `sim`, `ops`, `account`, `llm`, `research`（公共基座是叶子层，零项目依赖） |
 | `pipeline/` | `common` | `sim_schema`, `sim` |
 | `sim_schema/` | `common` | `pipeline`, `sim`, `adapters` |
 | `adapters/` | `pipeline`, `sim_schema`, `account`（账号数据适配）, `llm`（LLM 统一接入层 tribios）, `common` | `sim`（只输出 sim_schema，不调用仿真） |
 | `sim/` | `sim_schema`, `common` | `pipeline`, `adapters` |
-| `research_schema/` | 无 | `research_protocol`, `research_core`, `sim`, `pipeline`, `adapters`（纯数据契约） |
-| `research_protocol/` | `research_schema` | `research_core`, `sim`, `pipeline`, `adapters`（固定协议解析与校验，不执行模拟） |
-| `research_core/` | `research_schema`, `research_protocol`, `sim`, `sim_schema`, `common` | `pipeline`, `adapters`（执行、证据、可信计算与报告层） |
-| `research_permissions/` | `research_core`, `research_schema`, `research_protocol`, `research_web`, `common` | `sim`, `pipeline`, `adapters`（外部权限网关） |
-| `research_web/` | `research_schema`, `common` | `research_core`, `research_permissions`, `sim`, `pipeline`, `adapters`（外部检索与证据层） |
-| `agents/` | `research_schema`, `research_permissions`, `common` | `sim`, `research_core`, `pipeline`, `adapters`（外部 harness 适配，可信执行只经网关） |
+| `research/schema/` | 无 | `research/protocol`, `research/core`, `sim`, `pipeline`, `adapters`（纯数据契约） |
+| `research/protocol/` | `research/schema` | `research/core`, `sim`, `pipeline`, `adapters`（固定协议解析与校验，不执行模拟） |
+| `research/core/` | `research/schema`, `research/protocol`, `sim`, `sim_schema`, `common` | `pipeline`, `adapters`（执行、证据、可信计算与报告层） |
+| `research/permissions/` | `research/core`, `research/schema`, `research/protocol`, `research/web`, `common` | `sim`, `pipeline`, `adapters`（外部权限网关） |
+| `research/web/` | `research/schema`, `common` | `research/core`, `research/permissions`, `sim`, `pipeline`, `adapters`（外部检索与证据层） |
+| `research/workbench/` | `research/schema`, `research/permissions`, `common`, `sim`（仅 `sim.web` 本地服务与孤儿看护） | `research/core`, `agents`, `pipeline`, `adapters`（只读呈现，不直接执行） |
+| `agents/` | `research/schema`, `research/permissions`, `common` | `sim`, `research/core`, `pipeline`, `adapters`（外部 harness 适配，可信执行只经网关） |
 | `ops/` | `llm`, `adapters`, `sim`, `pipeline`, `sim_schema`, `common` | — |
 | `account/` | `common` | `sim`, `pipeline`, `adapters` |
 | `llm/` | `common` | `pipeline`, `sim_schema`, `sim`, `adapters` |
@@ -103,8 +104,8 @@ httpx + 公共基座 `common`）；`adapters` 允许 import `llm`——标注流
 |------|------|------|------|
 | 公共基座 | `common/` | 路径 / 环境变量 / `.env` / IO 基元（无业务语义） | 平实英文（不做星神/泰坦命名） |
 | 核心域 | `sim_schema/`、`sim/` | 仿真数据模型与战斗引擎 | 星神名（翁法罗斯）/ 引擎内部件泰坦名 |
-| 研究域 | `research_schema/`、`research_protocol/`、`research_core/`、`research_permissions/` | 研究契约、固定实验协议、可信执行与证据报告、外部权限边界 | schema/permissions 平实英文；protocol/core 星神名（太一/克里珀） |
-| 外部接入 | `pipeline/`、`account/`、`llm/`、`research_web/` | 各包一个外部系统（游戏数据 / 米游社 / LLM provider / 检索服务） | 目录平实英文；内部组件可挂泰坦名（如 llm=tribios） |
+| 研究域 | `research/`（schema、protocol、core、permissions、workbench） | 统一研究域：契约、协议、可信执行与证据、外部权限边界、只读研究台 | schema/permissions 平实英文；protocol/core/workbench 星神名（太一/克里珀/伊德莉拉） |
+| 外部接入 | `pipeline/`、`account/`、`llm/`、`research/web/` | 各包一个外部系统（游戏数据 / 米游社 / LLM provider / 检索服务） | 目录平实英文；内部组件可挂泰坦名（如 llm=tribios） |
 | Agent 接入 | `agents/` | DSH 外部进程、工具白名单与宿主复核 | 星神名（阿基维利） |
 | 桥接 | `adapters/` | 外部数据 → sim_schema | 平实英文 |
 | 应用编排 | `ops/` | 组合下层完成闭环 | 平实英文 |

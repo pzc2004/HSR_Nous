@@ -28,7 +28,7 @@ agent = ["mcp>=1.0,<2"]
 hsr-data = "hsr_nous.pipeline.cli:main"
 hsr-data-update = "hsr_nous.pipeline.update:main"
 hsr-sim = "hsr_nous.sim.cli:main"
-hsr-research-mcp = "hsr_nous.research_permissions.mcp:main"
+hsr-research-mcp = "hsr_nous.research.permissions.mcp:main"
 hsr-research-agent = "hsr_nous.agents.cli:main"
 
 [tool.hatch.build.targets.wheel]
