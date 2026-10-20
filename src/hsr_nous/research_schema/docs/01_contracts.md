@@ -74,6 +74,12 @@ assert restored == model
 
 生成器只产出现有 `CandidateSet`，不增加另一套执行或报告格式。完整字段约束、类型规则、MCP 传输和宿主复核见 [10_candidate_proposals.md](10_candidate_proposals.md)。
 
+## CandidateTask / CandidateTaskEvent
+
+`CandidateTask` 保存 task_id、CandidateSet、investigation 引用、状态、artifact_status、attempt、revision、report_id、错误、时间和只追加 history。task_id 由候选集内容派生，重复 start 是去重读取，resume 增加 attempt，不冒充独立执行。
+
+`CandidateTaskEvent` 保存 event_id、task_id、kind、status、attempt、时间与可选 contract/report 引用。事件持久追加并可按 cursor 增量读取，completed 事件只提供报告身份，不能替代独立复核。后台 worker、部分结果、取消恢复与通知语义见 [11_async_tasks.md](11_async_tasks.md)。
+
 ## ExperimentArm
 
 字段：`arm_id`、`world`、`patches`、`build_override`。

@@ -266,6 +266,132 @@ def run_candidate_proposals(
     return result, report
 
 
+def _background_call(result: DshResult, tool_name: str) -> dict:
+    calls = [event for event in result.events if event.get("type") == "tool_call"]
+    if len(calls) != 1 or calls[0].get("tool") != tool_name:
+        raise DshError(f"DSH must call {tool_name} exactly once without other tool calls")
+    return calls[0]
+
+
+def _background_receipt(result: DshResult, call: dict) -> tuple[str, str]:
+    call_id = call.get("callId")
+    if not isinstance(call_id, str):
+        raise DshError("background submission lacks a valid call identity")
+    for event in result.events:
+        if (event.get("type") != "tool_result" or event.get("callId") != call_id
+                or event.get("status") != "completed"):
+            continue
+        text = event.get("result")
+        if not isinstance(text, str):
+            raise DshError("background task result is not text")
+        try:
+            payload = json.loads(text)
+        except ValueError:
+            payload = None
+        if isinstance(payload, dict) and payload.get("status") == "rejected":
+            raise DshError(
+                "background task submission was rejected: "
+                + canonical_json(payload.get("error", {}))
+            )
+        task_match = re.search(r'"candidate_task_id"\s*:\s*"([0-9a-f]{64})"', text)
+        set_match = re.search(r'"candidate_set_id"\s*:\s*"([0-9a-f]{64})"', text)
+        if not task_match or not set_match:
+            raise DshError("background task result lacks task or candidate-set identity")
+        return task_match.group(1), set_match.group(1)
+    raise DshError("background submission did not return a successful tool result")
+
+
+def start_candidate_set(
+    candidate_set: CandidateSet,
+    *,
+    root: Path | None = None,
+    dsh_bin: str | Path | None = None,
+    timeout_s: float = 900,
+    model_env: Mapping[str, str] | None = None,
+    use_openai: bool | None = None,
+) -> tuple[DshResult, dict]:
+    task_text = (
+        "Start exactly one background candidate-set experiment. Call "
+        "mcp__nous__start_candidate_set exactly once with candidate_set_json set to the exact "
+        "JSON string below, preserving every character. Do not wait for completion or invent "
+        "statistics. Report only the returned task_id and status.\n\n"
+        f"candidate_set_json:\n{canonical_json(candidate_set)}"
+    )
+    result = run_headless(
+        task_text,
+        root=root,
+        dsh_bin=dsh_bin,
+        timeout_s=timeout_s,
+        model_env=model_env,
+        use_openai=use_openai,
+    )
+    if result.returncode != 0:
+        raise DshError(f"DSH failed with exit code {result.returncode}")
+    call = _background_call(result, "mcp__nous__start_candidate_set")
+    if call.get("input") != {"candidate_set_json": canonical_json(candidate_set)}:
+        raise DshError("DSH changed the expected candidate set")
+    task_id, candidate_set_id = _background_receipt(result, call)
+    task = open_research_gateway(root).read_candidate_task(task_id)
+    if task["candidate_set_id"] != candidate_set_id or canonical_json(
+        task["candidate_set"]
+    ) != canonical_json(candidate_set):
+        raise DshError("background task candidate-set identity mismatch")
+    return result, task
+
+
+def start_candidate_proposals(
+    space: CandidateSpace,
+    *,
+    root: Path | None = None,
+    dsh_bin: str | Path | None = None,
+    timeout_s: float = 900,
+    model_env: Mapping[str, str] | None = None,
+    use_openai: bool | None = None,
+) -> tuple[DshResult, dict]:
+    task_text = (
+        "Start exactly one background experiment for the natural-language question in "
+        f"base_contract.question. Propose between two and {space.max_candidates} distinct "
+        "candidates using only exact path/value pairs in the CandidateSpace rules. Call "
+        "mcp__nous__start_candidate_proposals exactly once with candidate_space_json set to "
+        "the exact JSON below and candidate_proposals_json set to an array containing only "
+        "path/value objects. Omit label. Do not wait for completion or invent statistics. "
+        "Report only the returned task_id and status.\n\n"
+        f"candidate_space_json:\n{canonical_json(space)}"
+    )
+    result = run_headless(
+        task_text,
+        root=root,
+        dsh_bin=dsh_bin,
+        timeout_s=timeout_s,
+        model_env=model_env,
+        use_openai=use_openai,
+    )
+    if result.returncode != 0:
+        raise DshError(f"DSH failed with exit code {result.returncode}")
+    call = _background_call(result, "mcp__nous__start_candidate_proposals")
+    payload = call.get("input")
+    if not isinstance(payload, dict) or set(payload) != {
+        "candidate_space_json", "candidate_proposals_json",
+    }:
+        raise DshError("DSH background proposal input has unexpected fields")
+    if payload["candidate_space_json"] != canonical_json(space):
+        raise DshError("DSH changed the expected candidate space")
+    try:
+        raw_proposals = json.loads(payload["candidate_proposals_json"])
+        if not isinstance(raw_proposals, list):
+            raise TypeError("candidate proposals must be an array")
+        proposals = tuple(CandidateProposal.from_dict(item) for item in raw_proposals)
+    except (TypeError, ValueError, KeyError) as error:
+        raise DshError(f"DSH produced invalid candidate proposals: {error}") from error
+    task_id, candidate_set_id = _background_receipt(result, call)
+    task = open_research_gateway(root).read_candidate_proposals_task(
+        space, proposals, task_id
+    )
+    if task["candidate_set_id"] != candidate_set_id:
+        raise DshError("background task candidate-set identity mismatch")
+    return result, task
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -280,11 +406,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--dsh-bin", type=Path)
     parser.add_argument("--timeout", type=float, default=900)
     parser.add_argument(
+        "--background", action="store_true", help="start a candidate task without waiting"
+    )
+    parser.add_argument(
         "--allow-model-env",
         action="store_true",
         help="explicitly pass the HSR_NOUS_LLM_AGENTS_* settings to DSH",
     )
     args = parser.parse_args(argv)
+    if args.background and not (args.candidate_set or args.candidate_proposals):
+        parser.error("--background requires --candidate-set or --candidate-proposals")
     model_env = {
         name: os.environ[name] for name in MODEL_ENV_KEYS if name in os.environ
     } if args.allow_model_env else None
@@ -293,34 +424,62 @@ def main(argv: Sequence[str] | None = None) -> int:
             space = CandidateSpace.from_dict(
                 json.loads(args.contract.read_text(encoding="utf-8"))
             )
-            result, candidate_report = run_candidate_proposals(
-                space,
-                root=args.research_root,
-                dsh_bin=args.dsh_bin,
-                timeout_s=args.timeout,
-                model_env=model_env,
-            )
-            output = {
-                "session_id": result.session_id,
-                "untrusted_agent_text": result.final_text,
-                "candidate_set_report": candidate_report,
-            }
+            if args.background:
+                result, candidate_task = start_candidate_proposals(
+                    space,
+                    root=args.research_root,
+                    dsh_bin=args.dsh_bin,
+                    timeout_s=args.timeout,
+                    model_env=model_env,
+                )
+                output = {
+                    "session_id": result.session_id,
+                    "untrusted_agent_text": result.final_text,
+                    "candidate_task": candidate_task,
+                }
+            else:
+                result, candidate_report = run_candidate_proposals(
+                    space,
+                    root=args.research_root,
+                    dsh_bin=args.dsh_bin,
+                    timeout_s=args.timeout,
+                    model_env=model_env,
+                )
+                output = {
+                    "session_id": result.session_id,
+                    "untrusted_agent_text": result.final_text,
+                    "candidate_set_report": candidate_report,
+                }
         elif args.candidate_set:
             candidate_set = CandidateSet.from_dict(
                 json.loads(args.contract.read_text(encoding="utf-8"))
             )
-            result, candidate_report = run_candidate_set(
-                candidate_set,
-                root=args.research_root,
-                dsh_bin=args.dsh_bin,
-                timeout_s=args.timeout,
-                model_env=model_env,
-            )
-            output = {
-                "session_id": result.session_id,
-                "untrusted_agent_text": result.final_text,
-                "candidate_set_report": candidate_report,
-            }
+            if args.background:
+                result, candidate_task = start_candidate_set(
+                    candidate_set,
+                    root=args.research_root,
+                    dsh_bin=args.dsh_bin,
+                    timeout_s=args.timeout,
+                    model_env=model_env,
+                )
+                output = {
+                    "session_id": result.session_id,
+                    "untrusted_agent_text": result.final_text,
+                    "candidate_task": candidate_task,
+                }
+            else:
+                result, candidate_report = run_candidate_set(
+                    candidate_set,
+                    root=args.research_root,
+                    dsh_bin=args.dsh_bin,
+                    timeout_s=args.timeout,
+                    model_env=model_env,
+                )
+                output = {
+                    "session_id": result.session_id,
+                    "untrusted_agent_text": result.final_text,
+                    "candidate_set_report": candidate_report,
+                }
         else:
             contract = ResearchContract.from_dict(
                 json.loads(args.contract.read_text(encoding="utf-8"))

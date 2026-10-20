@@ -250,6 +250,61 @@ class CandidateSet(_DataModel):
 
 
 @dataclass(frozen=True)
+class CandidateTask(_DataModel):
+    task_id: str
+    candidate_set: CandidateSet
+    investigation_ids: tuple[str, ...]
+    status: str
+    artifact_status: str
+    attempt: int
+    revision: int
+    created_at: str
+    updated_at: str
+    report_id: str | None = None
+    error: str | None = None
+    history: tuple[dict[str, Any], ...] = ()
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not self.task_id or not isinstance(self.candidate_set, CandidateSet):
+            raise ValueError("CandidateTask requires an identity and CandidateSet")
+        if len(self.investigation_ids) != len(self.candidate_set.candidates):
+            raise ValueError("CandidateTask investigation IDs must match candidates")
+        if self.status not in EXECUTION_STATUSES:
+            raise ValueError(f"unsupported CandidateTask status: {self.status!r}")
+        if self.artifact_status not in ARTIFACT_STATUSES:
+            raise ValueError(f"unsupported artifact_status: {self.artifact_status!r}")
+        if (isinstance(self.attempt, bool) or not isinstance(self.attempt, int)
+                or self.attempt < 1):
+            raise ValueError("CandidateTask attempt must be positive")
+        if (isinstance(self.revision, bool) or not isinstance(self.revision, int)
+                or self.revision < 1):
+            raise ValueError("CandidateTask revision must be positive")
+
+
+@dataclass(frozen=True)
+class CandidateTaskEvent(_DataModel):
+    event_id: str
+    task_id: str
+    kind: str
+    status: str
+    attempt: int
+    created_at: str
+    contract_id: str | None = None
+    report_id: str | None = None
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not self.event_id or not self.task_id or not self.kind:
+            raise ValueError("CandidateTaskEvent identities and kind must be non-empty")
+        if self.status not in EXECUTION_STATUSES:
+            raise ValueError(f"unsupported CandidateTaskEvent status: {self.status!r}")
+        if (isinstance(self.attempt, bool) or not isinstance(self.attempt, int)
+                or self.attempt < 1):
+            raise ValueError("CandidateTaskEvent attempt must be positive")
+
+
+@dataclass(frozen=True)
 class VersionFingerprint(_DataModel):
     rulebook_hash: str | None
     fixtures_hash: str | None

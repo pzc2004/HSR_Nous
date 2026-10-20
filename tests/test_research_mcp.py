@@ -50,6 +50,12 @@ def test_mcp_exposes_only_research_gateway_tools(tmp_path):
                     "resolve_evidence",
                     "submit_candidate_set",
                     "submit_candidate_proposals",
+                    "start_candidate_set",
+                    "start_candidate_proposals",
+                    "read_candidate_task",
+                    "wait_candidate_task",
+                    "cancel_candidate_task",
+                    "resume_candidate_task",
                     "read_candidate_set_report",
                 }
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -10,6 +11,7 @@ from hsr_nous.research_core.claims import ClaimValidationResult, ClaimValidator
 from hsr_nous.research_core.execution import ExecutionManager
 from hsr_nous.research_core.kernel import compare
 from hsr_nous.research_core.report import ReportComposer
+from hsr_nous.research_core.runner import RunCancelledError
 from hsr_nous.research_protocol import resolve_protocol, validate_candidate_set
 from hsr_nous.research_schema import CandidateSet, ResearchContract, canonical_json, content_hash
 
@@ -52,19 +54,28 @@ class CandidateRunner:
             validation=validated,
         )
 
-    def _execute(self, contract: ResearchContract) -> _Evaluation:
+    def _execute(
+        self,
+        contract: ResearchContract,
+        *,
+        observer: Callable[[int, int], None] | None = None,
+    ) -> _Evaluation:
         investigation = self._manager.create_investigation(contract)
         try:
             if investigation.status == "completed":
                 execution = self._manager.cache(investigation.investigation_id)
+            elif investigation.status == "failed" and investigation.artifact_status == "complete":
+                execution = self._manager.replay(investigation.investigation_id)
             elif investigation.artifact_status == "partial" and investigation.status in {
                 "cancelled", "failed",
             }:
-                execution = self._manager.resume(investigation.investigation_id)
+                execution = self._manager.resume(
+                    investigation.investigation_id, observer=observer
+                )
             else:
                 investigation = self._manager.validate(investigation.investigation_id)
                 execution = self._manager.queue(investigation.investigation_id)
-                execution = self._manager.execute(execution.execution_id)
+                execution = self._manager.execute(execution.execution_id, observer=observer)
             if execution.status != "completed":
                 return _Evaluation(contract, execution.status, execution.trial_id)
             return self._evaluate_from_trial(contract, execution.trial_id)
@@ -237,9 +248,25 @@ class CandidateRunner:
         report_id = self.store.publish_candidate_report(report["candidate_set_id"], report)
         return self.store.read_candidate_report(report["candidate_set_id"], report_id)
 
-    def run(self, candidate_set: CandidateSet) -> dict[str, Any]:
+    def run(
+        self,
+        candidate_set: CandidateSet,
+        *,
+        observer: Callable[[int, int], None] | None = None,
+        should_cancel: Callable[[], bool] | None = None,
+        on_candidate: Callable[[_Evaluation], None] | None = None,
+    ) -> dict[str, Any]:
         validate_candidate_set(candidate_set)
-        evaluations = [self._execute(contract) for contract in candidate_set.candidates]
+        evaluations = []
+        for contract in candidate_set.candidates:
+            if should_cancel is not None and should_cancel():
+                raise RunCancelledError("candidate task cancellation requested")
+            evaluation = self._execute(contract, observer=observer)
+            evaluations.append(evaluation)
+            if on_candidate is not None:
+                on_candidate(evaluation)
+            if should_cancel is not None and should_cancel():
+                raise RunCancelledError("candidate task cancellation requested")
         return self._compose(candidate_set, evaluations)
 
     def validate(self, candidate_set: CandidateSet) -> dict[str, Any]:

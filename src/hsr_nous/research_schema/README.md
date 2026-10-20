@@ -17,6 +17,7 @@
 | [08_agent_bridge.md](docs/08_agent_bridge.md) | DSH headless、MCP 工具面、隔离进程、跨 JavaScript 契约字符串与宿主复核 |
 | [09_candidates.md](docs/09_candidates.md) | 有界候选集、dev 排名、holdout Bonferroni 确认、不可变报告与独立复核 |
 | [10_candidate_proposals.md](docs/10_candidate_proposals.md) | 自然语言候选提案、白名单值域、确定性生成与宿主身份复核 |
+| [11_async_tasks.md](docs/11_async_tasks.md) | 候选集后台 worker、进度与部分结果、取消恢复和持久完成通知 |
 
 ## 数据流
 

@@ -16,6 +16,7 @@ from hsr_nous.research_core.artifacts import (
     run_failure_reason,
 )
 from hsr_nous.research_core.candidates import CandidateRunner
+from hsr_nous.research_core.tasks import CandidateTaskManager, CandidateTaskStore
 from hsr_nous.research_core.claims import ClaimValidationResult, ClaimValidator
 from hsr_nous.research_core.execution import ExecutionManager
 from hsr_nous.research_core.fingerprint import (
@@ -47,6 +48,8 @@ __all__ = [
     "ArtifactPathError",
     "ArtifactStore",
     "CandidateRunner",
+    "CandidateTaskManager",
+    "CandidateTaskStore",
     "ClaimValidationResult",
     "ClaimValidator",
     "ExecutionManager",

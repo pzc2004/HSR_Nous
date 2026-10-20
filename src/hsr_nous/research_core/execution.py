@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import datetime, timezone
 
@@ -220,7 +221,12 @@ class ExecutionManager:
         self.store.write_investigation(investigation)
         return execution, investigation
 
-    def execute(self, execution_id: str) -> ExecutionRecord:
+    def execute(
+        self,
+        execution_id: str,
+        *,
+        observer: Callable[[int, int], None] | None = None,
+    ) -> ExecutionRecord:
         execution = self.store.read_execution(execution_id)
         investigation = self.store.read_investigation(execution.investigation_id)
         if execution.status in {"completed", "failed", "cancelled"}:
@@ -250,6 +256,8 @@ class ExecutionManager:
                 status=status,
                 note=f"progress {completed}/{total}",
             )
+            if observer is not None:
+                observer(completed, total)
             if status == "cancel_requested":
                 raise RunCancelledError("execution cancellation requested")
 
@@ -329,7 +337,33 @@ class ExecutionManager:
         )
         return execution
 
-    def resume(self, investigation_id: str) -> ExecutionRecord:
+    def recover(self, investigation_id: str) -> InvestigationState:
+        investigation = self.store.read_investigation(investigation_id)
+        if investigation.status not in {"queued", "running", "cancel_requested", "validating"}:
+            return investigation
+        if investigation.active_execution_id is None:
+            raise ValueError("active investigation lacks an execution to recover")
+        execution = self.store.read_execution(investigation.active_execution_id)
+        artifact_status = (
+            "complete" if execution.completed_runs == execution.total_runs else "partial"
+        )
+        self._transition(
+            execution,
+            investigation,
+            status="failed",
+            artifact_status=artifact_status,
+            error="worker exited before execution completed",
+            note="stale execution reconciled after worker exit",
+            finished=True,
+        )
+        return self.store.read_investigation(investigation_id)
+
+    def resume(
+        self,
+        investigation_id: str,
+        *,
+        observer: Callable[[int, int], None] | None = None,
+    ) -> ExecutionRecord:
         investigation = self.store.read_investigation(investigation_id)
         if investigation.artifact_status != "partial" or investigation.status not in {
             "cancelled", "failed",
@@ -339,7 +373,7 @@ class ExecutionManager:
         execution, _ = self._new_execution(
             investigation, kind="resume", parent_execution_id=parent
         )
-        return self.execute(execution.execution_id)
+        return self.execute(execution.execution_id, observer=observer)
 
     def replay(self, investigation_id: str) -> ExecutionRecord:
         investigation = self.store.read_investigation(investigation_id)

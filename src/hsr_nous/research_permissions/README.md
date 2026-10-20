@@ -9,7 +9,8 @@
 - `submit_claim`：只接受 contract、trial_id 或 claim 之一，拒绝 metrics/samples/effect/CI 等调用方数字；MCP 另提供原样 JSON 字符串形式以保持跨 JavaScript 数字语义。
 - `submit_candidate_set` / `read_candidate_set_report` / `validate_candidate_set_report`：有界候选集执行、读取与独立复核；不能由调用方指定 selected、效应值或 CI。
 - `submit_candidate_proposals` / `validate_candidate_proposals_report`：将白名单提案确定性转为候选集，复用同一执行与复核通道；宿主按实际工具提案重建预期身份。
-- `mcp.py`：stdio MCP 传输，开放 submit_claim、read_investigation、read_report、resolve_evidence、submit_candidate_set、submit_candidate_proposals、read_candidate_set_report；证据经 canonical JSON 序列化。
+- `start_candidate_set/proposals`、`read_candidate_task`、`wait_candidate_task`、`cancel_candidate_task`、`resume_candidate_task`：独立后台任务、进度与部分结果、取消恢复和持久通知；同步 submit 保留为 start + wait 兼容包装。
+- `mcp.py`：stdio MCP 传输，开放 submit_claim、read_investigation、read_report、resolve_evidence、候选 submit/start、候选任务 read/wait/cancel/resume 和 read_candidate_set_report；证据经 canonical JSON 序列化。
 - `authorize_path`：realpath 与根包含检查，拒绝 `..`、symlink 逃逸、`.env`、`.git`、凭证和 Docker socket。
 - `execute_custom_code`：始终拒绝且不执行 payload；这不是可放开的执行接口。
 - `search_web` / `fetch_web`：经 `research_web.DeepSeekWebProvider` 的可选检索入口，默认关闭，域名白名单、预算和完整 query/result set/usage ledger 由 provider 强制。

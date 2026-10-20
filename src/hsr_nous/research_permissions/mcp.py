@@ -32,6 +32,21 @@ def _invalid_input(error: Exception) -> dict[str, Any]:
     }
 
 
+def _task_response(task: dict[str, Any]) -> dict[str, Any]:
+    return json.loads(canonical_json({
+        "candidate_task_id": task["task_id"],
+        "candidate_set_id": task["candidate_set_id"],
+        "status": task["status"],
+        "task": task,
+    }))
+
+
+def _wait_response(result: dict[str, Any]) -> dict[str, Any]:
+    response = _task_response(result["task"])
+    response["events"] = result["events"]
+    return json.loads(canonical_json(response))
+
+
 def build_server(gateway: ResearchGateway | None = None) -> FastMCP:
     gateway = gateway or open_research_gateway()
     server = FastMCP(
@@ -140,6 +155,76 @@ def build_server(gateway: ResearchGateway | None = None) -> FastMCP:
             "status": result["status"],
             "report": result,
         }))
+
+    @server.tool()
+    def start_candidate_set(
+        candidate_set: dict[str, Any] | None = None,
+        candidate_set_json: str = "",
+    ) -> dict[str, Any]:
+        """Start a detached candidate task and return its identity immediately."""
+        try:
+            if (candidate_set is None) == (not candidate_set_json):
+                raise ValueError("exactly one candidate_set or candidate_set_json is required")
+            parsed = CandidateSet.from_dict(
+                json.loads(candidate_set_json) if candidate_set_json else candidate_set
+            )
+            task = gateway.start_candidate_set(parsed)
+        except (TypeError, ValueError, KeyError) as error:
+            return _invalid_input(error)
+        return _task_response(task)
+
+    @server.tool()
+    def start_candidate_proposals(
+        candidate_space_json: str = "",
+        candidate_proposals_json: str = "",
+    ) -> dict[str, Any]:
+        """Start a detached candidate task from allowed proposals."""
+        try:
+            if not candidate_space_json or not candidate_proposals_json:
+                raise ValueError("candidate_space_json and candidate_proposals_json are required")
+            raw_proposals = json.loads(candidate_proposals_json)
+            if not isinstance(raw_proposals, list):
+                raise TypeError("candidate_proposals_json must contain an array")
+            space = CandidateSpace.from_dict(json.loads(candidate_space_json))
+            proposals = tuple(CandidateProposal.from_dict(item) for item in raw_proposals)
+            task = gateway.start_candidate_proposals(space, proposals)
+        except (TypeError, ValueError, KeyError) as error:
+            return _invalid_input(error)
+        return _task_response(task)
+
+    @server.tool()
+    def read_candidate_task(task_id: str) -> dict[str, Any]:
+        """Read current progress and any completed candidate result references."""
+        return _task_response(gateway.read_candidate_task(task_id))
+
+    @server.tool()
+    def wait_candidate_task(
+        task_id: str,
+        after_event_id: str = "",
+        timeout_s: float = 30,
+    ) -> dict[str, Any]:
+        """Wait for durable task events without client-side polling."""
+        try:
+            result = gateway.wait_candidate_task(
+                task_id, after_event_id=after_event_id, timeout_s=timeout_s
+            )
+        except (TypeError, ValueError) as error:
+            return _invalid_input(error)
+        return _wait_response(result)
+
+    @server.tool()
+    def cancel_candidate_task(task_id: str) -> dict[str, Any]:
+        """Request cooperative cancellation at the next safe progress point."""
+        return _task_response(gateway.cancel_candidate_task(task_id))
+
+    @server.tool()
+    def resume_candidate_task(task_id: str) -> dict[str, Any]:
+        """Resume a cancelled or failed partial task without repeating finished work."""
+        try:
+            task = gateway.resume_candidate_task(task_id)
+        except (TypeError, ValueError) as error:
+            return _invalid_input(error)
+        return _task_response(task)
 
     @server.tool()
     def read_candidate_set_report(candidate_set_id: str, report_id: str) -> dict[str, Any]:

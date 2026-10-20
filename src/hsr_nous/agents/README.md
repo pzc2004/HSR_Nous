@@ -30,8 +30,9 @@ DSH 启动时自行读取 `.env`；启动器只检查文件是否存在以选择
 
 ## 可信边界
 
-- DSH 只能调用 `mcp__nous__submit_claim/read_investigation/read_report/resolve_evidence/submit_candidate_set/submit_candidate_proposals/read_candidate_set_report`；配置禁用与插件 guard 同时拒绝其他工具。
+- DSH 只能调用 `mcp__nous__submit_claim/read_investigation/read_report/resolve_evidence/submit_candidate_set/submit_candidate_proposals/start_candidate_set/start_candidate_proposals/read_candidate_task/wait_candidate_task/cancel_candidate_task/resume_candidate_task/read_candidate_set_report`；配置禁用与插件 guard 同时拒绝其他工具。
 - 多候选输入使用 `hsr-research-agent --candidate-set /path/to/candidates.json`，候选集的 dev 排名、holdout 修正和 selected 都由后端计算。
+- 候选任务附加 `--background` 后立即返回 task_id，不等待最终报告；可通过 MCP 查询进度与部分结果、等待完成通知、取消或恢复。
 - 自然语言候选生成使用 `hsr-research-agent --candidate-proposals /path/to/space.json`。模型只提交 CandidateSpace 白名单内的 path/value 提案，宿主按实际提案重建候选集并复核报告。
 - Bash、Pwsh、FS、workflow、subagent、内置 web、jobs、会话日志上传和 OTel 均关闭。
 - `submit_claim` 进入现有 `ResearchGateway`，统计和报告只能由模拟证据及可信内核产生。

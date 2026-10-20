@@ -10,6 +10,7 @@ from hsr_nous.common import repo_root, research_root
 from hsr_nous.research_core import (
     ArtifactStore,
     CandidateRunner,
+    CandidateTaskManager,
     ClaimValidator,
     ExecutionManager,
     ReportComposer,
@@ -78,6 +79,7 @@ class ResearchGateway:
         self._validator = validator or self._manager.validator
         self._composer = composer or self._manager.composer
         self._candidate_runner = CandidateRunner(store, self._manager)
+        self._candidate_tasks = CandidateTaskManager(store, runner=self._candidate_runner)
         if web_provider is None and (policy.allow_web_search or policy.allow_web_fetch):
             web_provider = DeepSeekWebProvider(WebEvidenceStore(self._store.root), policy=self._policy)
         self._web_provider = web_provider
@@ -175,14 +177,29 @@ class ResearchGateway:
         self._require("allow_read_artifacts")
         return self._store.resolve_evidence(link)
 
-    def submit_candidate_set(self, candidate_set: CandidateSet) -> dict[str, Any]:
+    def start_candidate_set(self, candidate_set: CandidateSet) -> dict[str, Any]:
         self._require(
             "allow_run_simulation",
             "allow_write_project",
             "allow_read_artifacts",
             "allow_submit_claim",
         )
-        return self._candidate_runner.run(candidate_set)
+        return self._candidate_tasks.start(candidate_set)
+
+    def start_candidate_proposals(
+        self,
+        space: CandidateSpace,
+        proposals: Sequence[CandidateProposal],
+    ) -> dict[str, Any]:
+        candidate_set = CandidateGenerator.build_candidate_set(space, proposals)
+        return self.start_candidate_set(candidate_set)
+
+    def submit_candidate_set(self, candidate_set: CandidateSet) -> dict[str, Any]:
+        started = self.start_candidate_set(candidate_set)
+        task = self._candidate_tasks.wait_terminal(started["task_id"])
+        if task["report_id"] is None:
+            raise RuntimeError(f"candidate task ended without a report: {task['status']}")
+        return self.read_candidate_set_report(task["candidate_set_id"], task["report_id"])
 
     def submit_candidate_proposals(
         self,
@@ -191,6 +208,47 @@ class ResearchGateway:
     ) -> dict[str, Any]:
         candidate_set = CandidateGenerator.build_candidate_set(space, proposals)
         return self.submit_candidate_set(candidate_set)
+
+    def read_candidate_task(self, task_id: str) -> dict[str, Any]:
+        self._require("allow_read_artifacts")
+        return self._candidate_tasks.read(task_id)
+
+    def read_candidate_proposals_task(
+        self,
+        space: CandidateSpace,
+        proposals: Sequence[CandidateProposal],
+        task_id: str,
+    ) -> dict[str, Any]:
+        candidate_set = CandidateGenerator.build_candidate_set(space, proposals)
+        task = self.read_candidate_task(task_id)
+        if task["candidate_set_id"] != candidate_set.candidate_set_id:
+            raise ValueError("candidate task does not match the actual proposals")
+        return task
+
+    def wait_candidate_task(
+        self,
+        task_id: str,
+        *,
+        after_event_id: str = "",
+        timeout_s: float = 30,
+    ) -> dict[str, Any]:
+        self._require("allow_read_artifacts")
+        return self._candidate_tasks.wait(
+            task_id, after_event_id=after_event_id, timeout_s=timeout_s
+        )
+
+    def cancel_candidate_task(self, task_id: str) -> dict[str, Any]:
+        self._require("allow_write_project")
+        return self._candidate_tasks.cancel(task_id)
+
+    def resume_candidate_task(self, task_id: str) -> dict[str, Any]:
+        self._require(
+            "allow_run_simulation",
+            "allow_write_project",
+            "allow_read_artifacts",
+            "allow_submit_claim",
+        )
+        return self._candidate_tasks.resume(task_id)
 
     def validate_candidate_proposals_report(
         self,

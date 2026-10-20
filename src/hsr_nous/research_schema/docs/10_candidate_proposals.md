@@ -75,4 +75,4 @@ DSH 宿主把研究问题与固定 space 交给模型，但不预先提供 propo
 - 当前一个提案只修改一条路径；组合修改、自动扩展值域和自适应多轮搜索不在首版。
 - configuration 的 no-op 在生成时拒绝；mechanism 的模板真实路径和原值在加载后校验。
 - 既有 dev/holdout、Bonferroni、不可变 artifact、`simulated/pending_real_validation` 和仅限当前候选集的 scope 不变。
-- 当前仍为单进程顺序执行；异步调度、共享 Memory 和真实游戏校准不在本章实现范围内。
+- 后台任务、随时查询、取消恢复与完成通知见 [11_async_tasks.md](11_async_tasks.md)；共享 Memory 和真实游戏校准不在本章实现范围内。

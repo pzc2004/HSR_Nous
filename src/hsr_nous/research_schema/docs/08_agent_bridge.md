@@ -32,9 +32,15 @@ DSH 的自然语言最终文本不是 claim，也不能替代完成态 investiga
 | `resolve_evidence` | 一个 `EvidenceLink` | 下钻到 run/event/final modifier；递归只读对象经 canonical JSON 转为线协议值 |
 | `submit_candidate_set` | `candidate_set` 或 `candidate_set_json`，二选一 | 执行有界候选集，独立计算 dev 排名、holdout 修正 CI 与 selected，不能传入选中结果或统计值 |
 | `submit_candidate_proposals` | `candidate_space_json` + `candidate_proposals_json` | 只接受白名单内的候选修改，确定性生成 CandidateSet 后复用候选执行与报告 |
+| `start_candidate_set` | 与 submit_candidate_set 相同 | 启动独立后台任务并立即返回 task_id，不在 MCP 内等待模拟 |
+| `start_candidate_proposals` | 与 submit_candidate_proposals 相同 | 将白名单提案转为后台任务并立即返回 task_id |
+| `read_candidate_task` | `task_id` | 查询进度、逐候选状态与已完成候选的报告引用 |
+| `wait_candidate_task` | `task_id` + 可选 `after_event_id` + `timeout_s` | 服务端等待持久事件，返回新事件与最新任务快照 |
+| `cancel_candidate_task` | `task_id` | 在下一安全进度点协作取消，保留已有证据 |
+| `resume_candidate_task` | `task_id` | 新建 attempt，只恢复未完成部分 |
 | `read_candidate_set_report` | `candidate_set_id` + `report_id` | 重读并校验候选报告身份与归属 |
 
-`submit_candidate_set` 和 `submit_candidate_proposals` 的响应先提供 `candidate_report_id` 与 `candidate_set_id`，再嵌完整报告。`candidate_report_id` 是传输别名，避免 canonical JSON 按键排序导致大 `report` 对象先于 `report_id` 被 DSH 的投影截断；真正的报告身份仍以 `report_id` 为准。
+`submit_candidate_set` 和 `submit_candidate_proposals` 是同步 start + wait 兼容包装，响应先提供 `candidate_report_id` 与 `candidate_set_id`，再嵌完整报告。后台 start/read/wait 响应前置 `candidate_task_id` 与 `candidate_set_id`，避免大任务快照截断身份。真正的报告身份仍以 `report_id` 为准，通知不能替代宿主复核。
 
 `contract` 和 `claim` 使用对象输入。跨 JavaScript 进程时优先使用 `contract_json`、`claim_json`、`candidate_space_json` 和 `candidate_proposals_json` 的原样 JSON 字符串：JavaScript 可能把 `600.0` 规范化为 `600`，如果直接传对象，同一实验会因数字表示变化获得不同内容身份。字符串由 Python 端 `json.loads` 后再经严格数据模型校验，不绕过任何协议检查。
 
@@ -60,6 +66,6 @@ DSH 的 `--json` 事件流用于进程诊断和工具调用关联，其中的 `t
 - 假 DSH 可执行文件与 Node guard 测试：argv/stdin/cwd/env、超时清理、非零退出和白名单；
 - 真实 DSH + 回环 Messages 服务 + 真实 MCP + 真实模拟：模型请求只发往 `127.0.0.1` 的隔离服务，使用测试占位密钥，不访问真实 DeepSeek API 或用户凭据。
 
-标准回归验证的是 DSH、MCP 与模拟后端的实际链路，不调用真实模型 API。另已使用独立凭据完成真实模型 smoke：模型实际提交预期 contract、多候选 candidate set 和 CandidateSpace 白名单提案，完成全部协议 run，宿主复核报告并下钻事件；具体网关、模型 ID 和凭据不写入文档。
+标准回归验证的是 DSH、MCP 与模拟后端的实际链路，不调用真实模型 API。另已使用独立凭据完成真实模型 smoke：模型实际提交预期 contract、多候选 candidate set、CandidateSpace 白名单提案和独立后台任务，完成全部协议 run，宿主复核报告并下钻事件；后台提交后曾读取运行中进度，并通过公开 wait 收到逐候选与最终完成事件。具体网关、模型 ID 和凭据不写入文档。
 
-局部 npm 安装、独立 HOME、进程组和工具白名单不构成针对同用户恶意进程的强安全沙箱。当前也没有异步 worker、ACP、多轮前端、共享 Memory 或真实游戏校准；这些能力不得从本章推断。
+局部 npm 安装、独立 HOME、进程组和工具白名单不构成针对同用户恶意进程的强安全沙箱。候选后台 worker、进度查询与持久通知见 [11_async_tasks.md](11_async_tasks.md)；当前仍没有 ACP、多轮前端、共享 Memory、常驻 Agent 主动推送或真实游戏校准，这些能力不得从本章推断。
