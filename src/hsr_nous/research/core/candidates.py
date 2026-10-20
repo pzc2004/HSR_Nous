@@ -118,6 +118,7 @@ class CandidateRunner:
         if validated is None or validated.trial is None:
             return None
         resolved = resolve_protocol(validated.trial.spec.protocol_id)
+        metric_id = evaluation.contract.experiment.metric.metric_id
         by_arm = {}
         for arm in ("baseline", "variant"):
             values = {}
@@ -125,9 +126,11 @@ class CandidateRunner:
                 if (record.arm_id != arm or record.cohort != "holdout"
                         or record.status != "completed" or record.observed.get("truncated")):
                     continue
-                if "total_damage" not in record.observed:
-                    raise ArtifactIntegrityError("completed run lacks observed total_damage")
-                values[record.seed] = record.observed["total_damage"]
+                if metric_id not in record.observed:
+                    raise ArtifactIntegrityError(
+                        f"completed run lacks observed {metric_id}"
+                    )
+                values[record.seed] = record.observed[metric_id]
             by_arm[arm] = values
         expected = set(resolved.holdout_seeds)
         if any(set(values) != expected for values in by_arm.values()):

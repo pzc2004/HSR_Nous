@@ -70,9 +70,15 @@ configuration 的 override 必须非空，且与 baseline build 的 canonical JS
 - baseline 是 canonical 且无 patch/override；mechanism variant 是 hypothetical 且至少一个 patch，configuration variant 是 canonical 且有非空、不同的完整 build_override。
 - patch 目标模板和 path 必须存在，原值是有限数值且不是 bool。
 - 不允许同模板同一路径重复 patch，不允许越界增删列表项。
-- metric 只能是 `total_damage` + `paired_mean_difference` + 协议 confidence + `higher_is_better`。
+- metric 使用 `paired_mean_difference` 和协议 confidence；`total_damage` 为 `higher_is_better`，`action_value` 为 `lower_is_better`，未知指标或错误方向拒绝。
 
 `validate_fingerprint()` 另外拒绝缺少执行必需 rulebook/fixtures/data/implementation/config/protocol/artifact schema 指纹的输入。`git_commit` 缺失不是失败理由，因为真正身份由内容哈希承担。
+
+## 指标口径
+
+`total_damage` 是最终总伤害，越高越好。`action_value` 是最终 `state.clock`，越低越好，用于比较同一 stage 下哪个 variant 更快结束。它不是 `cycles_used`，也不代表操作水平或真实游戏校准。每个 CandidateSet 仍只选择一个 metric_id；需要比较多个指标时分别建立任务，不合并成未定义的混合评分。
+
+失败和 truncated run 继续按既有规则排除出有效配对并保留计数；`action_value` 的比较同样要求 baseline/variant 使用同一组 seed。
 
 ## 状态语义
 
@@ -91,7 +97,7 @@ CI 完全位于 0 以下也可以 accepted：这表示在该协议下得到了�
 - holdout 的 failed/truncated run 必须保留并计数；不能删除后假装样本完整。
 - 有效配对数不足或 CI 跨 0 时只能 inconclusive。
 - 证据或推导不一致时才进入 rejected；版本变化则进入 stale。
-- 首版只有一个 variant，不处理多候选搜索、多重比较或 winner's curse。
+- 多候选仍限于有界 CandidateSet，dev 排名与 holdout 修正用于控制选择偏差，不声称开放式全局搜索。
 - accepted 不表示真实游戏已经校准，也不表示全局最优；真实游戏验证仍是 `pending_real_validation`。
 
 统计实现和 CI 的进一步解释见 [04_kernel_claims.md](04_kernel_claims.md)。

@@ -124,9 +124,10 @@ completed run 在 publish/read 两侧强制核对：
 
 - `observed.seed` 与 run 坐标 seed 一致；
 - `observed.total_damage` 与 `final_save.state.total_damage` 一致；
-- `observed.truncated` 与 `final_save.state.truncated` 一致，并且都是 bool。
+- `observed.truncated` 与 `final_save.state.truncated` 一致，并且都是 bool；
+- `observed.action_value` 与 `final_save.state.clock` 一致。
 
-ClaimValidator 因而可以只从 `observed.total_damage` 取样；交叉核验已经在 store 边界完成。result 还会精确比较 failed run 与 failure reason，缺失或篡改失败样本不能被静默接受。
+ClaimValidator 因而可以按当前 metric_id 从 observed 取样；total_damage 的交叉核验已经在 store 边界完成。result 还会精确比较 failed run 与 failure reason，缺失或篡改失败样本不能被静默接受。
 
 ## Store 完整性机制
 

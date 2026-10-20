@@ -349,6 +349,7 @@ def test_read_variant_verifies_metadata_identity_and_document_paths(tmp_path):
         ({"total_damage": 101.0}, {}, "total_damage"),
         ({"seed": 1}, {}, "seed"),
         ({"truncated": True}, {}, "truncated"),
+        ({"action_value": 101.0}, {}, "action_value"),
         ({}, {"total_damage": 101.0}, "total_damage"),
     ],
 )

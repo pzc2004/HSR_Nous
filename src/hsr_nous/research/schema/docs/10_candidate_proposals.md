@@ -23,13 +23,13 @@
 
 ### CandidateProposal
 
-字段：`path`、`value`、可选 `label`。
+字段：`path`、`value`、可选 `label`、`edits`。`CandidateEdit` 字段为 `path`、`value`。
 
-- 每个提案表示一次单路径修改；首版不支持一个提案同时修改多条路径。
+- 旧 `path/value` 表示一次单字段修改；`edits` 表示一次多字段修改，两种格式互斥且至少选择一种。
+- 同一候选内 path 不得重复，提案去重使用完整 edits 签名，不能用不同 label 重复提交同一修改。
 - `label` 只是候选的 contract/spec 标识，不是结论或展示用自然语言。提供时必须匹配 `[A-Za-z0-9][A-Za-z0-9_-]*` 且在组内唯一；缺省时按提案顺序生成 `candidate-<index>`。
-- path+canonical value 在组内必须唯一，不能用不同 label 重复提交同一修改。
 
-三个模型都遵循既有递归冻结、严格 `from_dict`、未知字段拒绝和 canonical JSON round-trip。
+这些模型都遵循既有递归冻结、严格 `from_dict`、未知字段拒绝和 canonical JSON round-trip。
 
 ## 确定性生成规则
 
@@ -50,7 +50,7 @@
 
 ### mechanism
 
-规则必须提供 template kind/id。生成器创建 `op="set_number"`、值为 float 的单条 `MechanismPatch`，variant 使用 `world="hypothetical"` 且无 build_override。
+规则必须提供 template kind/id。生成器按 edits 顺序创建 `op="set_number"`、值为 float 的 `MechanismPatch` 列表，variant 使用 `world="hypothetical"` 且无 build_override。同一模板同一路径不得重复，继续执行既有 patch 校验。
 
 loader 前由 `validate_patch_reference` 检查模板引用和路径形状；loader 后仍由既有 `validate_contract` 检查模板真实存在、路径存在以及原值是有限数值。生成器不读取文件，也不绕过两阶段校验。
 
@@ -72,7 +72,7 @@ DSH 宿主把研究问题与固定 space 交给模型，但不预先提供 propo
 ## 范围与限制
 
 - 报告保留实际提交的全部候选及失败，但模型可以在执行前选择规则值域的子集；本功能不声称穷举 space，也不证明全局最优。
-- 当前一个提案只修改一条路径；组合修改、自动扩展值域和自适应多轮搜索不在首版。
+- 一个提案可以修改多个白名单路径，但不支持自动扩展值域或自适应多轮搜索。
 - configuration 的 no-op 在生成时拒绝；mechanism 的模板真实路径和原值在加载后校验。
 - 既有 dev/holdout、Bonferroni、不可变 artifact、`simulated/pending_real_validation` 和仅限当前候选集的 scope 不变。
 - 后台任务、随时查询、取消恢复与完成通知见 [11_async_tasks.md](11_async_tasks.md)；共享 Memory 和真实游戏校准不在本章实现范围内。

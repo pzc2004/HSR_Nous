@@ -184,6 +184,9 @@ def _validate_run_evidence(record: RunRecord) -> None:
             or not isinstance(state["truncated"], bool)
             or record.observed["truncated"] != state["truncated"]):
         raise ArtifactIntegrityError("observed.truncated does not match final_save.state")
+    if ("action_value" in record.observed
+            and ("clock" not in state or record.observed["action_value"] != state["clock"])):
+        raise ArtifactIntegrityError("observed.action_value does not match final_save.state")
 
 
 class ArtifactStore:

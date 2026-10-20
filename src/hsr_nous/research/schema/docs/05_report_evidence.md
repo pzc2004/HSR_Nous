@@ -39,7 +39,7 @@
 accepted 使用固定模板，数值只能来自重新验证的 claim；结论前缀由 claim.scope 动态生成：
 
 ```text
-simulated/<world>/pending_real_validation: holdout variant - baseline mean total_damage = <effect>; <confidence>% CI [<lower>, <upper>]; n=<n>.
+simulated/<world>/pending_real_validation: holdout variant - baseline mean <metric_id> = <effect>; <confidence>% CI [<lower>, <upper>]; n=<n>.
 ```
 
 其他状态使用：
@@ -175,4 +175,4 @@ configuration 的 accepted/rejected/inconclusive/stale 判定与 mechanism 完�
 - 完整离线模板闭包尚未导出，replay 仍依赖 canonical 模板根。
 - 真实游戏校准尚未完成，所有结论都是 simulated，configuration 的 canonical 也不等于真实游戏已验证。
 - 只读权限和 SHA-256 是防误改护栏，不是恶意同用户进程沙箱。
-- 首版只有一个 baseline/variant，不提供多候选搜索或多重比较结论。
+- 单个 ExperimentSpec 仍只有 baseline/variant；多候选由有界 CandidateSet 组合，dev 排名和 holdout 修正见 [09_candidates.md](09_candidates.md)，不提供开放式全局搜索。

@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from hsr_nous.research.protocol.profiles import ResolvedProtocol, get_profile
+from hsr_nous.research.schema import METRIC_DIRECTIONS
 from hsr_nous.research.schema import (
     CandidateSet,
     ExperimentArm,
@@ -58,8 +59,15 @@ def _is_finite_number(value: Any) -> bool:
 def _validate_metric(metric: MetricSpec, resolved: ResolvedProtocol) -> None:
     if not isinstance(metric, MetricSpec):
         raise ProtocolValidationError("metric must be a MetricSpec")
-    expected = MetricSpec(confidence=resolved.confidence)
-    for name in ("metric_id", "statistic", "confidence", "direction"):
+    direction = METRIC_DIRECTIONS.get(metric.metric_id)
+    if direction is None:
+        raise ProtocolValidationError(f"unsupported metric metric_id: {metric.metric_id!r}")
+    if metric.direction != direction:
+        raise ProtocolValidationError(
+            f"unsupported metric direction: {metric.direction!r}"
+        )
+    expected = MetricSpec(metric_id=metric.metric_id, direction=direction, confidence=resolved.confidence)
+    for name in ("statistic", "confidence"):
         if getattr(metric, name) != getattr(expected, name):
             raise ProtocolValidationError(f"unsupported metric {name}: {getattr(metric, name)!r}")
 

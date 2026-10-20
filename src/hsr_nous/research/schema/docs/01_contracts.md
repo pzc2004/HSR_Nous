@@ -68,9 +68,9 @@ assert restored == model
 
 ## CandidateSpace / CandidateRule / CandidateProposal
 
-`CandidateSpace` 字段为 `base_contract`、`rules`、`max_candidates`；`CandidateRule` 字段为 `path`、`values` 和可选的 `template_kind/template_id`；`CandidateProposal` 字段为 `path`、`value` 和可选 `label`。
+`CandidateSpace` 字段为 `base_contract`、`rules`、`max_candidates`；`CandidateRule` 字段为 `path`、`values` 和可选的 `template_kind/template_id`；`CandidateProposal` 字段为 `path`、`value`、可选 `label` 和 `edits`。`CandidateEdit` 字段为 `path`、`value`。
 
-它们用于把自然语言候选建议约束为白名单内的单路径修改。规则路径在同一 space 内唯一，机制规则必须带模板身份，配置规则不得带模板身份；提案数量、重复值、标识和值域由 `CandidateGenerator` 校验。`base_contract` 只提供共享实验条件，其 variant 不会夹带到生成结果。
+它们用于把自然语言候选建议约束为白名单修改。旧 `path/value` 表示单字段修改，`edits` 表示多字段修改，两种格式互斥且至少选择一种。规则路径在同一 space 内唯一，机制规则必须带模板身份，配置规则不得带模板身份；同一候选内 path 不得重复，提案去重使用完整 edits 签名。`base_contract` 只提供共享实验条件，其 variant 不会夹带到生成结果。
 
 生成器只产出现有 `CandidateSet`，不增加另一套执行或报告格式。完整字段约束、类型规则、MCP 传输和宿主复核见 [10_candidate_proposals.md](10_candidate_proposals.md)。
 
@@ -111,14 +111,9 @@ loader 前先校验引用形态，loader 后再校验路径和原值，两个阶
 
 字段：`metric_id`、`statistic`、`confidence`、`direction`。
 
-当前协议固定为：
+当前 `statistic="paired_mean_difference"`，`confidence=0.95`。`metric_id` 可为 `total_damage`（`higher_is_better`）或 `action_value`（`lower_is_better`），未知指标和错误方向会被拒绝。
 
-- `metric_id="total_damage"`；
-- `statistic="paired_mean_difference"`；
-- `confidence=0.95`；
-- `direction="higher_is_better"`。
-
-`direction="higher_is_better"` 不表示负向效应要被误标为 rejected；它只描述指标偏好，claim 的 relation 仍是精确的 `variant - baseline`。
+`direction` 只描述指标偏好，claim 的 relation 仍是精确的 `variant - baseline`；负向效应不被误标为 rejected。
 
 ## VersionFingerprint
 

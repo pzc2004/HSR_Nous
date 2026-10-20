@@ -12,7 +12,7 @@ from hsr_nous.research.protocol import (
     validate_contract,
     validate_fingerprint,
 )
-from hsr_nous.research.schema import ExperimentArm
+from hsr_nous.research.schema import ExperimentArm, MetricSpec
 from tests._research_builders import (
     make_contract,
     make_fingerprint,
@@ -251,6 +251,29 @@ def test_patch_reference_validation_is_public_and_does_not_need_templates():
     for template_id in ("../1202", "*", "with/slash", "with space"):
         with pytest.raises(ProtocolValidationError, match="template_id"):
             validate_patch_reference(make_patch(template_id=template_id))
+
+
+def test_action_value_metric_and_direction_are_validated():
+    contract = make_contract(
+        metric=MetricSpec(metric_id="action_value", direction="lower_is_better")
+    )
+    assert _valid(contract).confidence == 0.95
+    with pytest.raises(ProtocolValidationError, match="direction"):
+        _valid(replace(
+            contract,
+            experiment=replace(
+                contract.experiment,
+                metric=MetricSpec(metric_id="action_value", direction="higher_is_better"),
+            ),
+        ))
+    with pytest.raises(ProtocolValidationError, match="metric_id"):
+        _valid(replace(
+            contract,
+            experiment=replace(
+                contract.experiment,
+                metric=MetricSpec(metric_id="unknown_metric", direction="higher_is_better"),
+            ),
+        ))
 
 
 def test_protocol_doc_matches_paired_v1():

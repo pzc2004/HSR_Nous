@@ -4,12 +4,17 @@ from dataclasses import replace
 import json
 
 import anyio
+from fastapi.testclient import TestClient
 from mcp import ClientSession
 from mcp.client.stdio import stdio_client
 import pytest
 
+from hsr_nous.research.core import ArtifactStore, CandidateRunner, ClaimValidator
+from hsr_nous.research.permissions import open_research_gateway
 from hsr_nous.research.protocol import CandidateGenerator, ProtocolValidationError
+from hsr_nous.research.workbench.web import create_app
 from hsr_nous.research.schema import (
+    CandidateEdit,
     CandidateProposal,
     CandidateRule,
     CandidateSpace,
@@ -17,6 +22,8 @@ from hsr_nous.research.schema import (
     canonical_json,
 )
 from tests._research_builders import (
+    make_action_value_proposals,
+    make_action_value_space,
     make_candidate_proposals,
     make_candidate_space,
     make_contract,
@@ -231,3 +238,67 @@ def test_mcp_candidate_proposals_execute_and_reject_invalid_input(tmp_path):
                 assert malformed["status"] == "rejected"
 
     anyio.run(scenario)
+
+
+def test_multi_edit_proposals_generate_only_declared_changes():
+    space = make_action_value_space()
+    proposals = make_action_value_proposals(space)
+    assert all(CandidateProposal.from_dict(proposal.to_dict()) == proposal for proposal in proposals)
+
+    plan = CandidateGenerator.build_candidate_set(space, proposals)
+    assert len(plan.candidates) == 2
+    for candidate, main in zip(plan.candidates, ("atk_pct", "spd")):
+        override = candidate.experiment.variant.build_override
+        assert override["build"]["team"][0]["relics"]["feet"]["main"] == main
+        assert override["build"]["policy"]["action_rules"][0]["action"] == "basic"
+        assert candidate.experiment.metric.metric_id == "action_value"
+        assert candidate.experiment.metric.direction == "lower_is_better"
+
+    baseline = space.base_contract.experiment.build
+    assert baseline["build"]["team"][0]["base_stats"]["spd"] == 100
+    assert baseline["build"]["team"][0]["relics"]["feet"]["main"] == "hp"
+    assert baseline["build"]["policy"]["action_rules"][0]["action"] == "ultimate"
+
+
+def test_multi_edit_rejects_duplicate_paths_and_duplicate_proposals():
+    space = make_action_value_space()
+    first, second = make_action_value_proposals(space)
+    with pytest.raises(ProtocolValidationError, match="duplicate edit path"):
+        duplicated = CandidateProposal(edits=(*first.edits, first.edits[0]))
+        CandidateGenerator.build_candidate_set(space, (duplicated, second))
+    with pytest.raises(ProtocolValidationError, match="duplicate proposal edits"):
+        CandidateGenerator.build_candidate_set(space, (first, first))
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        CandidateProposal(
+            path=first.edits[0].path,
+            value=first.edits[0].value,
+            edits=first.edits,
+        )
+
+
+def test_multi_edit_action_value_execution_and_workbench_report(tmp_path):
+    space = make_action_value_space()
+    plan = CandidateGenerator.build_candidate_set(space, make_action_value_proposals(space))
+    store = ArtifactStore(tmp_path / "artifacts")
+    runner = CandidateRunner(store)
+    report = runner.run(plan)
+
+    assert report["status"] == "accepted"
+    assert report["selected"] == ["candidate-1"]
+    assert report["dev_ranking"][0]["contract_id"] == "candidate-1"
+    assert report["candidates"][0]["holdout_adjusted"]["confidence_interval"]["upper"] < 0
+    assert runner.validate_report(plan, report["report_id"])["report_id"] == report["report_id"]
+
+    for candidate in report["candidates"]:
+        validated = ClaimValidator(store).validate_trial(candidate["trial_id"])
+        assert validated.claim.metric.metric_id == "action_value"
+        assert validated.claim.metric.direction == "lower_is_better"
+        for record in validated.records:
+            assert record.observed["action_value"] == record.final_save["state"]["clock"]
+
+    client = TestClient(create_app(gateway=open_research_gateway(tmp_path)))
+    trial = report["candidates"][0]
+    response = client.get(f"/api/trials/{trial['trial_id']}/reports/{trial['report_id']}")
+    assert response.status_code == 200, response.text
+    assert response.json()["claim"]["metric"]["metric_id"] == "action_value"
+    assert "mean action_value" in response.json()["conclusion"]

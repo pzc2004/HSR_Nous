@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from hsr_nous.research.schema import (
+    CandidateEdit,
     CandidateProposal,
     CandidateRule,
     CandidateSet,
@@ -311,4 +312,71 @@ def make_candidate_proposals(
     return tuple(
         CandidateProposal(path=rule.path, value=value, label=label)
         for value, label in zip(values, labels)
+    )
+
+
+def make_action_value_space() -> CandidateSpace:
+    from copy import deepcopy
+
+    build, _ = _demo_parts("demo_停云白板")
+    build["build"]["team"][0]["base_stats"] = {"spd": 100}
+    build["build"]["team"][0]["relics"] = {
+        "feet": {"set_id": "101", "main": "hp", "subs": {}}
+    }
+    override = deepcopy(build)
+    override["build"]["team"][0]["relics"]["feet"]["main"] = "atk_pct"
+    override["build"]["policy"]["action_rules"][0]["action"] = "basic"
+    contract = make_contract(
+        build=build,
+        stage={
+            "stage": {
+                "stage_id": "action_value_test",
+                "enemies": [{
+                    "actor_id": "enemy",
+                    "name": "测试假人",
+                    "hp": 1,
+                    "spd": 50,
+                    "level": 80,
+                    "max_toughness": 60,
+                }],
+                "termination": {"mode": "fixed_av", "max_action_value": 300},
+            }
+        },
+        comparison_kind="configuration",
+        variant=ExperimentArm(
+            arm_id="variant", world="canonical", build_override=override
+        ),
+        metric=MetricSpec(metric_id="action_value", direction="lower_is_better"),
+    )
+    contract = contract.__class__(
+        contract_id=contract.contract_id,
+        question="Which candidate has the lowest final action value?",
+        protocol_id=contract.protocol_id,
+        experiment=contract.experiment,
+        budget=contract.budget,
+    )
+    return CandidateSpace(
+        base_contract=contract,
+        rules=(
+            CandidateRule(
+                path=("build", "team", 0, "relics", "feet", "main"),
+                values=("atk_pct", "spd"),
+            ),
+            CandidateRule(
+                path=("build", "policy", "action_rules", 0, "action"),
+                values=("basic",),
+            ),
+        ),
+        max_candidates=2,
+    )
+
+
+def make_action_value_proposals(space: CandidateSpace) -> tuple[CandidateProposal, ...]:
+    relic_path, policy_path = (rule.path for rule in space.rules)
+    return tuple(
+        CandidateProposal(edits=(
+            CandidateEdit(path=relic_path, value=main),
+            CandidateEdit(path=policy_path, value="basic"),
+        ))
+        for main in ("atk_pct", "spd")
     )

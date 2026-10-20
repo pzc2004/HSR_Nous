@@ -108,11 +108,12 @@ class ClaimValidator:
                     if record.observed.get("truncated"):
                         truncated.append(run_id)
                         continue
-                    if "total_damage" not in record.observed:
+                    metric_id = artifact.spec.experiment.metric.metric_id
+                    if metric_id not in record.observed:
                         raise ArtifactIntegrityError(
-                            f"completed run {run_id} lacks observed total_damage"
+                            f"completed run {run_id} lacks observed {metric_id}"
                         )
-                    values[seed] = record.observed["total_damage"]
+                    values[seed] = record.observed[metric_id]
                 values_by_arm[role] = values
                 failed_by_arm[role] = failed
                 truncated_by_arm[role] = truncated

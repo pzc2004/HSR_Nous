@@ -15,6 +15,7 @@ from hsr_nous.research.protocol.validation import (
     validate_patch_reference,
 )
 from hsr_nous.research.schema import (
+    CandidateEdit,
     CandidateProposal,
     CandidateRule,
     CandidateSet,
@@ -105,12 +106,20 @@ def _compatible(original: Any, value: Any) -> bool:
     return False
 
 
-def _configuration_override(
-    build: dict[str, Any], path: tuple[str | int, ...], value: Any
+def _proposal_edits(proposal: CandidateProposal) -> tuple[CandidateEdit, ...]:
+    if proposal.edits:
+        return proposal.edits
+    return (CandidateEdit(path=proposal.path, value=proposal.value),)
+
+
+def _apply_configuration_edit(
+    baseline: dict[str, Any],
+    override: dict[str, Any],
+    path: tuple[str | int, ...],
+    value: Any,
 ) -> dict[str, Any]:
-    override = _json_value(build)
-    parent, key = _location(override, path)
-    original = parent[key]
+    original_parent, original_key = _location(_json_value(baseline), path)
+    original = original_parent[original_key]
     if not _compatible(original, value):
         raise ProtocolValidationError(
             f"configuration proposal type does not match the baseline at {path!r}"
@@ -118,6 +127,7 @@ def _configuration_override(
     normalized = float(value) if isinstance(original, float) else value
     if canonical_json(normalized) == canonical_json(original):
         raise ProtocolValidationError("configuration proposal must not be a no-op")
+    parent, key = _location(override, path)
     parent[key] = normalized
     return override
 
@@ -170,13 +180,25 @@ class CandidateGenerator:
         labels = set()
         candidates = []
         for index, proposal in enumerate(proposals):
-            rule = rules.get(proposal.path)
-            if rule is None:
-                raise ProtocolValidationError(f"proposal path is not allowed: {proposal.path!r}")
-            value = _rule_value(rule, proposal.value, mechanism=mechanism)
-            identity = (proposal.path, canonical_json(value))
+            edits = _proposal_edits(proposal)
+            resolved_edits = []
+            paths = set()
+            for edit in edits:
+                if edit.path in paths:
+                    raise ProtocolValidationError(
+                        f"duplicate edit path within one candidate: {edit.path!r}"
+                    )
+                paths.add(edit.path)
+                rule = rules.get(edit.path)
+                if rule is None:
+                    raise ProtocolValidationError(f"proposal path is not allowed: {edit.path!r}")
+                value = _rule_value(rule, edit.value, mechanism=mechanism)
+                resolved_edits.append((edit.path, value, rule))
+            identity = tuple(
+                (path, canonical_json(value)) for path, value, _rule in resolved_edits
+            )
             if identity in seen:
-                raise ProtocolValidationError("duplicate proposal path and value")
+                raise ProtocolValidationError("duplicate proposal edits")
             seen.add(identity)
             label = proposal.label or f"candidate-{index}"
             if not _LABEL_RE.fullmatch(label):
@@ -189,20 +211,26 @@ class CandidateGenerator:
                 variant = ExperimentArm(
                     arm_id=experiment.variant.arm_id,
                     world="hypothetical",
-                    patches=(MechanismPatch(
-                        template_kind=rule.template_kind,
-                        template_id=rule.template_id,
-                        path=rule.path,
-                        value=value,
-                    ),),
+                    patches=tuple(
+                        MechanismPatch(
+                            template_kind=rule.template_kind,
+                            template_id=rule.template_id,
+                            path=path,
+                            value=value,
+                        )
+                        for path, value, rule in resolved_edits
+                    ),
                 )
             else:
+                override = _json_value(experiment.build)
+                for path, value, _rule in resolved_edits:
+                    override = _apply_configuration_edit(
+                        experiment.build, override, path, value
+                    )
                 variant = ExperimentArm(
                     arm_id=experiment.variant.arm_id,
                     world="canonical",
-                    build_override=_configuration_override(
-                        experiment.build, proposal.path, value
-                    ),
+                    build_override=override,
                 )
             candidates.append(replace(
                 base,

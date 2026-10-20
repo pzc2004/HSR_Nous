@@ -9,7 +9,7 @@
 - `artifacts.py`：canonical、不可覆盖的 spec/variant/run/result/claim/report 存储与证据下钻。
 - `runner.py`：两臂编译、逐 seed 新 engine、原始 run 与 ComparisonSet。
 - `kernel.py`：无 I/O 的 Fraction 统计、paired comparison 和纯 claim 推导。
-- `claims.py`：从 spec/result/run/variant 独立重算 claim，处理 rejected/inconclusive/stale。
+- `claims.py`：从 spec/result/run/variant 独立重算 claim，处理 rejected/inconclusive/stale；按 metric_id 取样，支持 total_damage 与 action_value 的方向和配对比较。
 - `report.py`：再验证后的 JSON 报告、动态 flags、固定结论句和仅用于解释的 actor_damage 拆解。
 - `execution.py`：单进程 ExecutionManager，覆盖首次执行、取消、resume、cache_hit、replay_check 及 history/revision 持久化。
 - `candidates.py`：有界候选集执行、dev 排名、holdout Bonferroni 确认与 candidate-v1 报告。

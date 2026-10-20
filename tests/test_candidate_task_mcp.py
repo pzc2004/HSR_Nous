@@ -5,7 +5,12 @@ from mcp import ClientSession
 from mcp.client.stdio import stdio_client
 
 from hsr_nous.research.schema import canonical_json
-from tests._research_builders import make_candidate_proposals, make_candidate_space
+from tests._research_builders import (
+    make_action_value_proposals,
+    make_action_value_space,
+    make_candidate_proposals,
+    make_candidate_space,
+)
 from tests.test_research_mcp import _payload, _server_parameters
 
 
@@ -79,5 +84,44 @@ def test_mcp_candidate_task_start_query_cancel_resume_and_notify(tmp_path):
                     },
                 ))
                 assert report["report_id"] == completed["task"]["report_id"]
+
+    anyio.run(scenario)
+
+
+def test_mcp_multi_edit_action_value_task(tmp_path):
+    space = make_action_value_space()
+    proposals = make_action_value_proposals(space)
+
+    async def scenario():
+        async with stdio_client(_server_parameters(tmp_path)) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                started = _payload(await session.call_tool(
+                    "start_candidate_proposals",
+                    {
+                        "candidate_space_json": canonical_json(space),
+                        "candidate_proposals_json": canonical_json(proposals),
+                    },
+                ))
+                assert started["status"] in {"queued", "running", "completed"}
+                completed = await _wait_terminal(session, started["candidate_task_id"])
+                assert completed["task"]["status"] == "completed"
+                assert completed["task"]["completed_runs"] == 128
+                report = _payload(await session.call_tool(
+                    "read_candidate_set_report",
+                    {
+                        "candidate_set_id": completed["task"]["candidate_set_id"],
+                        "report_id": completed["task"]["report_id"],
+                    },
+                ))
+                assert report["selected"] == ["candidate-1"]
+                assert report["candidates"][0]["dev"]["effect"] < 0
+                assert report["candidates"][0]["holdout_adjusted"]["effect"] < 0
+                candidate = report["candidates"][0]
+                trial = _payload(await session.call_tool(
+                    "read_report",
+                    {"trial_id": candidate["trial_id"], "report_id": candidate["report_id"]},
+                ))
+                assert trial["claim"]["metric"]["metric_id"] == "action_value"
 
     anyio.run(scenario)

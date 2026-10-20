@@ -83,7 +83,7 @@ def _conclusion(claim: Claim) -> str:
         interval = metadata["confidence_interval"]
         confidence = claim.metric.confidence * 100
         return (
-            f"{prefix}: holdout variant - baseline mean total_damage = "
+            f"{prefix}: holdout variant - baseline mean {claim.metric.metric_id} = "
             f"{metadata['effect']:.6f}; {confidence:.0f}% CI "
             f"[{interval['lower']:.6f}, {interval['upper']:.6f}]; "
             f"n={metadata['n']}."

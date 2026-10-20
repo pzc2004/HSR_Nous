@@ -21,6 +21,10 @@ EXECUTION_STATUSES = frozenset({
     "failed", "cancel_requested", "cancelled",
 })
 ARTIFACT_STATUSES = frozenset({"partial", "complete"})
+METRIC_DIRECTIONS = {
+    "total_damage": "higher_is_better",
+    "action_value": "lower_is_better",
+}
 
 
 def _snapshot(value: Any) -> Any:
@@ -213,14 +217,32 @@ class CandidateSpace(_DataModel):
 
 
 @dataclass(frozen=True)
-class CandidateProposal(_DataModel):
+class CandidateEdit(_DataModel):
     path: tuple[str | int, ...]
     value: Any
-    label: str | None = None
 
     def __post_init__(self) -> None:
         super().__post_init__()
-        _validate_candidate_path(self.path, "CandidateProposal")
+        _validate_candidate_path(self.path, "CandidateEdit")
+
+
+@dataclass(frozen=True)
+class CandidateProposal(_DataModel):
+    path: tuple[str | int, ...] | None = None
+    value: Any = None
+    label: str | None = None
+    edits: tuple[CandidateEdit, ...] = ()
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.path is None and not self.edits:
+            raise ValueError("CandidateProposal requires path/value or edits")
+        if self.path is not None:
+            _validate_candidate_path(self.path, "CandidateProposal")
+            if self.edits:
+                raise ValueError("CandidateProposal path/value and edits are mutually exclusive")
+        if any(not isinstance(edit, CandidateEdit) for edit in self.edits):
+            raise ValueError("CandidateProposal edits must be CandidateEdit instances")
         if self.label is not None and (not isinstance(self.label, str) or not self.label):
             raise ValueError("CandidateProposal label must be a non-empty string")
 

@@ -1,12 +1,12 @@
 # research/protocol
 
-固定实验协议与执行前校验包。本包只依赖 `research/schema`，不调用模拟器，不计算 CI，也不生成 claim 或报告。除 mechanism 外，当前还校验 canonical configuration 的完整 build_override；configuration 与 world 是两个独立维度。
+固定实验协议与执行前校验包。本包只依赖 `research/schema`，不调用模拟器，不计算 CI，也不生成 claim 或报告。除 mechanism 外，当前还校验 canonical configuration 的完整 build_override；configuration 与 world 是两个独立维度。指标支持 total_damage 与 action_value，候选提案支持单字段 path/value 和多字段 edits。
 
 ## 代码入口
 
 - `profiles.py`：`ResolvedProtocol`、`PAIRED_V1` 和只读协议注册表。
 - `validation.py`：`resolve_protocol()`、`validate_contract()`、`validate_candidate_set()`、`validate_patch_reference()`、`validate_fingerprint()` 与 `ProtocolValidationError`。
-- `candidate_proposals.py`：`CandidateGenerator` 将白名单内的单路径提案确定性生成为现有 CandidateSet；不执行模拟或计算排名。
+- `candidate_proposals.py`：`CandidateGenerator` 将白名单内的单字段与多字段提案确定性生成为现有 CandidateSet；不执行模拟或计算排名。
 
 ## 规范
 

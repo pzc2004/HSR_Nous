@@ -193,6 +193,7 @@ class OutcomeRecord:
     allies_alive: int
     enemies_alive: int
     total_damage: float
+    action_value: float
     zero_cycle_kill: bool
     stable_clear: bool
     truncated: bool
@@ -240,6 +241,7 @@ def classify_outcome(
         allies_alive=sum(1 for s in roster if s.alive),
         enemies_alive=len(engine._enemies_alive()),
         total_damage=float(state.total_damage),
+        action_value=float(state.clock),
         zero_cycle_kill=zero_cycle_kill,
         stable_clear=bool(outcome == "win" and ally_deaths == 0),
         truncated=bool(state.truncated),
