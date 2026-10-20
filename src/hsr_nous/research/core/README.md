@@ -27,5 +27,6 @@
 - [08_agent_bridge.md](../research/schema/docs/08_agent_bridge.md)：外部 DSH/MCP 传输与宿主复核边界。
 - [09_candidates.md](../research/schema/docs/09_candidates.md)：有界候选集、执行、修正与不可变报告。
 - [11_async_tasks.md](../research/schema/docs/11_async_tasks.md)：后台任务、部分结果、取消恢复与持久通知。
+- [12_workbench.md](../research/schema/docs/12_workbench.md)：只读研究台的任务、图表与证据下钻。
 
 模块 import 边界只以根目录 `AGENTS.md` 与 `tests/test_doc_lint.py` 的边界闸为准。

@@ -18,6 +18,7 @@
 | [09_candidates.md](docs/09_candidates.md) | 有界候选集、dev 排名、holdout Bonferroni 确认、不可变报告与独立复核 |
 | [10_candidate_proposals.md](docs/10_candidate_proposals.md) | 自然语言候选提案、白名单值域、确定性生成与宿主身份复核 |
 | [11_async_tasks.md](docs/11_async_tasks.md) | 候选集后台 worker、进度与部分结果、取消恢复和持久完成通知 |
+| [12_workbench.md](docs/12_workbench.md) | 只读研究台：任务、图表、单候选报告与证据下钻 |
 
 ## 数据流
 

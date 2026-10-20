@@ -5,7 +5,8 @@
 ## 当前能力
 
 - `CapabilityPolicy`：不可变策略，默认仓库/artifact 只读、项目目录可写、允许模拟和 submit_claim，联网/Bash/Python/Docker 全禁。
-- `ResearchGateway`：薄封装调查生命周期，逐项检查权限，不暴露 publish_run/publish_claim/publish_report；`open_research/gateway()` 统一 MCP 与宿主 CLI 的构造。
+- `ResearchGateway`：薄封装调查生命周期，逐项检查权限，不暴露 publish_run/publish_claim/publish_report；`open_research_gateway()` 统一 MCP 与宿主 CLI 的构造。
+- `list_candidate_tasks`：按更新时间排序、带上限的只读任务发现，供研究台和外部查询复用。
 - `submit_claim`：只接受 contract、trial_id 或 claim 之一，拒绝 metrics/samples/effect/CI 等调用方数字；MCP 另提供原样 JSON 字符串形式以保持跨 JavaScript 数字语义。
 - `submit_candidate_set` / `read_candidate_set_report` / `validate_candidate_set_report`：有界候选集执行、读取与独立复核；不能由调用方指定 selected、效应值或 CI。
 - `submit_candidate_proposals` / `validate_candidate_proposals_report`：将白名单提案确定性转为候选集，复用同一执行与复核通道；宿主按实际工具提案重建预期身份。

@@ -209,6 +209,10 @@ class ResearchGateway:
         candidate_set = CandidateGenerator.build_candidate_set(space, proposals)
         return self.submit_candidate_set(candidate_set)
 
+    def list_candidate_tasks(self, limit: int = 50) -> list[dict[str, Any]]:
+        self._require("allow_read_artifacts")
+        return self._candidate_tasks.list(limit)
+
     def read_candidate_task(self, task_id: str) -> dict[str, Any]:
         self._require("allow_read_artifacts")
         return self._candidate_tasks.read(task_id)

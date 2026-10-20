@@ -242,6 +242,21 @@ class CandidateTaskStore:
             raise ValueError("candidate task result identity mismatch")
         return payload
 
+    def list(self, limit: int = 50) -> list[CandidateTask]:
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+            raise ValueError("candidate task list limit must be between 1 and 100")
+        records = []
+        for path in self.root.iterdir():
+            if not path.is_dir() or len(path.name) != 64:
+                continue
+            if any(character not in "0123456789abcdef" for character in path.name):
+                continue
+            if not self.task_path(path.name).exists():
+                continue
+            records.append(self.read(path.name))
+        records.sort(key=lambda task: task.updated_at, reverse=True)
+        return records[:limit]
+
     def view(self, task: CandidateTask) -> dict[str, Any]:
         candidates = []
         completed_runs = 0
@@ -390,6 +405,9 @@ class CandidateTaskManager:
                 return self.tasks.view(task)
             self._launch(task)
         return self.read(task.task_id)
+
+    def list(self, limit: int = 50) -> list[dict[str, Any]]:
+        return [self.read(task.task_id) for task in self.tasks.list(limit)]
 
     def read(self, task_id: str) -> dict[str, Any]:
         task = self._reconcile(self.tasks.read(task_id))

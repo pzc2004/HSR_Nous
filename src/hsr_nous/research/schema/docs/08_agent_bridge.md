@@ -1,6 +1,6 @@
 # Agent Bridge：DSH 与 MCP
 
-本章描述当前已经落地的 DSH headless → MCP → ResearchGateway 接入。ACP、交互式前端、共享 Memory 和开放式多候选搜索仍不在当前实现内；白名单候选提案见 [10_candidate_proposals.md](10_candidate_proposals.md)。
+本章描述当前已经落地的 DSH headless → MCP → ResearchGateway 接入。ACP、复杂交互式研究环境、共享 Memory 和开放式多候选搜索仍不在当前实现内；白名单候选提案见 [10_candidate_proposals.md](10_candidate_proposals.md)，只读研究台见 [12_workbench.md](12_workbench.md)。
 
 ## 数据流与信任归属
 
@@ -46,7 +46,7 @@ DSH 的自然语言最终文本不是 claim，也不能替代完成态 investiga
 
 这些字符串字段在 MCP 函数签名中是纯 `str`，以空字符串表示未提供，不是 `str | None`。当前官方 Python MCP SDK 会预解析非纯 `str` 字段中的 JSON 文本；保持纯 `str` 注解可防止契约字符串在函数调用前被提前变成对象。各工具输入的互斥或必填校验仍然生效。
 
-MCP 不暴露 `publish_run/publish_claim/publish_report`、任意路径读写、Bash、Python、Docker 或联网工具。`open_research/gateway()` 是 MCP 与宿主 CLI 共用的构造入口，默认策略保持联网关闭。
+MCP 不暴露 `publish_run/publish_claim/publish_report`、任意路径读写、Bash、Python、Docker 或联网工具。`open_research_gateway()` 是 MCP 与宿主 CLI 共用的构造入口，默认策略保持联网关闭。
 
 ## DSH 进程与配置
 

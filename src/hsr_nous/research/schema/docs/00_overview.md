@@ -19,7 +19,7 @@
 
 当前版本不做以下工作：
 
-- 不接 ACP、交互式前端或共享 Memory；当前 DSH headless/MCP 接入见 [08_agent_bridge.md](08_agent_bridge.md)。
+- 不接 ACP、复杂交互式研究环境或共享 Memory；当前只读研究台见 [12_workbench.md](12_workbench.md)，DSH headless/MCP 接入见 [08_agent_bridge.md](08_agent_bridge.md)。
 - 不做开放式多候选搜索、自主规划或全局最优声明；当前只支持有界候选集，见 [09_candidates.md](09_candidates.md)。
 - 不声称模拟结果已经过真实游戏校准，也不声称 accepted 等于真实游戏正确或全局最优。
 - 不导出完整离线模板闭包；replay 仍要求指纹对应的 canonical 模板根可用。
