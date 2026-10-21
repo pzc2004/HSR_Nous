@@ -537,6 +537,7 @@ class CombatEngine:
         seed: Optional[int] = None,
         initial_sp: Optional[int] = None,
         initial_energy_ratio: Optional[float] = None,
+        rng: Optional[Any] = None,
     ) -> "CombatEngine":
         """读档恢复：from_compiled 同路建骨架 → 注入存档状态 → 重挂订阅 → 返回引擎.
 
@@ -544,7 +545,8 @@ class CombatEngine:
         在存档状态里，`_init_state` 不重跑）。mode 缺省随存档（显式给且不符即炸——
         roll/expected 混接世界线必分叉）；seed 仅为与 from_compiled 签名对称——RNG
         流位置由存档决定，传非 None 被忽略并告警。initial_sp/initial_energy_ratio
-        是 setup 注入件，恢复后无消费点（仅透传骨架构造）。
+        是 setup 注入件，恢复后无消费点（仅透传骨架构造）。脚本化世界线经 rng 注入
+        ScriptedRandom，setstate 恢复随机值与消费游标。
         """
         if not isinstance(save, dict):
             raise ValueError(f"存档不是 dict（{type(save).__name__}）")
@@ -560,6 +562,8 @@ class CombatEngine:
         engine = cls.from_compiled(compiled, mode=mode, seed=None,
                                    initial_sp=initial_sp,
                                    initial_energy_ratio=initial_energy_ratio)
+        if rng is not None:
+            engine.pipeline.rng = rng
         restore_into(engine, save)
         return engine
 
@@ -2009,7 +2013,7 @@ class CombatEngine:
         return self._fire_ultimate(st, ult, free=True)
 
     def _try_ultimate(self, actor_state: ActorState, timing: str) -> bool:
-        if self.decision.ult_timing != timing:
+        if self.decision.ult_timing != "scripted" and self.decision.ult_timing != timing:
             return False
         fired = False
         # 窗口连放（游戏同款）：放一个 → 重查 ready → 再问，直到决策不放/无人就绪——
@@ -2020,7 +2024,10 @@ class CombatEngine:
                 break
             # 统一决策接口第三件：窗口 ready 清单上交决策源（None=本窗口不放；
             # 手动实现可跨单位选——施放者不一定是行动方，按回答反查 caster）
-            ult = self.decision.select_ultimate(actor_state, ready, self)
+            if self.decision.ult_timing == "scripted":
+                ult = self.decision.select_ultimate(actor_state, ready, self, timing=timing)
+            else:
+                ult = self.decision.select_ultimate(actor_state, ready, self)
             caster = next((st for st, a in ready if a is ult), None) if ult is not None else None
             if caster is None:
                 break  # 本窗口不放 / ready 之外的回答（越权不收——policy 只选不越权）

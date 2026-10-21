@@ -317,7 +317,7 @@ class TestCompletenessGate:
         "actions_by_actor": "编译产物",
         "summon_defs": "编译产物",
         "_binding_params": "编译产物",
-        "decision": "编译策略运行时（无实例状态——select_* 全走 ctx/turn_count 现算）",
+        "decision": "编译策略本体（from_compiled 重带；ultimate_script 游标走 save['decision']）",
         "_expr": "表达式编译器（parse 缓存=派生物；恢复重 parse 经它兜底）",
         "pipeline": "结算管线（mode 走 save['mode']、rng 走 save['rng']，余为注入回调/缓存）",
         "bus": "事件总线（订阅恢复时重挂；_depth/_warned 是结算瞬时量，档间恒静息零值）",

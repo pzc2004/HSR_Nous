@@ -5,7 +5,7 @@ import math
 import random
 from dataclasses import dataclass
 from numbers import Real
-from typing import Iterable, Optional
+from typing import Any, Callable, Iterable, Optional
 
 from hsr_nous.sim.compile.compiled import CompiledEncounter
 from hsr_nous.sim.engine import CombatEngine
@@ -58,6 +58,24 @@ class ScriptedRandom(random.Random):
                 f"脚本随机值未全部消费：已消费 {self.consumed}/{len(self._values)}，"
                 f"剩余 {len(self.remaining)} 个（下一值 {self.remaining[0]!r}）")
 
+    def getstate(self) -> dict[str, Any]:
+        return {
+            "version": 1,
+            "values": self._values,
+            "cursor": self._cursor,
+            "base_state": super().getstate(),
+        }
+
+    def setstate(self, state: dict[str, Any]) -> None:
+        if not isinstance(state, dict) or state.get("version") != 1:
+            raise ValueError("ScriptedRandom 存档格式无效")
+        cursor = state.get("cursor")
+        self.__init__(state["values"])
+        if isinstance(cursor, bool) or not isinstance(cursor, int) or not 0 <= cursor <= len(self._values):
+            raise ValueError(f"ScriptedRandom 游标越界：{cursor!r}")
+        self._cursor = cursor
+        super().setstate(state["base_state"])
+
 
 @dataclass(frozen=True)
 class ScriptedResult:
@@ -81,6 +99,7 @@ def run_scripted(
     seed: Optional[int] = None,
     initial_sp: Optional[int] = None,
     initial_energy_ratio: Optional[float] = None,
+    prepare_engine: Optional[Callable[[CombatEngine], None]] = None,
 ) -> ScriptedResult:
     """用固定随机序列实际执行一场 roll 战斗，seed 不参与脚本语义。"""
     rng = ScriptedRandom(random_values)
@@ -92,6 +111,8 @@ def run_scripted(
         initial_energy_ratio=initial_energy_ratio,
     )
     engine.pipeline.rng = rng
+    if prepare_engine is not None:
+        prepare_engine(engine)
     state = engine.run()
     rng.require_exhausted()
     record = classify_outcome(engine, seed=0 if seed is None else seed)

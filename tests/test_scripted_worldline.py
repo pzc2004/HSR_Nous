@@ -1,16 +1,21 @@
 """固定随机序列与严格行动/目标脚本的端到端回归。"""
 from __future__ import annotations
 
+import json
 import math
 from dataclasses import replace
 
 import pytest
 
 from hsr_nous.sim.compile import compile_encounter
+from hsr_nous.sim.compile.build_compiler import BuildCompiler
 from hsr_nous.sim.compile.expr_compiler import ExprCompiler
+from hsr_nous.sim.engine import CombatEngine
+from hsr_nous.sim.montecarlo import RunRecorder
 from hsr_nous.sim.pipeline import MODE_ROLL, SettlementPipeline
 from hsr_nous.sim.scripted import ScriptedRandom, run_scripted
 from hsr_nous.sim_schema.action import Action
+from tests._worldline_builders import make_acheron_worldline_parts
 
 
 def _build(policy, *, enemy_hp=1e9, second_enemy_hp=None, enemy_spd=130.0,
@@ -46,6 +51,23 @@ def _policy(action="basic", target=None):
     if target is not None:
         entry["target"] = target
     return {"mode": "scripted", "script": [entry]}
+
+
+def _ultimate_compiled(ultimate_script, *, script=None, **kwargs):
+    policy = {
+        "mode": "scripted", "ult_timing": "scripted",
+        "script": script or [{"turn": 1, "actor": "hero", "action": "basic"}],
+        "ultimate_script": ultimate_script,
+    }
+    build, stage = _build(policy, **kwargs)
+    member = build["build"]["team"][0]
+    member["base_stats"]["max_energy"] = 0
+    member["actions"].append({
+        "action_id": "u", "name": "终结技", "action_type": "ultimate",
+        "target_type": "single", "damage_type": "physical",
+        "scaling": [{"atk": 2.0}], "energy_cost": 0, "energy_gain": 0,
+    })
+    return compile_encounter(build, stage)
 
 
 class TestScriptedRandom:
@@ -161,3 +183,120 @@ class TestScriptedWorldline:
         compiled = _compiled(_policy(), enemy_hp=1, av=1000, termination="wipe")
         with pytest.raises(RuntimeError, match="未全部消费"):
             run_scripted(compiled, [0.99, 0.5], initial_sp=5, initial_energy_ratio=0.0)
+
+
+class TestUltimateScript:
+    def test_compile_gates(self):
+        entry = {"turn": 1, "window": "before_action", "actor": "hero", "action": "skip"}
+        policy = {"mode": "scripted", "ult_timing": "after_action",
+                  "script": [{"turn": 1, "actor": "hero", "action": "basic"}],
+                  "ultimate_script": [entry]}
+        with pytest.raises(ValueError, match="ult_timing 不是 scripted"):
+            BuildCompiler()._compile_policy(policy)
+        policy["ult_timing"] = "scripted"
+        policy["ultimate_script"] = [{**entry, "window": "mid_action"}]
+        with pytest.raises(ValueError, match="非法值 'mid_action'"):
+            BuildCompiler()._compile_policy(policy)
+        policy["ultimate_script"] = [entry]
+        compiled = BuildCompiler()._compile_policy(policy)
+        assert compiled.ult_timing == "scripted" and len(compiled.ultimate_script) == 1
+
+    def test_normal_action_cannot_bypass_ultimate_script(self):
+        compiled = _ultimate_compiled([
+            {"turn": 1, "window": "before_action", "actor": "hero", "action": "skip"},
+        ], script=[{"turn": 1, "actor": "hero", "action": "ultimate"}],
+            hero_spd=150, enemy_spd=100, av=70)
+        with pytest.raises(RuntimeError, match="普通行动不得选择 ultimate"):
+            run_scripted(compiled, [], initial_sp=5)
+
+    def test_skip_cast_and_target(self):
+        compiled = _ultimate_compiled([
+            {"turn": 1, "window": "before_action", "actor": "hero", "action": "skip"},
+            {"turn": 1, "window": "after_action", "actor": "hero", "action": "ultimate",
+             "target": "e2"},
+            {"turn": 1, "window": "after_action", "actor": "hero", "action": "skip"},
+        ], hero_spd=150, enemy_spd=100, av=70, second_enemy_hp=1e9)
+        result = run_scripted(compiled, [0.99, 0.99], initial_sp=5)
+        assert result.outcome == "timeout"
+        assert any("英雄 对 假人乙 使用 终结技" in line for line in result.state.log)
+        assert result.random_source.consumed == 2
+
+    def test_continuous_cast_in_same_window(self):
+        compiled = _ultimate_compiled([
+            {"turn": 1, "window": "before_action", "actor": "hero", "action": "ultimate"},
+            {"turn": 1, "window": "before_action", "actor": "hero", "action": "skip"},
+            {"turn": 1, "window": "after_action", "actor": "hero", "action": "skip"},
+        ], hero_spd=150, enemy_spd=100, av=70)
+        result = run_scripted(compiled, [0.99, 0.99], initial_sp=5)
+        actions = [line for line in result.state.log if "使用" in line]
+        assert "终结技" in actions[0] and "普攻" in actions[1]
+
+    @pytest.mark.parametrize("entries,message", [
+        ([], "已耗尽"),
+        ([{"turn": 1, "window": "after_action", "actor": "hero", "action": "skip"}],
+         "窗口失配"),
+        ([{"turn": 1, "window": "before_action", "actor": "other", "action": "skip"}],
+         "不在 ready 集"),
+        ([{"turn": 1, "window": "before_action", "actor": "hero", "action": "missing"}],
+         "不在 ready 集"),
+    ])
+    def test_decision_mismatch_raises(self, entries, message):
+        compiled = _ultimate_compiled(entries, hero_spd=150, enemy_spd=100, av=70)
+        with pytest.raises(RuntimeError, match=message):
+            run_scripted(compiled, [], initial_sp=5)
+
+    def test_ultimate_target_mismatch_raises(self):
+        compiled = _ultimate_compiled([
+            {"turn": 1, "window": "before_action", "actor": "hero", "action": "ultimate",
+             "target": "missing"},
+        ], hero_spd=150, enemy_spd=100, av=70)
+        with pytest.raises(RuntimeError, match="目标.*不在合法候选集"):
+            run_scripted(compiled, [], initial_sp=5)
+
+    def test_save_restore_preserves_random_and_ultimate_cursors(self):
+        compiled = _ultimate_compiled([
+            {"turn": 1, "window": "before_action", "actor": "hero", "action": "ultimate"},
+            {"turn": 1, "window": "before_action", "actor": "hero", "action": "skip"},
+            {"turn": 1, "window": "after_action", "actor": "hero", "action": "skip"},
+            {"turn": 2, "window": "after_action", "actor": "hero", "action": "skip"},
+            {"turn": 3, "window": "before_action", "actor": "hero", "action": "skip"},
+            {"turn": 3, "window": "after_action", "actor": "hero", "action": "skip"},
+        ], script=[
+            {"turn": 1, "actor": "hero", "action": "basic"},
+            {"turn": 3, "actor": "hero", "action": "basic"},
+        ], hero_spd=150, enemy_spd=100, av=150)
+        engine = CombatEngine.from_compiled(compiled, mode=MODE_ROLL, initial_sp=5)
+        engine.pipeline.rng = ScriptedRandom([0.99, 0.99, 0.99])
+        engine.setup()
+        engine.step()
+        saved = json.loads(json.dumps(engine.save_state()))
+        engine.run()
+        restored = CombatEngine.load_state(
+            compiled, saved, mode=MODE_ROLL, rng=ScriptedRandom([]))
+        restored.run()
+        assert restored.decision.export_state() == {"ultimate_cursor": 6}
+        assert restored.pipeline.rng.consumed == 3
+        assert restored.save_state() == engine.save_state()
+
+
+class TestRealTeamWorldline:
+    def test_acheron_full_decision_axis(self):
+        build, stage, values = make_acheron_worldline_parts()
+        recorder = None
+
+        def prepare(engine):
+            nonlocal recorder
+            engine.setup()
+            recorder = RunRecorder(engine)
+
+        result = run_scripted(
+            compile_encounter(build, stage), values,
+            initial_sp=5, initial_energy_ratio=1.0, prepare_engine=prepare,
+        )
+        assert result.outcome == "timeout" and result.state.turn_count == 16
+        assert result.random_source.consumed == 92 and not result.random_source.remaining
+        assert recorder is not None and recorder.ult_casts == 3
+        assert math.isclose(result.state.total_damage, 13835.311721259002, rel_tol=1e-9)
+        assert any("轮盘勋爵" in line for line in result.state.log)
+        assert any("猜猜谁住在这里" in line for line in result.state.log)
+        assert any("残梦尽染，一刀缭断" in line for line in result.state.log)

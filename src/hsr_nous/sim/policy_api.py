@@ -93,7 +93,7 @@ class ScriptedPolicy:
         """统一决策接口（目标）：脚本策略不选目标——None=引擎缺省（首个存活敌人/自己）。"""
         return None
 
-    def select_ultimate(self, actor_state: "ActorState", ready: list, engine=None):
+    def select_ultimate(self, actor_state: "ActorState", ready: list, engine=None, timing=None):
         """统一决策接口（终结技窗口）：旧口径——只放行动方自己的终结技（ready 中查自己）；
         自己不 ready 则 None=本窗口不放（与 v2b 前 _try_ultimate 内联逻辑逐行为等价）。"""
         return next((a for st, a in ready if st is actor_state), None)
@@ -115,6 +115,8 @@ class CompiledPolicyRuntime:
         self.policy = compiled_policy
         self.ult_timing = compiled_policy.ult_timing  # 统一决策接口的一部分（原由 engine 外挂读取）
         self.expr = expr_compiler or ExprCompiler()
+        self._ultimate_cursor = 0
+        self._active_script_entry: Optional[Dict[str, Any]] = None
 
     def select_action(self, actor_state: ActorState, legal: List[Action], engine: "CombatEngine") -> Action:
         """统一决策接口：scripted/hybrid 先查逐回合脚本（B4 回放变体），未命中按 mode 分流；
@@ -122,15 +124,23 @@ class CompiledPolicyRuntime:
         if self.policy.mode in ("scripted", "hybrid"):
             hit = self._script_lookup(actor_state, engine)
             if hit is not None:
-                return hit
+                return self._validate_normal_action(hit)
             if self.policy.mode == "scripted":
                 raise RuntimeError(
                     f"scripted policy 未覆盖 turn {engine.state.turn_count + 1} "
                     f"actor {actor_state.actor.actor_id}（严格模式——未覆盖即报错，14_policy）")
             # hybrid：未覆盖回合回退规则匹配
+        self._active_script_entry = None
         want = self.select_action_type(actor_state, engine)
-        return (next((a for a in legal if a.action_id == want), None)
-                or next((a for a in legal if a.action_type == want), legal[0]))
+        action = (next((a for a in legal if a.action_id == want), None)
+                  or next((a for a in legal if a.action_type == want), legal[0]))
+        return self._validate_normal_action(action)
+
+    def _validate_normal_action(self, action: Action) -> Action:
+        if self.ult_timing == "scripted" and action.action_type == "ultimate":
+            raise RuntimeError(
+                "ult_timing=scripted 时普通行动不得选择 ultimate——由 ultimate_script 接管")
+        return action
 
     def _script_entry(self, actor_state: ActorState,
                       engine: "CombatEngine") -> Optional[Dict[str, Any]]:
@@ -157,6 +167,7 @@ class CompiledPolicyRuntime:
             raise RuntimeError(
                 f"scripted policy turn {turn} actor {e['actor']!r} 的行动 {e['action']!r}"
                 f" 不在合法集（被锁/不存在——脚本轴与战斗状态失配）")
+        self._active_script_entry = e
         return hit
 
     def _context(self, actor_state: ActorState, engine: "CombatEngine") -> Dict[str, Any]:
@@ -218,9 +229,47 @@ class CompiledPolicyRuntime:
         # 兜底：无命中退首个候选（filter/has_modifier 等原口径；空候选=None）
         return candidates[0] if candidates else None
 
-    def select_ultimate(self, actor_state: ActorState, ready: list, engine: "CombatEngine") -> Optional[Any]:
-        """统一决策接口（终结技窗口）：编译策略同 Scripted 旧口径——只放行动方自己的终结技."""
-        return next((a for st, a in ready if st is actor_state), None)
+    def select_ultimate(self, actor_state: ActorState, ready: list, engine: "CombatEngine",
+                        timing: Optional[str] = None) -> Optional[Any]:
+        if self.ult_timing != "scripted":
+            return next((a for st, a in ready if st is actor_state), None)
+        turn = engine.state.turn_count + 1
+        if self._ultimate_cursor >= len(self.policy.ultimate_script):
+            raise RuntimeError(
+                f"ultimate_script 已耗尽：turn {turn} window {timing} 仍有 ready 终结技")
+        entry = self.policy.ultimate_script[self._ultimate_cursor]
+        if entry["turn"] != turn or entry["window"] != timing:
+            raise RuntimeError(
+                f"ultimate_script 窗口失配：下一条是 turn {entry['turn']} "
+                f"window {entry['window']}，实际是 turn {turn} window {timing}")
+        match = next(((st, a) for st, a in ready
+                      if entry["actor"] in (st.actor.actor_id, st.actor.name)
+                      and (a.action_id == entry["action"] or a.action_type == entry["action"])), None)
+        if entry["action"] == "skip":
+            if not any(entry["actor"] in (st.actor.actor_id, st.actor.name) for st, _ in ready):
+                raise RuntimeError(
+                    f"ultimate_script turn {turn} actor {entry['actor']!r} 不在 ready 集")
+            self._ultimate_cursor += 1
+            self._active_script_entry = None
+            return None
+        if match is None:
+            raise RuntimeError(
+                f"ultimate_script turn {turn} actor {entry['actor']!r} 的行动 "
+                f"{entry['action']!r} 不在 ready 集")
+        self._ultimate_cursor += 1
+        self._active_script_entry = entry
+        return match[1]
+
+    def export_state(self) -> Dict[str, Any]:
+        return {"ultimate_cursor": self._ultimate_cursor}
+
+    def restore_state(self, state: Optional[Dict[str, Any]] = None) -> None:
+        cursor = (state or {}).get("ultimate_cursor", 0)
+        if (isinstance(cursor, bool) or not isinstance(cursor, int)
+                or not 0 <= cursor <= len(self.policy.ultimate_script)):
+            raise ValueError(f"非法 ultimate_script 游标：{cursor!r}")
+        self._ultimate_cursor = cursor
+        self._active_script_entry = None
 
     def wait_segment(self, actor_state: ActorState, action, seg_index: int, engine: "CombatEngine"):
         """统一决策接口（段间决策）：编译策略直通——缺省路径（index 对齐变体 +
@@ -230,18 +279,23 @@ class CompiledPolicyRuntime:
     def select_target(self, actor_state: ActorState, action_type: str, candidates: List[ActorState], engine: "CombatEngine") -> Optional[ActorState]:
         if not candidates:
             return None
-        if self.policy.mode in ("scripted", "hybrid"):
+        turn = engine.state.turn_count + 1
+        entry = self._active_script_entry
+        if entry is not None and (
+                entry["turn"] != turn
+                or entry["actor"] not in (actor_state.actor.actor_id, actor_state.actor.name)):
+            entry = None
+        if entry is None and self.policy.mode in ("scripted", "hybrid"):
             entry = self._script_entry(actor_state, engine)
-            if entry is not None and "target" in entry:
-                wanted = entry["target"]
-                picked = (next((s for s in candidates if s.actor.actor_id == wanted), None)
-                          or next((s for s in candidates if s.actor.name == wanted), None))
-                if picked is None:
-                    turn = engine.state.turn_count + 1
-                    raise RuntimeError(
-                        f"scripted policy turn {turn} actor {entry['actor']!r} 的目标 {wanted!r}"
-                        f" 不在合法候选集（目标不存在/已离场——脚本轴与战斗状态失配）")
-                return picked
+        if entry is not None and "target" in entry:
+            wanted = entry["target"]
+            picked = (next((s for s in candidates if s.actor.actor_id == wanted), None)
+                      or next((s for s in candidates if s.actor.name == wanted), None))
+            if picked is None:
+                raise RuntimeError(
+                    f"scripted policy turn {turn} actor {entry['actor']!r} 的目标 {wanted!r}"
+                    f" 不在合法候选集（目标不存在/已离场——脚本轴与战斗状态失配）")
+            return picked
         ctx = self._context(actor_state, engine)
         ctx["action_type"] = action_type
         for rule in self.policy.target_rules:

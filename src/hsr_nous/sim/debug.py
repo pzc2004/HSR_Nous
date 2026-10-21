@@ -58,7 +58,8 @@ class _ManualPolicy(ScriptedPolicy):
                 return picked
         return None  # 手动目标缺省 = 引擎缺省（首个存活敌人/自己）
 
-    def select_ultimate(self, actor_state: Any, ready: list, engine: Any = None) -> Any:
+    def select_ultimate(self, actor_state: Any, ready: list, engine: Any = None,
+                        timing: Any = None) -> Any:
         """手动终结技窗口：hook 回答 Action=放 / None=本窗口不放（skip）；
         哨兵 _AUTO_ULT=交回旧自动口径（重放段、未挂 hook——CLI REPL 旧行为）。"""
         if self._ult_hook is not None:

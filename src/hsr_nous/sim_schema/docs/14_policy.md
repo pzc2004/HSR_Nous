@@ -141,14 +141,35 @@ policy:
   script:
     - {turn: 1, actor: "seele", action: "skill", target: "enemy_2"}
     - {turn: 2, actor: "seele", action: "basic"}
-    - {turn: 3, actor: "seele", action: "ultimate"}
+    - {turn: 3, actor: "seele", action: "basic"}
 ```
 
 - 脚本条目按 turn 序执行；`actor`/`action` 必须能解析到该 actor 的 actions 内
 - `target` 可选，按 actor id 或显示名解析到当前合法主目标；目标不存在、已离场或不在候选集中即报错。未写 `target` 时保持 `target_rules` 与缺省目标行为
 - `target` 只指定行动主目标；弹射、受击等引擎内部随机选择仍由随机源决定
 - `mode: "hybrid"`：脚本覆盖列出的决策点，未覆盖的回合/角色回退到 `action_rules` 默认匹配；`mode: "scripted"` 严格模式——未覆盖即报错
+- 普通 `script` 不接管终结技插入窗口；需要全决策回放时使用下节的 `ult_timing: "scripted"`。该模式下普通行动选择 `ultimate` 会直接报错，不能绕过窗口脚本
 - `state_resources` / `state_hooks`（策略相位容器）仍**未落地**，不可配置
+
+#### 终结技窗口脚本
+
+`ult_timing: "scripted"` 启用独立的 `ultimate_script`，逐项消费每个实际 ready 窗口的决策；缺省的 `before_action` / `after_action` 自动施放行为不变：
+
+```yaml
+policy:
+  mode: "scripted"
+  ult_timing: "scripted"
+  script:
+    - {turn: 1, actor: "seele", action: "basic", target: "enemy_1"}
+  ultimate_script:
+    - {turn: 1, window: "before_action", actor: "seele", action: "skip"}
+    - {turn: 1, window: "after_action", actor: "seele", action: "ultimate", target: "enemy_2"}
+```
+
+- 每条包含 `turn / window / actor / action`，可选 `target`；`window` 只接受 `before_action` 或 `after_action`，`action` 为终结技 id、`ultimate` 或保留字 `skip`
+- 每次 ready 窗口消费下一条：窗口、回合、施放者或终结技不符，以及脚本耗尽，均直接报错；`skip` 表示本窗口不再施放，不能省略成自动跳过
+- 施放后引擎重新计算 ready，再消费下一条，支持同窗口多人与连续插入；普通行动与终结技分别使用自己的 `target`
+- 战斗提前结束或窗口无人 ready 时，不要求消费未来条目；非 scripted 时机写 `ultimate_script` 会在编译期拒绝
 
 #### 固定随机序列：脚本化世界线
 

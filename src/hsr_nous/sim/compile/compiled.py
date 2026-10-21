@@ -80,11 +80,12 @@ class CompiledPolicy:
     action_rules: tuple[CompiledPolicyRule, ...]
     target_rules: tuple[CompiledPolicyRule, ...]
     parameters: Mapping[str, Any] = field(default_factory=dict)
-    ult_timing: str = "after_action"  # before_action | after_action | never
+    ult_timing: str = "after_action"  # before_action | after_action | never | scripted
     # B4 回放变体（14_policy）：mode=rule_based(默认)/scripted(严格脚本)/hybrid(脚本+规则回退)；
     # script 逐回合有序条目（{turn(1 起), actor(id 或名), action(id 或类型), target?}）
     mode: str = "rule_based"
     script: tuple = ()
+    ultimate_script: tuple = ()
 
     def __post_init__(self) -> None:
         _freeze_containers(self, ("parameters",), ())

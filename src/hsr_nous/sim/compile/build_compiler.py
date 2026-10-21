@@ -157,12 +157,13 @@ _HOOK_KEYS = frozenset({"event", "condition", "effects",
 
 #: policy 合法键
 _POLICY_KEYS = frozenset({"name", "action_rules", "target_rules", "parameters", "ult_timing",
-                          "mode", "script"})  # mode/script=B4 回放变体（14_policy；state_* 仍炸）
+                          "mode", "script", "ultimate_script"})
 #: policy mode 合法值（14_policy：rule_based 默认 / scripted 严格脚本 / hybrid 脚本+规则回退）
 _POLICY_MODES = frozenset({"rule_based", "scripted", "hybrid"})
 #: script 条目合法键（mode: scripted/hybrid 的逐回合脚本；target 可选，运行时按 id/名
 #: 解析到当前合法候选，非法目标与非法行动同样报错）
 _POLICY_SCRIPT_KEYS = frozenset({"turn", "actor", "action", "target"})
+_ULTIMATE_SCRIPT_KEYS = frozenset({"turn", "window", "actor", "action", "target"})
 _POLICY_RULE_KEYS = frozenset({"condition", "action", "priority", "selector"})
 
 #: build 段顶层合法键（消费点：compile() 逐键读取）
@@ -499,8 +500,9 @@ _ENGINE_NATIVE_RESOURCES = frozenset({"punchline", "certified_banger"})
 #: 文档示例里的 enemy_single/enemy_aoe 引擎未实现，不在词表）
 TARGET_TYPES = frozenset({"single", "blast", "aoe", "bounce", "self", "ally_single", "ally_aoe"})
 
-#: ult_timing 合法值（policy_api ULT_BEFORE_ACTION/ULT_AFTER_ACTION/ULT_NEVER）
-ULT_TIMINGS = frozenset({"before_action", "after_action", "never"})
+#: ult_timing 合法值（自动前/后窗口、禁用，或 ultimate_script 严格窗口回放）
+ULT_TIMINGS = frozenset({"before_action", "after_action", "never", "scripted"})
+ULTIMATE_WINDOWS = frozenset({"before_action", "after_action"})
 
 #: modifier 枚举字段（引擎 stack_mode/tick_anchor/effect_scope 实现集，state.py 注释同口径）
 STACK_MODES = frozenset({"refresh", "independent", "replace", "set"})
@@ -2214,6 +2216,27 @@ class BuildCompiler:
                 entry["target"] = str(e["target"])
             script.append(entry)
 
+        ultimate_spec = spec.get("ultimate_script") or []
+        if ultimate_spec and spec.get("ult_timing") != "scripted":
+            raise ValueError("policy 写了 ultimate_script，但 ult_timing 不是 scripted")
+        ultimate_script: List[Dict[str, Any]] = []
+        for i, e in enumerate(ultimate_spec):
+            where = f"policy ultimate_script[{i}]"
+            _check_keys(e, _ULTIMATE_SCRIPT_KEYS, where=where)
+            turn = e.get("turn")
+            if not isinstance(turn, int) or turn < 1:
+                raise ValueError(f"{where} 的 turn 须为 ≥1 的整数，实得 {turn!r}")
+            if not e.get("window") or not e.get("actor") or not e.get("action"):
+                raise ValueError(f"{where} 缺 window/actor/action：{e!r}")
+            _check_enum(e["window"], ULTIMATE_WINDOWS, where=where, field="window")
+            entry = {"turn": turn, "window": str(e["window"]),
+                     "actor": str(e["actor"]), "action": str(e["action"])}
+            if "target" in e:
+                if not e["target"]:
+                    raise ValueError(f"{where} 的 target 须为 actor id 或显示名：{e!r}")
+                entry["target"] = str(e["target"])
+            ultimate_script.append(entry)
+
         def rules_of(items: List[Dict[str, Any]], with_selector: bool, kind: str) -> tuple[CompiledPolicyRule, ...]:
             out = []
             for r in items or []:
@@ -2254,6 +2277,7 @@ class BuildCompiler:
             ult_timing=spec.get("ult_timing", "after_action"),
             mode=mode,
             script=tuple(script),
+            ultimate_script=tuple(ultimate_script),
         )
 
     # ------------------------------------------------------------------

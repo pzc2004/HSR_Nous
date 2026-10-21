@@ -16,6 +16,8 @@
   两件——与 `_init_state` 的订阅块同集，无运行期动态注册盲区）；
 - 红黑树（AVTree）不序列化——恢复时按存档逐句柄 insert 派生重建（remaining 是守恒
   主状态；树键取存档里读自活树的逐句柄预计时刻，与浮点重算彻底脱钩）。
+- RNG 与决策游标分别走 `rng` / `decision`；ScriptedRandom 保存随机值全集和消费位置，
+  ultimate_script 保存窗口消费位置，读档不会退回 seed 或自动施放。
 
 完备性闸（防漂移）：`FIELD_CODECS` 是本模块唯一字段策略源——被档 dataclass
 （Modifier/ActorState/BattleState/Actor/StatBlock/ShieldInstance/StateConfig）每个
@@ -306,16 +308,18 @@ def _decode_value(value: Any, codec: str, expr: Any) -> Any:
 # ---------------------------------------------------------------------------
 
 def _tuples_to_lists(x: Any) -> Any:
-    if isinstance(x, tuple):
+    if isinstance(x, (tuple, list)):
         return [_tuples_to_lists(v) for v in x]
-    if isinstance(x, list):
-        return [_tuples_to_lists(v) for v in x]
+    if isinstance(x, dict):
+        return {k: _tuples_to_lists(v) for k, v in x.items()}
     return x
 
 
 def _lists_to_tuples(x: Any) -> Any:
     if isinstance(x, list):
         return tuple(_lists_to_tuples(v) for v in x)
+    if isinstance(x, dict):
+        return {k: _lists_to_tuples(v) for k, v in x.items()}
     return x
 
 
@@ -471,6 +475,8 @@ def save_engine(engine: Any) -> Dict[str, Any]:
         "state": _encode(BattleState, engine.state),
         "scheduler": _save_scheduler(engine.scheduler),
         "rng": _save_rng(engine.pipeline.rng),
+        "decision": (engine.decision.export_state()
+                     if hasattr(engine.decision, "export_state") else {}),
         "engine": _save_engine_fields(engine),
         "acc_queues": _save_acc_queues(engine),
     }
@@ -507,8 +513,10 @@ def restore_into(engine: Any, save: Dict[str, Any]) -> None:
     engine.scheduler = _restore_scheduler(save["scheduler"], actors_by_id)
     # ③ RNG 流位置（就地 setstate——全引擎经 pipeline.rng 单点读取，不换实例）
     engine.pipeline.rng = _restore_rng(engine.pipeline.rng, save["rng"])
-    # ④ 引擎运行期字段
+    # ④ 引擎运行期字段与策略脚本游标
     _restore_engine_fields(engine, save["engine"])
+    if hasattr(engine.decision, "restore_state"):
+        engine.decision.restore_state(save.get("decision"))
     # ⑤ 事件订阅重挂（编译产物静态注册——与 _init_state 订阅块同集；
     # 开局事件链不重发，属历史）
     engine._subscribe_compiled_hooks()
