@@ -19,6 +19,7 @@
 | [10_candidate_proposals.md](docs/10_candidate_proposals.md) | 自然语言候选提案、白名单值域、确定性生成与宿主身份复核 |
 | [11_async_tasks.md](docs/11_async_tasks.md) | 候选集后台 worker、进度与部分结果、取消恢复和持久完成通知 |
 | [12_workbench.md](docs/12_workbench.md) | 只读研究台：任务、图表、单候选报告与证据下钻 |
+| [13_worldline.md](docs/13_worldline.md) | 单世界线证据链（worldline-v1）：WorldlineSpec/Artifact、身份公式、失败保留与读时重算 |
 
 ## 数据流
 

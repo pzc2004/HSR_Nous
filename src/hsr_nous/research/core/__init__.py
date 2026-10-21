@@ -22,6 +22,7 @@ from hsr_nous.research.core.execution import ExecutionManager
 from hsr_nous.research.core.fingerprint import (
     ARTIFACT_SCHEMA_VERSION,
     collect_research_fingerprint,
+    collect_worldline_fingerprint,
     implementation_hash,
 )
 from hsr_nous.research.core.kernel import (
@@ -39,6 +40,7 @@ from hsr_nous.research.core.kernel import (
 from hsr_nous.research.core.report import ReportComposer
 from hsr_nous.research.core.runner import RunCancelledError, TrialRunner
 from hsr_nous.research.core.variants import PreparedVariant, VariantMaterializer
+from hsr_nous.research.core.worldline import WorldlineRunner, verify_worldline
 
 __all__ = [
     "ARTIFACT_SCHEMA_VERSION",
@@ -58,8 +60,10 @@ __all__ = [
     "RunCancelledError",
     "TrialRunner",
     "VariantMaterializer",
+    "WorldlineRunner",
     "build_claim",
     "collect_research_fingerprint",
+    "collect_worldline_fingerprint",
     "compare",
     "confidence_interval",
     "distribution",
@@ -78,4 +82,5 @@ __all__ = [
     "run_failure_reason",
     "validate_claim",
     "variance",
+    "verify_worldline",
 ]

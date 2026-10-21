@@ -13,6 +13,8 @@ from hsr_nous.research.protocol import ResolvedProtocol, validate_fingerprint
 from hsr_nous.research.schema import (
     ResearchContract,
     VersionFingerprint,
+    WorldlineSpec,
+    WORLDLINE_SCHEMA_VERSION,
     canonical_json,
     content_hash,
 )
@@ -105,3 +107,33 @@ def collect_research_fingerprint(
         git_commit=base.get("git_commit"),
     )
     return validate_fingerprint(fingerprint, protocol_id=resolved.protocol_id)
+
+
+def collect_worldline_fingerprint(spec: WorldlineSpec) -> dict[str, Any]:
+    """世界线内容指纹：paired 研究指纹键集的 worldline 投影。
+
+    保留 rulebook/fixtures/data/policy/implementation/config 六键与信息性
+    git_commit；policy_hash 绑定 spec 内声明的 scripted policy 原文
+    （canonical JSON 文本）；config_hash 绑定 build/stage/随机序列/开局资源——
+    随机序列是世界线身份的一部分。不含 variant_hash/protocol_id/
+    artifact_schema_version（paired 专属坐标），schema_version 记 "worldline-v1"。
+    """
+    policy_source = canonical_json(spec.build["build"]["policy"])
+    base = collect_version_fingerprint(policy_source=policy_source)
+    config_hash = content_hash({
+        "build": spec.build,
+        "stage": spec.stage,
+        "random_values": spec.random_values,
+        "initial_sp": spec.initial_sp,
+        "initial_energy_ratio": spec.initial_energy_ratio,
+    })
+    return {
+        "git_commit": base.get("git_commit"),
+        "rulebook_hash": base.get("rulebook_hash"),
+        "fixtures_hash": base.get("fixtures_hash"),
+        "data_hash": base.get("data_hash"),
+        "policy_hash": base.get("policy_hash"),
+        "implementation_hash": implementation_hash(repo_root()),
+        "config_hash": config_hash,
+        "schema_version": WORLDLINE_SCHEMA_VERSION,
+    }

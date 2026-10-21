@@ -13,6 +13,8 @@ from hsr_nous.research.schema.models import (
     EXECUTION_KINDS,
     EXECUTION_STATUSES,
     METRIC_DIRECTIONS,
+    WORLDLINE_SCHEMA_VERSION,
+    WORLDLINE_STATUSES,
     CandidateEdit,
     CandidateProposal,
     CandidateRule,
@@ -34,6 +36,8 @@ from hsr_nous.research.schema.models import (
     RunRecord,
     TrialArtifact,
     VersionFingerprint,
+    WorldlineArtifact,
+    WorldlineSpec,
 )
 
 __all__ = [
@@ -41,6 +45,8 @@ __all__ = [
     "CLAIM_STATUSES",
     "CLAIM_SUBMISSION_STATUSES",
     "METRIC_DIRECTIONS",
+    "WORLDLINE_SCHEMA_VERSION",
+    "WORLDLINE_STATUSES",
     "CandidateEdit",
     "CandidateProposal",
     "CandidateRule",
@@ -62,6 +68,8 @@ __all__ = [
     "RunRecord",
     "TrialArtifact",
     "VersionFingerprint",
+    "WorldlineArtifact",
+    "WorldlineSpec",
     "canonical_bytes",
     "canonical_json",
     "canonical_round",

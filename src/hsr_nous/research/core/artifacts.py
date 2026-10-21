@@ -26,6 +26,8 @@ from hsr_nous.research.schema import (
     RunRecord,
     TrialArtifact,
     VersionFingerprint,
+    WorldlineArtifact,
+    WorldlineSpec,
     canonical_bytes,
     content_hash,
 )
@@ -54,6 +56,16 @@ def _fingerprint_identity(fingerprint: VersionFingerprint) -> dict[str, Any]:
     payload = fingerprint.to_dict()
     payload.pop("git_commit", None)
     return payload
+
+
+def _worldline_identity(spec: WorldlineSpec, fingerprint: Mapping[str, Any]) -> str:
+    """世界线身份哈希：spec + 内容指纹（git_commit 不参与身份，同 trial 惯例）。"""
+    identity_fp = {**fingerprint}
+    identity_fp.pop("git_commit", None)
+    return content_hash({
+        "worldline_spec": spec.to_dict(),
+        "worldline_fingerprint": identity_fp,
+    })
 
 
 def _spec_identity(
@@ -195,6 +207,8 @@ class ArtifactStore:
     def __init__(self, root: Path) -> None:
         self.root = Path(root)
         (self.root / "trials").mkdir(parents=True, exist_ok=True)
+        self.worldlines_root = self.root / "worldlines"
+        self.worldlines_root.mkdir(parents=True, exist_ok=True)
 
     @staticmethod
     def _validate_id(value: str, label: str) -> str:
@@ -217,6 +231,16 @@ class ArtifactStore:
     def run_path(self, trial_id: str, run_id: str) -> Path:
         self._validate_id(run_id, "run_id")
         return self._safe_path(self.trial_dir(trial_id) / "runs" / f"{run_id}.json")
+
+    def worldline_dir(self, worldline_id: str) -> Path:
+        self._validate_id(worldline_id, "worldline_id")
+        return self._safe_path(self.worldlines_root / worldline_id)
+
+    def worldline_spec_path(self, worldline_id: str) -> Path:
+        return self._safe_path(self.worldline_dir(worldline_id) / "spec.json")
+
+    def worldline_path(self, worldline_id: str) -> Path:
+        return self._safe_path(self.worldline_dir(worldline_id) / "worldline.json")
 
     def _publish_bytes(self, path: Path, data: bytes, *, overwrite: bool = False) -> bool:
         path = self._safe_path(path)
@@ -567,6 +591,124 @@ class ArtifactStore:
 
     def read_metadata(self, trial_id: str) -> dict[str, Any]:
         return self._read_json(self.trial_dir(trial_id) / "metadata.json")
+
+    def publish_worldline_spec(
+        self,
+        spec: WorldlineSpec,
+        fingerprint: Mapping[str, Any],
+    ) -> tuple[str, str]:
+        """发布世界线 spec（幂等），返回 (worldline_id, spec_hash)。"""
+        worldline_id = _worldline_identity(spec, fingerprint)
+        payload: dict[str, Any] = {
+            "worldline_id": worldline_id,
+            "spec": spec.to_dict(),
+            "fingerprint": dict(fingerprint),
+        }
+        payload["spec_hash"] = content_hash(payload)
+        self._publish_json(self.worldline_spec_path(worldline_id), payload)
+        return worldline_id, payload["spec_hash"]
+
+    def read_worldline_spec(self, worldline_id: str) -> dict[str, Any]:
+        payload = self._read_json(self.worldline_spec_path(worldline_id))
+        spec_hash = payload.pop("spec_hash", None)
+        if spec_hash != content_hash(payload):
+            raise ArtifactIntegrityError("worldline spec content hash mismatch")
+        try:
+            spec = WorldlineSpec.from_dict(payload["spec"])
+            fingerprint = payload["fingerprint"]
+            identity = _worldline_identity(spec, fingerprint)
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ArtifactIntegrityError("worldline spec payload is incomplete") from exc
+        if payload.get("worldline_id") != identity:
+            raise ArtifactIntegrityError("worldline_id does not match spec content")
+        payload["spec_hash"] = spec_hash
+        return payload
+
+    def _validate_worldline_against_spec(
+        self,
+        artifact: WorldlineArtifact,
+        spec_payload: dict[str, Any],
+    ) -> None:
+        try:
+            expected_id = _worldline_identity(artifact.spec, artifact.fingerprint)
+            published_spec = WorldlineSpec.from_dict(spec_payload["spec"])
+            published_fingerprint = dict(spec_payload["fingerprint"])
+            artifact_fingerprint = dict(artifact.fingerprint)
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ArtifactIntegrityError("worldline spec payload is incomplete") from exc
+        if artifact.worldline_id != expected_id:
+            raise ArtifactIntegrityError("worldline_id does not match spec/fingerprint identity")
+        if artifact.spec != published_spec:
+            raise ArtifactIntegrityError("worldline does not match its published spec")
+        if artifact_fingerprint != published_fingerprint:
+            raise ArtifactIntegrityError("worldline fingerprint does not match its published spec")
+
+    def _validate_worldline_evidence(self, artifact: WorldlineArtifact) -> None:
+        """镜像 _validate_run_evidence：completed 交叉核验 observed/final_save 与随机审计。"""
+        if artifact.status == "failed":
+            if artifact.final_save is not None or not artifact.failure_reasons:
+                raise ArtifactIntegrityError(
+                    "failed worldline must keep failure reasons without final_save"
+                )
+            return
+        state = artifact.final_save.get("state")
+        if not isinstance(state, Mapping):
+            raise ArtifactIntegrityError("completed worldline lacks final_save.state")
+        observed = artifact.observed
+        if observed.get("total_damage") != state.get("total_damage"):
+            raise ArtifactIntegrityError("observed.total_damage does not match final_save.state")
+        if (not isinstance(observed.get("truncated"), bool)
+                or not isinstance(state.get("truncated"), bool)
+                or observed["truncated"] != state["truncated"]):
+            raise ArtifactIntegrityError("observed.truncated does not match final_save.state")
+        if observed.get("action_value") != state.get("clock"):
+            raise ArtifactIntegrityError("observed.action_value does not match final_save.state")
+        if observed.get("turn_count") != state.get("turn_count"):
+            raise ArtifactIntegrityError("observed.turn_count does not match final_save.state")
+        if (observed.get("random_consumed") != observed.get("random_total")
+                or observed.get("random_total") != len(artifact.spec.random_values)):
+            raise ArtifactIntegrityError("random audit does not match the scripted sequence")
+
+    def publish_worldline(self, artifact: WorldlineArtifact) -> bool:
+        if artifact.status not in {"completed", "failed"}:
+            raise ArtifactIntegrityError(f"unsupported worldline status: {artifact.status!r}")
+        spec_payload = self.read_worldline_spec(artifact.worldline_id)
+        self._validate_worldline_against_spec(artifact, spec_payload)
+        self._validate_worldline_evidence(artifact)
+        payload = artifact.to_dict()
+        payload["content_hash"] = content_hash(payload)
+        return self._publish_json(self.worldline_path(artifact.worldline_id), payload)
+
+    def read_worldline(self, worldline_id: str) -> WorldlineArtifact:
+        spec_payload = self.read_worldline_spec(worldline_id)
+        payload = self._read_json(self.worldline_path(worldline_id))
+        supplied_hash = payload.pop("content_hash", None)
+        if supplied_hash != content_hash(payload):
+            raise ArtifactIntegrityError("worldline content hash mismatch")
+        try:
+            artifact = WorldlineArtifact.from_dict(payload)
+        except (TypeError, ValueError) as exc:
+            raise ArtifactIntegrityError("worldline payload violates contract invariants") from exc
+        if artifact.worldline_id != worldline_id:
+            raise ArtifactIntegrityError("worldline_id does not match its path")
+        self._validate_worldline_against_spec(artifact, spec_payload)
+        self._validate_worldline_evidence(artifact)
+        ordinals = []
+        for event in artifact.events:
+            ordinal = event["ordinal"]
+            ordinals.append(ordinal)
+            if event["event_id"] != make_event_id(
+                worldline_id, ordinal, event["payload"]
+            ):
+                raise ArtifactIntegrityError("event_id does not match event payload")
+        if ordinals != list(range(len(ordinals))):
+            raise ArtifactIntegrityError("event ordinals are not the frozen sequence")
+        for modifier in artifact.modifiers:
+            if modifier["modifier_id"] != make_modifier_id(
+                worldline_id, modifier["actor_id"], modifier["engine_modifier_id"]
+            ):
+                raise ArtifactIntegrityError("modifier_id does not match final modifier")
+        return artifact
 
     def claim_path(self, trial_id: str, record_id: str) -> Path:
         self._validate_id(record_id, "claim record_id")

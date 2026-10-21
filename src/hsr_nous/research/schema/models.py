@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass, fields
+from numbers import Real
 from types import MappingProxyType, UnionType
 from typing import Any, Union, get_args, get_origin, get_type_hints
 
@@ -21,6 +23,8 @@ EXECUTION_STATUSES = frozenset({
     "failed", "cancel_requested", "cancelled",
 })
 ARTIFACT_STATUSES = frozenset({"partial", "complete"})
+WORLDLINE_STATUSES = frozenset({"completed", "failed"})
+WORLDLINE_SCHEMA_VERSION = "worldline-v1"
 METRIC_DIRECTIONS = {
     "total_damage": "higher_is_better",
     "action_value": "lower_is_better",
@@ -486,3 +490,90 @@ class ClaimSubmissionResult(_DataModel):
         super().__post_init__()
         if self.status not in CLAIM_SUBMISSION_STATUSES:
             raise ValueError(f"unsupported claim submission status: {self.status!r}")
+
+
+@dataclass(frozen=True)
+class WorldlineSpec(_DataModel):
+    """单条脚本化世界线声明（worldline-v1 输入契约）。
+
+    世界线 = 声明轨迹：build/stage 完全确定队伍与关卡，random_values 固定整条
+    随机序列，initial_sp/initial_energy_ratio 固定开局资源。policy.mode 必须
+    是 "scripted"——世界线不是策略搜索，是逐决策声明的确定性重放。
+    """
+
+    build: Mapping
+    stage: Mapping
+    random_values: tuple[float, ...]
+    initial_sp: int | None = None
+    initial_energy_ratio: float | None = None
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not isinstance(self.build, Mapping) or "build" not in self.build:
+            raise ValueError("WorldlineSpec build 必须是含 'build' 键的 mapping")
+        inner = self.build["build"]
+        if not isinstance(inner, Mapping):
+            raise ValueError("WorldlineSpec build['build'] 必须是 mapping")
+        policy = inner.get("policy")
+        if not isinstance(policy, Mapping) or policy.get("mode") != "scripted":
+            raise ValueError(
+                "世界线要求 build['build']['policy']['mode'] == 'scripted'"
+                "（世界线是声明轨迹，非 scripted 策略拒收）"
+            )
+        if not isinstance(self.random_values, tuple):
+            raise ValueError("WorldlineSpec random_values 必须是元组")
+        normalized = []
+        for index, value in enumerate(self.random_values):
+            if isinstance(value, bool) or not isinstance(value, Real):
+                raise TypeError(f"随机脚本[{index}] 须为实数，实得 {value!r}")
+            number = float(value)
+            if not math.isfinite(number) or not 0.0 <= number < 1.0:
+                raise ValueError(f"随机脚本[{index}] 须满足 0 <= value < 1，实得 {value!r}")
+            normalized.append(number)
+        # 归一化为 float：canonical JSON 里 0 与 0.0 字节不同，归一化保证身份稳定
+        object.__setattr__(self, "random_values", tuple(normalized))
+
+    @property
+    def spec_hash(self) -> str:
+        """声明内容的 canonical 内容哈希（发布与读时重算共用）。"""
+        return content_hash(self)
+
+
+@dataclass(frozen=True)
+class WorldlineArtifact(_DataModel):
+    """单世界线执行证据（worldline-v1）。
+
+    成功与失败都会发布并存留；读取时 store 重算身份、字节哈希与
+    observed/final_save 交叉证据，篡改即拒。completed 要求保留 final_save
+    且无 failure_reasons；failed 要求 final_save 为 None 且 failure_reasons
+    非空。
+    """
+
+    worldline_id: str
+    spec: WorldlineSpec
+    fingerprint: Mapping
+    status: str
+    observed: Mapping
+    events: tuple[Mapping, ...]
+    final_save: Mapping | None
+    modifiers: tuple[Mapping, ...]
+    caveats: tuple[str, ...]
+    failure_reasons: tuple[str, ...]
+    schema_version: str = WORLDLINE_SCHEMA_VERSION
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.schema_version != WORLDLINE_SCHEMA_VERSION:
+            raise ValueError(f"unsupported worldline schema_version: {self.schema_version!r}")
+        if self.status not in WORLDLINE_STATUSES:
+            raise ValueError(f"unsupported WorldlineArtifact status: {self.status!r}")
+        if self.status == "completed":
+            if not isinstance(self.final_save, Mapping) or not self.final_save:
+                raise ValueError("completed 世界线必须保留非空 final_save")
+            if self.failure_reasons:
+                raise ValueError("completed 世界线不得携带 failure_reasons")
+        else:
+            if self.final_save is not None:
+                raise ValueError("failed 世界线不得保留 final_save")
+            if not self.failure_reasons:
+                raise ValueError("failed 世界线必须记录 failure_reasons")
