@@ -372,7 +372,7 @@ order: "newest"              # 可选：移除顺序 newest（默认，LIFO）| 
 |------|------|
 | `modifier_id` | hook 语境与 `filter` **至少其一**（都写 = 交集；都不写编译期炸） |
 | `target` | hook 语境收（缺省 `self`；示例的 `enemy_single` 不在 hook 选择器词表） |
-| `filter`（`$mod` 绑定） | **已实现**（2026-09-07）——`$mod` 绑定待审 modifier（字段：`modifier_id` / `modifier_type` / `debuff_kind` / `control_kind` / `dot_element` / `dispellable` / `source` + 合成 `kind`——免疫判定同口径 `debuff_kind or (control if control_kind else modifier_type)`，`"$mod.kind == 'control'"` 一把罩住两写法；`dot_element` 可按 DoT 属性精确摘除，炽燃徘徊者 Dancing Cinders 解除灼烧首实例；`source` 为施加者 actor_id，可写 `$mod.source == $self.actor_id` 对应上游 OnlyRemoveCasterAdded）；命中的仍仅限 `dispellable: true` 实例（见 `04_modifier.md` §4.6），按 LIFO 逐个摘除 |
+| `filter`（`$mod` 绑定） | **已实现**（2026-09-07）——`$mod` 绑定待审 modifier（字段：`modifier_id` / `modifier_type` / `debuff_kind` / `control_kind` / `dot_element` / `prevent_action` / `dispellable` / `source` + 合成 `kind`——免疫判定同口径 `debuff_kind or (control if control_kind else modifier_type)`，`"$mod.kind == 'control'"` 一把罩住两写法；`dot_element` 可按 DoT 属性精确摘除，炽燃徘徊者 Dancing Cinders 解除灼烧首实例；DoT 类可用 `$mod.kind == 'dot'`，禁行动旗标可用 `$mod.prevent_action`；`source` 为施加者 actor_id，可写 `$mod.source == $self.actor_id` 对应上游 OnlyRemoveCasterAdded）；命中的仍仅限 `dispellable: true` 实例（见 `04_modifier.md` §4.6），按 LIFO 逐个摘除 |
 | `max_count` | **已实现**（2026-09-08）——逐目标截断：命中清单（LIFO 序）只摘前 N 个，须为 ≥1 整数（编译期闸）；仅配 `filter` 路径有意义（`modifier_id` 定点摘除本就一次一件，写上不改变语义） |
 | `order` | **未实现**（写了编译期炸） |
 | `reason` | hook 语境收（缺省 `"remove"`，进移除日志/事件载荷） |
@@ -980,7 +980,12 @@ on_insufficient: "fail"      # "fail" | "clamp" | "consume_all"
   target: "self"               # 可选，缺省 self；逐目标写入
   dynamic_key: "Phase_Flag"   # 必填，非空字符串
   amount: 2                    # 必填，目标值
+  amount_target: {"pool": "allies"}  # 可选：仅决定 amount 的 $target 求值语境
 ```
+
+`amount_target` 不改变写入目标；每个读取目标依次触发一次求值与写入，空候选不写，
+多候选按目标代数结果顺序写入，后者覆盖前者，对应上游 Retarget TaskList 的逐目标执行。
+缺省该槽时仍沿用原语义，以当前写入目标作为 `$target`。
 
 目标必须已有敌方 policy 运行态，否则运行期报错；写入值随 `dynamic_values` 进入存档。
 保留键 `current_phase` 改写敌方 `runtime.current_phase`（不写入 `dynamic_values`），供

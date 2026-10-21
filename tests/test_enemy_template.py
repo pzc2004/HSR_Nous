@@ -908,6 +908,8 @@ class TestEnemyAIConfig:
             "Config/ConfigAI/A.json": {"AIName": "A"},
             "Config/ConfigAI/B.json": {"AIName": "B"},
         }
+        for filename in enemies_update.GLOBAL_MODIFIER_FILES:
+            configs[filename] = {}
         calls = []
 
         def _fake_download(url, *, timeout):

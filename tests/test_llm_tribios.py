@@ -260,22 +260,28 @@ class TestScheduler:
         client = LLMClient(_cfg(api_keys=("k1", "k2"), concurrency=1))
         sch = Scheduler(client, per_key_concurrency=1)
         marks = {}
+        c_completed = threading.Event()
 
         def timed(name, dur):
             def task():
                 time.sleep(dur)
                 marks[name] = time.monotonic()
+                if name == "C_fast":
+                    c_completed.set()
                 return name
             return task
 
-        t0 = time.monotonic()
-        marks["A_start"] = t0
-        sch.submit(timed("A_slow", 0.20), label="A")   # key#1 慢任务
+        def slow():
+            # 正确补位时由 C 释放；若调度器分批等待，则超时后 A 先完成，断言失败。
+            c_completed.wait(timeout=2.0)
+            marks["A_slow"] = time.monotonic()
+            return "A_slow"
+
+        sch.submit(slow, label="A")                     # key#1 等待 C 的慢任务
         sch.submit(timed("B_fast", 0.02), label="B")   # key#2 快任务
         sch.submit(timed("C_fast", 0.02), label="C")   # 排队——B 完成即补到 key#2
         sch.run()
-        assert marks["C_fast"] < marks["A_slow"], (
-            "C 应在 B 完成后立刻补位（≈0.04s），不等 A（≈0.20s）——若成立则非分批等待")
+        assert marks["C_fast"] < marks["A_slow"], "C 应在 B 完成后补位，不等 A 结束"
 
     def test_retry_then_success(self):
         client = LLMClient(_cfg())

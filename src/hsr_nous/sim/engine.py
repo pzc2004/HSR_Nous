@@ -726,6 +726,13 @@ class CombatEngine:
         items.insert(end, (summon_id, st))
         self.state.actors = dict(items)
 
+    def _remove_source_exit_modifiers(self, actor_id: str, *, reason: str) -> None:
+        """摘除永久离场施加者的带旗 modifier；临时 banish 不调用本通道."""
+        for st in self.state.actors.values():
+            for mod in list(st.modifiers.values()):
+                if mod.remove_on_source_exit and mod.source_id == str(actor_id):
+                    self._remove_modifier(st, mod.modifier_id, reason)
+
     def dismiss_summon_actor(self, summon_id: str, *, reason: str = "dismiss") -> bool:
         """召唤物离场：before_actor_exit（生前）→ alive=False + 调度器冻结 + actor_exit（reason=dismiss）.
 
@@ -740,6 +747,7 @@ class CombatEngine:
         st.alive = False
         if self.scheduler is not None:
             self.scheduler.freeze(st.actor.actor_id)
+        self._remove_source_exit_modifiers(str(summon_id), reason="source_exit")
         self.bus.emit("actor_exit", {"actor": st.actor.actor_id, "reason": reason}, self.state)
         self.state.log.append(f"AV{self.state.clock:.1f}: {st.actor.name} 离场（{reason}）")
         return True
@@ -753,6 +761,8 @@ class CombatEngine:
         st.alive = False
         if self.scheduler is not None:
             self.scheduler.freeze(st.actor.actor_id)
+        if reason != "banish":
+            self._remove_source_exit_modifiers(str(actor_id), reason="source_exit")
         self.bus.emit("actor_exit", {"actor": st.actor.actor_id, "reason": reason}, self.state)
         self.state.log.append(f"AV{self.state.clock:.1f}: {st.actor.name} 离场（{reason}）")
         return True
@@ -1255,6 +1265,7 @@ class CombatEngine:
             for m in list(st.modifiers.values()):
                 if m.remove_on_source_death and m.source_id == target.actor.actor_id:
                     self._remove_modifier(st, m.modifier_id, "source_death")
+        self._remove_source_exit_modifiers(target.actor.actor_id, reason="source_exit")
         # 形态主死亡：形态随死亡解除（exit_state 单漏斗）——境界 banish 的队友回场，
         # 防"主死形态未退"导致的队友永久 banish/frozen 孤儿化
         if target.state_config is not None:
@@ -1658,6 +1669,9 @@ class CombatEngine:
         if self._is_enemy(actor):
             if tt == "self":
                 return actor_state, [actor_state]
+            if tt == "ally_aoe":
+                teammates = self._enemies_alive()
+                return (teammates[0] if teammates else None), teammates
             # 敌方视角的我方目标池：enemy_targetable:false 召唤物剔除（与 _pick_ally_target 同口径）
             allies = [s for s in self._allies_alive() if s.actor.summon_flags.get("enemy_targetable", True)]
             if tt == "aoe":

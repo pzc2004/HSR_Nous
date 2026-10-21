@@ -1246,7 +1246,7 @@ def test_inspire_config_ai_selects_unbuffed_other_friendly(tmp_path):
     dummy_state = engine.state.actors["dummy"]
     modifier = dummy_state.modifiers["Monster_W1_Soldier01_03_Buff"]
     assert ("1002020", "100202002") in seen and engine._last_target_id == "dummy"
-    assert modifier.stat_effects == {"atk_pct": 0.3} and modifier.duration == 2
+    assert modifier.stat_effects == {"atk_pct": 0.3, "spd": 0.0} and modifier.duration == 2
     assert engine.pipeline.effective_stats(dummy_state)["atk"] == 130.0
     assert engine.scheduler._remaining[engine.scheduler.handle_of("dummy")] == 0.0
     assert "Monster_W1_Soldier01_03_Buff" not in engine.state.actors["1002020"].modifiers
@@ -1314,7 +1314,7 @@ def test_tutorial_inspire_variant_and_action_delay_exception(tmp_path):
     dummy_state = engine.state.actors["101201012"]
     assert ("1002021", "100202102") in seen and engine._last_target_id == "101201012"
     modifier = dummy_state.modifiers["Monster_W1_Soldier01_03_Buff"]
-    assert modifier.stat_effects == {"atk_pct": 100.0} and modifier.duration == 2
+    assert modifier.stat_effects == {"atk_pct": 100.0, "spd": 0.0} and modifier.duration == 2
     assert engine.pipeline.effective_stats(dummy_state)["atk"] == 10100.0
     assert engine.scheduler._remaining[engine.scheduler.handle_of("101201012")] == 0.0
 

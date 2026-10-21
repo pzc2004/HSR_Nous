@@ -146,7 +146,7 @@ _MODIFIER_SPEC_KEYS = frozenset({
     "hit_stat_exprs",  # 命中域表达式值（04_modifier §hit_condition——per-hit 值槽）
     "weakness_add", "grants_immune",
     "tick_anchor", "effect_scope", "hp_lock", "block_damage", "fixed_hp_bars", "revive_percent", "moon_cocoon",
-    "forced_taunt", "toughness_lock", "lock_on", "prevent_action", "remove_on_source_death", "shield", "target", "target_resource",
+    "forced_taunt", "toughness_lock", "lock_on", "prevent_action", "remove_on_source_death", "remove_on_source_exit", "shield", "target", "target_resource",
     "max_override", "debuff_kind", "control_kind", "on_apply", "on_remove",
     "dot_element", "dot_ratio", "dot_ratio_expr", "dot_base_chance",  # DoT 运行时载体（modifier_type=="dot"——dot_source_atk/dot_snapshot_ctx 由引擎施加时结算，不经声明；dot_ratio/dot_base_chance 字符串值走 param() 取档，hook 侧现场求值烘焙）
 })
@@ -270,7 +270,7 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "gain_resource": frozenset({"resource_id", "amount", "source"}),
     "absorb_modifier": frozenset({"modifier_name", "resource_id"}),
     "set_resource": frozenset({"resource_id", "amount"}),
-    "set_dynamic_value": frozenset({"dynamic_key", "amount"}),
+    "set_dynamic_value": frozenset({"dynamic_key", "amount", "amount_target"}),
     "once_per_battle": frozenset({"latch_id"}),
     "refund_bank": frozenset({"resource_id"}),
     "gain_skill_point": frozenset({"amount", "overflow_to"}),
@@ -2094,30 +2094,35 @@ class BuildCompiler:
                 raise ValueError(
                     f"{e_desc} 的 resource_id 'energy' 是内建资源——能量走 gain_energy 钩"
                     f" / action 层 energy_gain（1210 桂乃芬实证——1004/1103 同口径）")
-            if sel is not None and isinstance(sel, dict):
-                # 目标代数 dict：键 diff + pool/take/mode 词表 + where/order_by/take 预编译
-                # （表达式先过 param() 取档就地写回——藿藿 1217 加强版阈值实证：
-                # 未替换会被白名单当未知函数拒，槽同 EFFECT_EXPR_SLOTS 口径，shield param 槽同族）；
-                # `$self.<字段>`/`$event.<字段>` 对账（2026-09-16 接线——运行期已注入
-                # （hook 持有者/hook payload 同 hook condition 口径）：错拼/越界字段
-                # 编译期炸，不再放到运行期 ExpressionError（打标稿实证四处）
-                from hsr_nous.sim.target_algebra import validate_algebra
-                for _ak in ("where", "order_by", "take"):
-                    if isinstance(sel.get(_ak), str):
-                        sel[_ak] = sub(sel[_ak], where=f"{e_desc} target {_ak}")
-                        _check_self_ns_fields(sel[_ak], where=f"{e_desc} 的 target {_ak}")
-                        if event_ns is not None:
-                            _check_event_ns_fields(sel[_ak], event_ns,
-                                                   where=f"{e_desc} 的 target {_ak}")
-                validate_algebra(sel, where=f"{e_desc} target", expr=self.expr, allow_pool=True)
-            elif sel is not None and str(sel).startswith("$event."):
-                if event_ns is not None:
-                    _check_event_ns_fields(str(sel), event_ns, where=f"{e_desc} 的 target")
-            elif sel is not None and str(sel) not in HOOK_TARGET_SELECTORS:
-                raise ValueError(
-                    f"{e_desc} 未知 target 选择器 {sel!r}（合法集合："
-                    f"{sorted(HOOK_TARGET_SELECTORS)} + '$event.<字段>' + 代数 dict）"
-                )
+            for target_slot in ("target", "amount_target"):
+                target_sel = eff.get(target_slot)
+                if target_sel is None:
+                    continue
+                if isinstance(target_sel, dict):
+                    # 目标代数 dict：键 diff + pool/take/mode 词表 + where/order_by/take 预编译；
+                    # `$self`/`$event` 字段对账与 hook condition 同口径。
+                    from hsr_nous.sim.target_algebra import validate_algebra
+                    for _ak in ("where", "order_by", "take"):
+                        if isinstance(target_sel.get(_ak), str):
+                            target_sel[_ak] = sub(
+                                target_sel[_ak], where=f"{e_desc} {target_slot} {_ak}")
+                            _check_self_ns_fields(
+                                target_sel[_ak], where=f"{e_desc} 的 {target_slot} {_ak}")
+                            if event_ns is not None:
+                                _check_event_ns_fields(
+                                    target_sel[_ak], event_ns,
+                                    where=f"{e_desc} 的 {target_slot} {_ak}")
+                    validate_algebra(
+                        target_sel, where=f"{e_desc} {target_slot}", expr=self.expr, allow_pool=True)
+                elif str(target_sel).startswith("$event."):
+                    if event_ns is not None:
+                        _check_event_ns_fields(
+                            str(target_sel), event_ns, where=f"{e_desc} 的 {target_slot}")
+                elif str(target_sel) not in HOOK_TARGET_SELECTORS:
+                    raise ValueError(
+                        f"{e_desc} 未知 {target_slot} 选择器 {target_sel!r}（合法集合："
+                        f"{sorted(HOOK_TARGET_SELECTORS)} + '$event.<字段>' + 代数 dict）"
+                    )
             if t == "apply_modifier":
                 source_ref = eff.get("source")
                 if source_ref is not None:

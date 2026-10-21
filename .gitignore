@@ -17,6 +17,8 @@ data/*
 # 与对局配置库（`data/battles/`——策展 build/stage 配置，入版本）
 !data/library/
 !data/battles/
+# 例外之例外：golden 对拍材料（视频/截图/JSON 元数据——真实 golden 分析为后置项，暂不入版本）
+data/battles/golden/
 
 # Virtual environment
 .venv/

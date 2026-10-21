@@ -86,6 +86,7 @@ FIELD_CODECS: Dict[type, Dict[str, str]] = {
         "source_kind": _CODEC_PLAIN,
         "source_ref": _CODEC_PLAIN,
         "remove_on_source_death": _CODEC_PLAIN,
+        "remove_on_source_exit": _CODEC_PLAIN,
         "on_remove": _CODEC_PLAIN,
         "shield_spec": _CODEC_PLAIN,
         "stat_effects": _CODEC_PLAIN,

@@ -780,6 +780,7 @@ scale_stat: {source: "$resource.x", rate: 0.08, cap: 80, live: true}   # 资源�
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `remove_on_source_death` | bool | **施加者**（`source_id` 记账对象）**真死定论**时引擎全场摘除本件（`_check_death` 单漏斗：`alive=False` 后、`actor_exit` 发射前扫全场——死后清理监听者读到摘除后终态；摘除走 `_remove_modifier` 常轨，`after_remove_modifier` 带 `reason: "source_death"`）。alive 闸使「自己听自己 `actor_exit`」hook 结构性不触发，本字段是引擎层统一通道；dismiss/放逐不触发（只认真死定论）。星期日 1313 蒙福者（BEATIFIED）首实例 |
+| `remove_on_source_exit` | bool | **施加者永久离场**时全场摘除本件：真死、dismiss、flee 均触发，临时 banish 不触发；与 `remove_on_source_death` 独立声明，事件 `reason` 为 `source_exit`。上游 `RemoveWhenCasterUnstage` 直译通道，标准 `MCommon_CTRL_Taunt` 是首个实例 |
 
 **资源上限覆写两字段（`16_custom_resources.md` §16.12——获得统一入口 `_gain_resource` 唯一 clamp 点消费）**：
 

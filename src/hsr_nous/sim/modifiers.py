@@ -376,6 +376,7 @@ class ModifierBook:
             lock_on=bool(spec.get("lock_on", False)),
             prevent_action=bool(spec.get("prevent_action", False)),
             remove_on_source_death=bool(spec.get("remove_on_source_death", False)),
+            remove_on_source_exit=bool(spec.get("remove_on_source_exit", False)),
             on_remove=[dict(effect) for effect in spec.get("on_remove") or []],
             target_resource=str(spec.get("target_resource", "")),
             max_override=float(spec.get("max_override", 0.0)),

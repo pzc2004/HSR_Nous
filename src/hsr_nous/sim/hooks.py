@@ -651,6 +651,11 @@ class HookRuntime:
                 return 0.0
             return float(self._engine.pipeline.effective_stats(st2)["hp"])
 
+        def toughness_of(target: Any) -> float:
+            # 目标当前韧性（ActorState.toughness 直读；目标解析与 hp_of 同通道，查无返回 0）。
+            st2 = _lookup(target)
+            return 0.0 if st2 is None else float(st2.toughness)
+
         def resource_of(target: Any, resource_id: Any) -> float:
             # 目标自定义资源当前值（跨 actor 资源读取唯一通道——长夜月 1413 忆灵技读忆师
             # Memoria 族（§22.4"首个真实实例到达时再收"收编）；目标解析与 hp_of 同通道，
@@ -792,7 +797,8 @@ class HookRuntime:
                 "count": count, "count_selected": count_selected,
                 "unique_sources": unique_sources,
                 "mechanic_chance": mechanic_chance, "actor_type_of": actor_type_of,
-                "hp_of": hp_of, "max_hp_of": max_hp_of, "resource_of": resource_of,
+                "hp_of": hp_of, "max_hp_of": max_hp_of, "toughness_of": toughness_of,
+                "resource_of": resource_of,
                 "dynamic_of": dynamic_of, "count_team": count_team,
                 "stat_of": stat_of, "base_stat_of": base_stat_of, "controlled": controlled,
                 "action_disabled": action_disabled,
@@ -1046,6 +1052,12 @@ class HookRuntime:
                 self._engine._gain_resource(t2, rid, target - self._engine._resource_value(t2, rid))
         elif t == "set_dynamic_value":
             key = str(eff["dynamic_key"])
+            # amount_target 只提供 $target 求值语境，写入仍由 target 决定；
+            # 每个读取候选依次求值并写入，空候选不写，多候选后者覆盖前者。
+            read_targets = (self._hook_target_states(eff["amount_target"], st, payload)
+                            if "amount_target" in eff else None)
+            if read_targets is not None and not read_targets:
+                return
             for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
                 runtime = self._engine._enemy_policy_state.get(t2.actor.actor_id)
                 if runtime is None:
@@ -1057,13 +1069,14 @@ class HookRuntime:
                         "seq_idx": 0, "cooldown_left": {}, "current_phase": 1,
                         "dynamic_values": {},
                     })
-                value = self._hook_amount(eff["amount"], st, payload, target_st=t2)
-                if key == "current_phase":
-                    if not float(value).is_integer():
-                        raise ValueError(f"current_phase 必须为整数，得到 {value!r}")
-                    runtime["current_phase"] = int(value)
-                else:
-                    runtime.setdefault("dynamic_values", {})[key] = float(value)
+                for amount_st in read_targets if read_targets is not None else [t2]:
+                    value = self._hook_amount(eff["amount"], st, payload, target_st=amount_st)
+                    if key == "current_phase":
+                        if not float(value).is_integer():
+                            raise ValueError(f"current_phase 必须为整数，得到 {value!r}")
+                        runtime["current_phase"] = int(value)
+                    else:
+                        runtime.setdefault("dynamic_values", {})[key] = float(value)
         elif t == "refund_bank":
             # bank 返还（16 §16.12 糖展开原语）：<rid>_bank → <rid> clamp 回填——
             # ③防递归：from_bank=True（不回流）；多出作废（银行全清，钉字面口径）
@@ -1664,7 +1677,7 @@ class HookRuntime:
                         modifier_id=mod.modifier_id, modifier_type=mod.modifier_type,
                         debuff_kind=mod.debuff_kind, control_kind=mod.control_kind,
                         dot_element=mod.dot_element, dispellable=mod.dispellable, kind=kind,
-                        name=mod.name, source=mod.source_id)
+                        prevent_action=mod.prevent_action, name=mod.name, source=mod.source_id)
                     ctx = self._hook_ctx(st, payload)
                     ctx["mod"] = mod_ns
                     if self._engine._expr.evaluate(

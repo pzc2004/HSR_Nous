@@ -320,14 +320,15 @@ def get_enemy_character_config(
 
 @lru_cache(maxsize=4)
 def _ability_index(tbgd_dir: Optional[str] = None) -> Dict[str, Any]:
-    """本地 Ability 文件内容索引；文件名只用于枚举，实体解析以文件内 Name 为准."""
+    """本地 Ability 与公共 Modifier 内容索引；文件名只用于枚举，实体解析以文件内 Name 为准."""
     root = Path(tbgd_dir) if tbgd_dir is not None else _paths.turnbasedgamedata_dir()
     config_root = root / "Config" / "ConfigAbility"
+    global_root = root / "Config" / "ConfigGlobalModifier"
     abilities: Dict[str, List[tuple[str, Dict[str, Any]]]] = {}
     modifiers: Dict[str, List[tuple[str, Dict[str, Any]]]] = {}
     target_aliases: Dict[str, List[tuple[str, Dict[str, Any]]]] = {}
     invalid_files: List[str] = []
-    if not config_root.exists():
+    if not config_root.exists() and not global_root.exists():
         return {"abilities": abilities, "modifiers": modifiers,
                 "target_aliases": target_aliases, "invalid_files": invalid_files}
     for path in sorted(config_root.rglob("*.json")):
@@ -349,6 +350,17 @@ def _ability_index(tbgd_dir: Optional[str] = None) -> Dict[str, Any]:
             modifiers.setdefault(str(name), []).append((relative, modifier))
         for name, alias in (doc.get("GlobalTargetAlias") or {}).items():
             target_aliases.setdefault(str(name), []).append((relative, alias))
+    for path in sorted(global_root.rglob("*.json")):
+        if path.name.endswith(".layout.json"):
+            continue
+        relative = path.relative_to(root).as_posix()
+        try:
+            doc = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            invalid_files.append(relative)
+            continue
+        for name, modifier in (doc.get("ModifierMap") or {}).items():
+            modifiers.setdefault(str(name), []).append((relative, modifier))
     return {"abilities": abilities, "modifiers": modifiers,
             "target_aliases": target_aliases, "invalid_files": invalid_files}
 

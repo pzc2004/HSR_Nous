@@ -226,10 +226,32 @@ sequence 解释器冒充完整专属 AI。`SelectAISkillTarget` 支持 modifier 
 Switch/Case 仍由静态闸拒绝，不猜测哈希含义。
 `ByCheckCustomValueBool` 的 `Key.Hash` 经同一哈希算法与 pipeline 全量 `CustomValueTags`
 名册对账并归一化为 `Key.Value`，运行时检查目标 `Actor.groups`；未解析键以
-`custom_bool:Key` 拒绝，不把未知哈希当成恒假。
+`custom_bool:Key` 拒绝，不把未知哈希当成恒假。`ByCompareHP` 以 `hp_of(target)` 读取当前
+绝对 HP；`CasterSummoner`/`ModifierOwnerSummoner` 经 `summoner_of` 寻址，其他目标别名仍拒绝。
+`ByTargetAliveState` 仅收 `Mask_AliveOnly` 并调用 `actor_alive`，支持 `Inverse`；
+`Mask_AliveOrLimbo` 不把 limbo 近似成存活或死亡，继续显式拒绝。
+`ByHasSummonRelation` 分别解析 `SummonerType` 与 `ServantType`，编译为
+`summoner_of(servant) == summoner`，支持 `Inverse`；不能只检查召唤者字段非空来代替双向关系。
+`ByTargetEntityType` 的 `Servant` 编译为 `actor_type_of(target) == 'summon' or
+summoner_of(target) != ''`，同时覆盖我方召唤物与仍按 monster 登记的敌方召唤物；`Avatar`
+取其反，支持 `Inverse`。当前只收缺省或 `Anyone` 的存活掩码，不把额外 AliveState 与类型取反混为一谈。
 modifier 驱动的动态值迁移用 hook `set_dynamic_value`（`dynamic_key` + `amount`）写入目标敌人的
 `dynamic_values`；目标必须已有敌方 policy 运行态，不写另一套影子计数。动态值和 `current_phase`
-与冷却一样进入存档。
+与冷却一样进入存档。`SetDynamicValueByProperty` 的 `Attack`/`Speed` 读取当前有效面板，
+分别编译为 `stat_of(..., 'atk')`/`stat_of(..., 'spd')`；`BaseAttack`/`BaseSpeed` 仍走
+`base_stat_of`，不混淆基础值与当前值。DoT `OnPhase1` 的 `CurrentHP` 映射 `$self.hp`，
+与 `MaxHP` 映射 `$self.max_hp` 同为跳伤时持有者现值。`SetDynamicValueByProperty` 在
+Retarget 内读取 `ParamEntity` 时，`target: self` 仍写施放者动态值，另以
+`amount_target: ctx.retarget` 绑定 `$target` 求值语境；逐读取目标依次写入，空候选不写。
+`CasterSummoner` 经 `summoner_of` 解析召唤者；`MaxStance` 以
+`base_stat_of(..., 'max_toughness')` 读取基础韧性上限，`CurrentStance` 以 `toughness_of`
+读取当前韧性。`DefineDynamicValue`/`SetDynamicValue` 的自指动态键读取改用
+`dynamic_of($self.actor_id, key)` 在效果执行时取值，不再要求静态字面量；谓词写入后读取的
+旧快照闸保持独立，不随之放宽。`SetDynamicValueByModifierValue` 的 `Layer`/`LifeTime`
+读取分别编译为 `stacks(...)`/`modifier_duration(...) × Multiplier`；省略 `ReadTargetType`
+时读取施放者/当前 modifier 持有者的已命名 modifier，`ParamEntity` 同样经 `amount_target`
+逐目标求值，其他值类型与其他目标仍显式拒绝。DoT 数值读取与摘除共用同技能来源绑定闸，
+不能把其他技能生成的 DoT ID 拼到当前技能上。
 
 候选转移规则：
 
@@ -249,6 +271,15 @@ modifier 驱动的动态值迁移用 hook `set_dynamic_value`（`dynamic_key` + 
 还原。`TASK_HANDLERS`/`EVENT_HANDLERS` 未注册的节点、无法唯一绑定的被动、缺失引用和
 未证明的条件分支都记为 `unsupported`，不得拿部分结果冒充完整收编。完整支持的主动技能
 在正式生成器中优先走该路径；下述 Fandom 文本转换属于尚未迁移机制族的遗留路径。
+`TargetInfo.AllTeamMember` 映射 `ally_aoe`，敌方行动时该类型返回全部存活友方怪物，
+不落入玩家目标池。属性件仅在整个 stat 块可静态证明全为增益时标 `buff`；正向
+`vulnerability`、任一负向其他 stat 或任一未判号表达式仍按保守 `debuff` 处理。
+条件伤害只在谓词分支前已有主伤记录时转为 `on_action` 的 `deal_damage`，保留分支条件；
+此时它属于主伤后的附加段。谓词前没有主伤时仍拒绝，避免条件主伤或后续主伤被错误重排。
+单目标 `FireProjectile` 允许缺省或 `AbilityTargetEntity` 主目标；`OnProjectileHit` 支持
+主目标直伤与已注册的非伤害任务，Retarget 内投射物仍拒绝。`FireWaveProjectile` 以
+`Count` 展开为 `Action.instances`，逐段复用 `PerProjectileDamage`；`OnProjectileHitClientOnly`
+仅在接受纯表现时忽略。
 
 语义对齐不再按整表 zip：每个 TBGD 技能逐个尝试 Fandom 候选，只接受唯一转换；
 一个语义不得服务多个原始技能，冲突时只有原始顺序也能对齐才保留，其余拒绝收编。
@@ -362,7 +393,12 @@ Silvermane Lieutenant (Bug) 的 Shield Reflect 直接 `trigger_action` Pierce �
 Counter；该变体没有普通版的 ReturnAttackTarget 选择器，不套用标记 + ConfigAI 反击链。
 Enrage Order 按文本与第三 ParamList 对齐的基础概率对全体施加 `control_kind: taunt` +
 `forced_taunt`，第二参数给出持续回合；被嘲讽的玩家主目标强制指向施加者，首个 ParamList
-不参与该效果，不另猜用途。
+不参与该效果，不另猜用途。公共 `MCommon_CTRL_Taunt` 同走该结构，并同时声明
+`remove_on_source_death` / `remove_on_source_exit`；`ByContainBehaviorFlag(Taunt)` 直译为
+`controlled(target, 'taunt')`，不再按纯表现件跳过。公共 `MCommon_CTRL_Frozen` 生成
+`control_kind: freeze` + `prevent_action` 的控制件，并按任务的
+`Modifier_Frozen_DamagePercentage` 在 `on_turn_start` 对冻结持有者结算 Pursued 冰伤；
+随后才进入既有冻结跳过与 50% 补偿路径，倍率缺失仍拒绝。
 Frozen Storm 按上游五段 `deal_damage` 结算（15%×4 + 40%，削韧 0.75×4 + 2），随后施加
 Deep Freeze；每层 `res_ice +0.12`、`spd_pct +0.2`，最多 3 层，与原始参数逐项对齐。
 Feast That Is Set For You 复用 `random_choice` 对全体施加 Poison 或 Electric：各 50% 分支；
@@ -372,6 +408,12 @@ Precious Blood Shed For You 以 `target_type: single` 只对主目标施加同�
 ParamList 分别是 Poison/Electric 层数上限，基础实例均为 3 层，不写死全体的 5/1 上限。
 A Cup Runneth Over For You 复用同组 `random_choice` 对全体施加随机 DoT，并以 self
 Charge action 推进到 Wash Away All Sins For You；三个参数同样为概率、持续和 DoT 倍率。
+Wash Away All Sins For You 将 `TriggerModifierCustomEvent(EventType.Value=1,
+DynamicKey=DOT_TriggerRatio)` 直译为 `trigger_dot`，比例读取本技能 ParamList（基础实例
+1.25），随后按 `STAT_DOT` 摘除；紧邻且定义缺失的 `MCommon_SkillTarget` 是该内建事件的
+寻址标记，不另生成 DSL 件。有 `trigger_dot` 的技能不再被误判为缺少直伤。目标数量沿用
+`Retarget(ByRandom=true)` 的现有结构化规则；Fandom 的全体描述与该结构存在口径冲突，
+留真实 golden 复核，不靠文本擅自改写目标数。
 Frigid Waterfall 的 SPRL 实例结算 380% AoE 冰伤并叠加 12% 自身增伤；其 Skill04
 全 Ability 不读取第三 ParamList，仅该已核对 ID 接受对应三参数布局。
 Sky-Piercing Lance 按已核对的原始 ID 分别结算 5 段 120% 或 6 段 100% Imaginary Bounce；

@@ -84,6 +84,8 @@ class Modifier:
     #（星期日 1313 蒙福者首实例，2026-09-17；结算点 engine._check_death alive=False 后、
     # actor_exit 发射前，dismiss/放逐不触发，04_modifier §4.15）
     remove_on_source_death: bool = False
+    # 施加者永久离场（真死/dismiss/flee）时全场摘除；临时 banish 不触发（RemoveWhenCasterUnstage 族）。
+    remove_on_source_exit: bool = False
     # 摘除后效果（05_effects §apply_modifier）：实例已移除、after_remove_modifier 发射前执行；
     # 定义随全状态存档保留，过期/驱散/替换/死亡共用 _remove_modifier 单漏斗。
     on_remove: List[Dict[str, Any]] = field(default_factory=list)

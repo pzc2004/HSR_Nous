@@ -91,6 +91,23 @@ class TestEffectTypeWhitelist:
                 "effect_type": "set_dynamic_value", "dynamic_key": "Phase_Flag",
             }], "模板 X")
 
+    def test_set_dynamic_value_amount_target_validation(self):
+        compiler = BuildCompiler()
+        compiler._validate_effects([{
+            "effect_type": "set_dynamic_value", "target": "self", "dynamic_key": "_MaxHP",
+            "amount": "max_hp_of($target)",
+            "amount_target": {"pool": "allies", "where": "hp_of($it) > 0"},
+        }], "模板 X")
+        with pytest.raises(ValueError, match="未知 amount_target 选择器"):
+            compiler._validate_effects([{
+                "effect_type": "set_dynamic_value", "dynamic_key": "X", "amount": 1,
+                "amount_target": "not_a_selector",
+            }], "模板 X")
+        with pytest.raises(ValueError, match="未知键 'amount_target'"):
+            compiler._validate_effects([{
+                "effect_type": "deal_damage", "amount": 1, "amount_target": "self",
+            }], "模板 X")
+
     def test_once_per_battle_requires_latch_id(self):
         compiler = BuildCompiler()
         compiler._validate_effects([{

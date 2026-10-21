@@ -4571,8 +4571,8 @@ def test_nihility_command_locks_all_followup_attacks(tmp_path):
             break
     assert "801202001" in targets and "801202002" in targets
     assert targets["801202002"] == targets["801202001"]
-    modifier = engine.state.actors[targets["801202001"]].modifiers["MMonster_AML_Minion03_00_Target"]
-    assert modifier.lock_on and modifier.stat_effects == {"vulnerability": 0.1}
+    assert "MMonster_AML_Minion03_00_Target" not in engine.state.actors[
+        targets["801202001"]].modifiers, "第二发命中后按上游 RemoveModifier 清除标记"
 
 
 def test_trotter_flee_sequence_leaves_without_kill(tmp_path):

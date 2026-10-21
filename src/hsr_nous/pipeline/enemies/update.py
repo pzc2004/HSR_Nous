@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""enemies 域下载：tbgd 五表 + 实际引用 CharacterConfig/Ability/ConfigAI.
+"""enemies 域下载：tbgd 五表 + 公共 Modifier + 实际引用 CharacterConfig/Ability/ConfigAI.
 
 ExcelOutput 表走 `/ExcelOutput/` raw 命名空间；Config 树走仓库根部 raw 命名空间。
 CharacterConfig 来自 MonsterTemplateConfig.JsonConfig，同族 Ability 须经 GitLab 实际文件索引
@@ -47,6 +47,13 @@ TBGD_FILES = [
     "MonsterSkillConfig.json",
     "EliteGroup.json",
     "HardLevelGroup.json",
+]
+
+#: 已被真实引用证明必需的公共 Modifier 定义（ConfigAbility 闭包之外的补充源）。
+GLOBAL_MODIFIER_FILES = [
+    "Config/ConfigGlobalModifier/GlobalModifier_Common_Specific.json",
+    "Config/ConfigGlobalModifier/GlobalModifier_Common_Property.json",
+    "Config/ConfigGlobalModifier/GlobalModifier_Monster.json",
 ]
 
 
@@ -160,12 +167,12 @@ def run_update(
     timeout: float = 30.0,
     dry_run: bool = False,
 ) -> int:
-    """拉取五表与实际引用 ConfigAI（文件级断点；单件失败不阻塞他件）."""
+    """拉取五表、公共 Modifier 与实际引用 ConfigAI（文件级断点；单件失败不阻塞他件）."""
     from hsr_nous.pipeline.build.update import download_with_etag
 
     root = Path(data_dir)
     root.mkdir(parents=True, exist_ok=True)
-    targets = list(files) if files else list(TBGD_FILES)
+    targets = list(files) if files else [*TBGD_FILES, *GLOBAL_MODIFIER_FILES]
 
     updated: List[str] = []
     skipped: List[str] = []

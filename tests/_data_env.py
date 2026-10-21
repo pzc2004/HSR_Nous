@@ -59,6 +59,9 @@ def enemy_ability_available() -> bool:
         "Config/ConfigCharacter/Monster/Monster_SW_Minion01_01_Config_IF.json",
         "Config/ConfigAbility/Monster/Monster_SW_Minion01_01_Ability.json",
         "Config/ConfigAbility/Monster/Monster_SW_Boss_00_Ability.json",
+        "Config/ConfigGlobalModifier/GlobalModifier_Common_Specific.json",
+        "Config/ConfigGlobalModifier/GlobalModifier_Common_Property.json",
+        "Config/ConfigGlobalModifier/GlobalModifier_Monster.json",
     )
     return all((root / relative).is_file() for relative in required)
 
