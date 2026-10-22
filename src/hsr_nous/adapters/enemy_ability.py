@@ -461,13 +461,24 @@ class AbilityCompiler:
         # 被写键的哈希 → dynamic_of 活读回落（最低优先级符号层）：PostfixExpr 读取
         # 本敌任意已登记动态键（含生成期被写键与 modifier 自槽）时不再"未知哈希"——
         # 活读走四层读链最高优先的帧覆盖层（写后读，#26 期 2/3）；同名哈希冲突不回落。
-        name_symbols: Dict[int, str] = {}
+        # 全语料反查表（pipeline 生成物）先铺底：全局键/跨文件键的哈希在敌外定义，
+        # 本敌扫描不可见——表只收语料级写入键（运行时读语义），内联参数族/冲突桶
+        # 已在生成侧排除（scripts/mine_dynamic_key_table.py 口径）；本敌扫描覆盖
+        # 全局层（近水楼台），跨层冲突整桶撤回落。
+        from hsr_nous.pipeline.enemies.dynamic_key_table import DYNAMIC_KEY_HASH_TABLE
+        name_symbols: Dict[int, str] = {
+            hashed: f"dynamic_of($self.actor_id, '{name}')"
+            for hashed, name in DYNAMIC_KEY_HASH_TABLE.items()
+        }
         for name in self.dynamic_keys:
             if any(ch in name for ch in "'\"\\"):
                 continue
             hashed = dynamic_value_hash(name)
             if hashed in name_symbols:
-                name_symbols.pop(hashed, None)   # 冲突撤回落（保持显式拒绝）
+                existing = name_symbols[hashed]
+                rendered = f"dynamic_of($self.actor_id, '{name}')"
+                if existing != rendered:
+                    name_symbols.pop(hashed, None)   # 跨层冲突撤回落（保持显式拒绝）
             else:
                 name_symbols[hashed] = f"dynamic_of($self.actor_id, '{name}')"
         self.dynamic_name_symbols = name_symbols

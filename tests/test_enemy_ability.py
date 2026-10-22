@@ -3579,3 +3579,42 @@ def test_predicate_unregistered_reasons_specific():
         out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
         assert any(needle in i["reason"] for i in out["unsupported"]), \
             f"{needle} 拒因未落：{[i['reason'] for i in out['unsupported']]}"
+
+
+def test_dynamic_key_hash_table_lookup_and_exclusions():
+    """全语料动态键哈希反查表（pipeline 生成物，scripts/mine_dynamic_key_table.py）：
+    全局/跨文件写入键回收为 dynamic_of 活读；MDF_ 内联参数族与不可反解哈希保持显式未知。"""
+    from hsr_nous.pipeline.enemies.dynamic_key_table import (DYNAMIC_KEY_HASH_TABLE,
+                                                             lookup_dynamic_key_name)
+
+    def build(hashes):
+        tasks = [{
+            "$type": "RPG.GameCore.SetDynamicValueByAddValue",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+            "Key": {"Value": f"Sink{index}"},
+            "AddValue": {"IsDynamic": True, "PostfixExpr": {
+                "OpCodes": "AQAAAAIR", "FixedValues": [{"Value": 1}],
+                "DynamicHashes": [hashed]}},
+        } for index, hashed in enumerate(hashes)]
+        sources = {
+            "character_config": {"SkillList": [{
+                "Name": "Skill01", "SkillType": "Skill",
+                "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "A",
+            }]},
+            "abilities": {"A": {"Name": "A", "OnStart": tasks}},
+            "modifiers": {},
+        }
+        skills = [{"skill_id": "s1", "trigger_key": "Skill01", "param_list": []}]
+        return AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+
+    assert len(DYNAMIC_KEY_HASH_TABLE) >= 1000, "语料表规模异常（tbgd 缺失？）"
+    assert lookup_dynamic_key_name(-1368562990) == "OneMoreCount"
+    out = build([1912601768, 768008000])   # _Layer / CurrentSummonIndex
+    by_key = {e.get("dynamic_key"): str(e.get("amount"))
+              for h in out["hooks"] for e in h.get("effects", [])}
+    assert "dynamic_of($self.actor_id, '_Layer')" in by_key["Sink0"]
+    assert "dynamic_of($self.actor_id, 'CurrentSummonIndex')" in by_key["Sink1"]
+    rejected = build([2128130574, 1227332892])   # MDF_PropertyValue / OneMoreCount 读哈希
+    unknown = [i["reason"] for i in rejected["unsupported"] if "未知 DynamicHash" in i["reason"]]
+    assert any("2128130574" in r for r in unknown), "内联参数族应保持未知（静默 0 比显式未知更坏）"
+    assert any("1227332892" in r for r in unknown), "无名哈希不可反解，保持未知"
