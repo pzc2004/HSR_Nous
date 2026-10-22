@@ -51,6 +51,8 @@
 - insert:
     - id: nous-research-policy
       name: ./research_policy.mjs
+    - id: nous-research-stream
+      name: ./research_stream.mjs
     - id: nous-research-mcp
       name: '@deepseek-ai/dsh-mcp-client'
       config:

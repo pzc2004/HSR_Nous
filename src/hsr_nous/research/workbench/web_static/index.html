@@ -104,10 +104,11 @@ async function openRun(index){try{const drilldown=state.trialReport.evidence.dri
 async function openEvidence(kind,index){try{const link=state.currentDrilldown[kind][index];state.detail=await api('/api/evidence',link);renderEvidence();}catch(error){toast(error);}}
 // ---- 聊天视图（ACP 桥；唯一前端是研究台，独立桥仅开发调试）----
 const LS_SID='hsr_nous.workbench.chat_last_session';
-const chat={available:false,sessions:[],sid:null,attached:false,es:null,inFlight:false,msgNode:null,thoughtDet:null,thoughtCount:0,toolNodes:{},remembered:null,typeBuf:''};
-// 打字机揭示：实测 dsh 的 ACP 桥按整条消息提交（update 源自 committed 事件，
-// 无 token 级流），真实逐字流在当前底座上不可得——把整段文本按 tick 逐段
-// 揭示，观感接近流式；prompt 结束或思考/工具事件到来时 flushTypeBuf 保时序。
+const chat={available:false,sessions:[],sid:null,attached:false,es:null,inFlight:false,msgNode:null,thoughtDet:null,thoughtCount:0,toolNodes:{},remembered:null,typeBuf:'',toolGroup:null,toolCount:0,maxSeq:0,seen:new Set(),liveStream:false};
+// 打字机揭示（降级路径）：ACP 按整条 committed 消息提交（update 源自 committed
+// 事件，无 token 级流）；原生逐 token 流经 research_stream 插件的
+// agent_message_delta 直写（见 liveStream 分支）——无插件时把整段文本按 tick
+// 逐段揭示，观感接近流式；prompt 结束或思考/工具事件到来时 flushTypeBuf 保时序。
 function flushTypeBuf(){
   if(!chat.typeBuf)return;
   if(!chat.msgNode){chat.msgNode=chatEl('chat-msg');chatStream().appendChild(chat.msgNode);}
@@ -169,26 +170,54 @@ function setChatInFlight(on){
 function closeChatStream(){if(chat.es){chat.es.close();chat.es=null;}chat.attached=false;}
 function attachChatStream(sid,note){
   closeChatStream();
-  chat.sid=sid;chat.toolNodes={};chat.msgNode=null;chat.thoughtDet=null;chat.thoughtCount=0;chat.typeBuf='';
+  chat.sid=sid;chat.toolNodes={};chat.msgNode=null;chat.thoughtDet=null;chat.thoughtCount=0;chat.typeBuf='';chat.toolGroup=null;chat.toolCount=0;chat.maxSeq=0;chat.seen=new Set();chat.liveStream=false;
   chat.remembered=sid;localStorage.setItem(LS_SID,sid);
   const stream=chatStream();stream.innerHTML='';
   if(note)stream.appendChild(chatEl('chat-sys',note));
-  chat.es=new EventSource('/chat/sessions/'+encodeURIComponent(sid)+'/events');
-  chat.es.addEventListener('update',e=>renderChatUpdate(JSON.parse(e.data)));
-  chat.es.onerror=()=>{$('chatStatus').textContent='事件流断开（EventSource 自动重连中）…';};
+  openEventStream();
   chat.attached=true;
   setChatInFlight(false);
   renderSessionList();renderInspector();
 }
-function showResumableSession(s){
+function openEventStream(){
+  // 自管重连（EventSource 原生重试沿用构造时 URL，after= 会过期）：断开后按
+  // 当前 maxSeq 重开，重放只补新事件；会话切换后旧定时器因 sid/es 守卫不复活
+  if(chat.es){chat.es.close();chat.es=null;}
+  chat.es=new EventSource('/chat/sessions/'+encodeURIComponent(chat.sid)+'/events'+(chat.maxSeq?('?after='+chat.maxSeq):''));
+  chat.es.addEventListener('update',e=>renderChatUpdate(JSON.parse(e.data)));
+  chat.es.onopen=()=>{$('chatStatus').textContent=chat.inFlight?'Agent 运行中…':('就绪（会话 '+String(chat.sid).slice(0,8)+'…）');};
+  chat.es.onerror=()=>{
+    $('chatStatus').textContent='事件流断开（自动重连中）…';
+    const curSid=chat.sid;
+    if(chat.es){chat.es.close();chat.es=null;}
+    setTimeout(()=>{if(chat.attached&&chat.sid===curSid&&!chat.es)openEventStream();},3000);
+  };
+}
+async function showResumableSession(s){
   closeChatStream();
-  chat.typeBuf='';chat.msgNode=null;
+  chat.typeBuf='';chat.msgNode=null;chat.toolGroup=null;chat.toolCount=0;
   chat.sid=s.session_id;chat.remembered=s.session_id;localStorage.setItem(LS_SID,s.session_id);
   const stream=chatStream();stream.innerHTML='';
-  stream.appendChild(chatEl('chat-sys','该会话已落盘（桥侧无历史记录）：恢复后从空开始，历史不回放。'));
-  $('chatStatus').textContent='待恢复';
   setChatInFlight(false);
   renderSessionList();renderInspector();
+  // 先尝试从桥侧落盘日志重建历史（DSH 完整落盘，ACP resume 本身不重放）；
+  // 拉取失败/无日志则保留「历史不回放」降级提示
+  $('chatStatus').textContent='正在加载历史…';
+  let loaded=false;
+  try{
+    const resp=await fetch('/chat/sessions/'+encodeURIComponent(s.session_id)+'/history');
+    if(resp.ok){
+      const data=await resp.json();
+      (data.turns||[]).forEach(t=>{
+        stream.appendChild(chatEl('chat-msg'+(t.role==='user'?' user':''),(t.role==='user'?'你：':'Agent：')+t.text));
+      });
+      stream.appendChild(chatEl('chat-sys','——以上为历史，以下为继续——'));
+      loaded=true;
+    }
+  }catch(_){loaded=false;}
+  if(!loaded)stream.appendChild(chatEl('chat-sys','该会话已落盘（桥侧无历史记录）：恢复后从空开始，历史不回放。'));
+  $('chatStatus').textContent='待恢复';
+  stream.scrollTop=stream.scrollHeight;
 }
 function selectChatSession(sid){
   const s=chat.sessions.find(x=>x.session_id===sid);
@@ -199,9 +228,24 @@ function selectChatSession(sid){
 function renderChatUpdate(update){
   const stream=chatStream();
   const kind=update.sessionUpdate;
-  if(kind==='agent_message_chunk'){
+  // 桥侧 seq 去重：重连重放（after= 滞后或竞态）不重复渲染
+  if(update.seq!==undefined){
+    if(chat.seen.has(update.seq))return;
+    chat.seen.add(update.seq);
+    if(update.seq>chat.maxSeq)chat.maxSeq=update.seq;
+  }
+  if(kind==='agent_message_delta'){
+    // 原生 token 流（research_stream 插件）：直写跳过打字机；首个 delta 先冲掉
+    // 打字机缓冲，本轮 closed 前 chunk/delta 都直写
+    if(!chat.liveStream){flushTypeBuf();chat.liveStream=true;}
+    chat.toolGroup=null;
     if(!chat.msgNode){chat.msgNode=chatEl('chat-msg');stream.appendChild(chat.msgNode);}
-    chat.typeBuf+=update.content&&update.content.text||'';
+    chat.msgNode.textContent+=update.text||'';
+  }else if(kind==='agent_message_chunk'){
+    chat.toolGroup=null; // Agent 开始说话 = 本轮工具调用结束，下一个突发开新组
+    if(!chat.msgNode){chat.msgNode=chatEl('chat-msg');stream.appendChild(chat.msgNode);}
+    if(chat.liveStream)chat.msgNode.textContent+=update.content&&update.content.text||'';
+    else chat.typeBuf+=update.content&&update.content.text||'';
   }else if(kind==='agent_thought_chunk'){
     flushTypeBuf();
     // 思考过程默认折叠成一张卡片（摘要行显示段数），展开才见全文——每轮一张
@@ -215,13 +259,23 @@ function renderChatUpdate(update){
     chat.thoughtDet.appendChild(chatEl('chat-thought-text',update.content&&update.content.text||''));
   }else if(kind==='tool_call'){
     flushTypeBuf();
+    // 按轮聚合：同一突发里的多次工具调用收进一张默认折叠的组卡
+    // （"默认只显示用户与 Agent 对话"——明细点开才见）；Agent 开口即开新组
+    if(!chat.toolGroup){
+      chat.toolGroup=document.createElement('details');chat.toolGroup.className='chat-tool';
+      const gsum=document.createElement('summary');chat.toolGroup.appendChild(gsum);
+      chat.toolGroup._sum=gsum;chat.toolCount=0;
+      stream.appendChild(chat.toolGroup);
+    }
+    chat.toolCount+=1;
+    chat.toolGroup._sum.textContent='🔧 工具调用 ×'+chat.toolCount+'（点击展开）';
     const det=document.createElement('details');det.className='chat-tool';
     const title=(update.title||update.toolCallId||'tool')+(update.name?' · '+update.name:'');
     const sum=document.createElement('summary');
     sum.textContent='⚙ '+title+' ['+(update.status||'?')+']';
     det.appendChild(sum);
     det.appendChild(chatEl('meta',JSON.stringify(update.rawInput!==undefined?update.rawInput:{})));
-    stream.appendChild(det);
+    chat.toolGroup.appendChild(det);
     chat.toolNodes[update.toolCallId]={det,sum,base:title};
   }else if(kind==='tool_call_update'){
     const t=chat.toolNodes[update.toolCallId];
@@ -235,6 +289,7 @@ function renderChatUpdate(update){
     if(s){s.usage={used:update.used,size:update.size};renderInspector();}
   }else if(kind==='prompt_closed'){
     flushTypeBuf();
+    chat.liveStream=false; // 下一轮回归 chunk+打字机降级直到首个 delta 到来
     if(update.error)stream.appendChild(chatEl('chat-error','错误：'+update.error));
     else stream.appendChild(chatEl('chat-sys','— 本轮结束（'+(update.stopReason||'?')+'）—'));
     setChatInFlight(false);
@@ -266,7 +321,7 @@ async function sendChat(){
   $('chatText').value='';
   const stream=chatStream();
   stream.appendChild(chatEl('chat-msg user','你：'+text));
-  chat.msgNode=null;chat.thoughtDet=null;chat.thoughtCount=0;
+  chat.msgNode=null;chat.thoughtDet=null;chat.thoughtCount=0;chat.liveStream=false;
   setChatInFlight(true);
   const resp=await fetch('/chat/sessions/'+encodeURIComponent(chat.sid)+'/prompt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
   if(resp.status===202)return;

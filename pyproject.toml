@@ -20,7 +20,7 @@ account = [
     "qrcode>=7.4",
     "curl-cffi>=0.7",
 ]
-web = ["fastapi>=0.115", "uvicorn>=0.30"]
+web = ["fastapi>=0.115", "uvicorn>=0.30", "zstandard>=0.23"]
 ops = ["ddgs>=9.0"]
 agent = ["mcp>=1.0,<2"]
 

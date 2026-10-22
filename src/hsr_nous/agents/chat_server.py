@@ -29,12 +29,17 @@ websockets 库而 sse-starlette 已在依赖里，SSE（EventSource）+ POST 下
 活跃 = 本桥记账的未关闭会话（带首条用户消息摘要与最近上下文用量），
 可恢复 = ACP ``session/list`` 的落盘会话（桥无其历史）；
 ``POST /sessions/{id}/resume`` 恢复后不重回放，页面标注「历史不回放」。
+但 DSH 把会话完整落盘（zstd JSONL，见 ``session_log_root``），故
+``GET /sessions/{id}/history`` 从落盘日志重建静态历史供恢复前展示——
+按 seq 取 user/message 与 assistant/message 的 text 块（跳过 reasoning/工具
+事件与坏行），ACP resume 本身仍不重放。
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import io
 import json
 import os
 import shutil
@@ -46,6 +51,7 @@ from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from pathlib import Path
 from typing import Any, Sequence
 
+import zstandard
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
@@ -70,6 +76,17 @@ class CreateSessionRequest(BaseModel):
 
 class PromptRequest(BaseModel):
     text: str
+
+
+class IngestRequest(BaseModel):
+    """原生流插件（research_stream.mjs）回推载荷：仅支持 delta 一种。"""
+
+    sessionUpdate: str
+    text: str
+
+
+# ingest 只接受回环来源（插件与 workbench 反代都住在本机回环）
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1"})
 
 
 def _page(base: str) -> str:
@@ -237,13 +254,78 @@ def _title_of(entry: dict[str, Any]) -> str | None:
     return first[:TITLE_LIMIT] + ("…" if len(first) > TITLE_LIMIT else "")
 
 
+# DSH 落盘会话日志：zstd 压缩 JSONL，每行一个事件。一级子目录是 cwd 的变形
+# （如 --root-HSR_Nous-workspace--），目录名不可推导——由调用方按
+# `*/<session_id>/session.v4.jsonl.zstd` glob 定位（会话目录通常只一个匹配）。
+_SESSION_LOG_NAME = "session.v4.jsonl.zstd"
+
+
+def _turns_from_session_log(path: Path) -> list[dict[str, str]]:
+    """从落盘日志重建对话轮次：按 seq 排序的 user/assistant text 块拼接。
+
+    ACP resume 不重放历史，但 DSH 把会话完整落盘——user/message 与
+    assistant/message 行取 content 里的 text 块（assistant 的 reasoning 块、
+    工具事件一律跳过）；单行坏 JSON/未知行跳过；无 seq 的行按插入序排在 seq=0。
+    """
+    collected: list[tuple[int, int, str, str]] = []  # (seq, 插入序, role, text)
+    decompressor = zstandard.ZstdDecompressor()
+    with path.open("rb") as fh, decompressor.stream_reader(fh) as reader:
+        wrapper = io.TextIOWrapper(reader, encoding="utf-8", errors="replace")
+        for index, line in enumerate(wrapper):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue  # 坏行容错：跳过
+            if not isinstance(event, dict):
+                continue
+            etype = event.get("type")
+            if etype not in ("user/message", "assistant/message"):
+                continue  # session 首行、工具/系统事件等不参与对话重建
+            data = event.get("data")
+            if not isinstance(data, dict):
+                continue
+            if etype == "assistant/message":
+                message = data.get("message") or {}
+                content = message.get("content")
+            else:
+                # user/message 是扁平形状（data.content + data.role，不同于
+                # assistant 的 data.message）；DSH 会把 runtime-context 快照等
+                # 系统注入也记成 user 消息——只认 source.kind == "user" 的真用户轮
+                if (data.get("source") or {}).get("kind") != "user":
+                    continue
+                content = data.get("content")
+            if not isinstance(content, list):
+                continue
+            text = "".join(
+                block.get("text", "")
+                for block in content
+                if isinstance(block, dict) and block.get("type") == "text"
+            )
+            if not text.strip():
+                continue
+            seq = event.get("seq")
+            role = "user" if etype == "user/message" else "assistant"
+            collected.append((
+                seq if isinstance(seq, int) and not isinstance(seq, bool) else 0,
+                index, role, text,
+            ))
+    collected.sort(key=lambda item: (item[0], item[1]))
+    return [{"role": role, "text": text} for _, _, role, text in collected]
+
+
 def create_chat_router(
-    client: AcpClient, *, default_cwd: Path | None = None, prefix: str = "/"
+    client: AcpClient, *, default_cwd: Path | None = None, prefix: str = "/",
+    session_log_root: Path | None = None,
 ) -> APIRouter:
     """造聊天路由组：独立 app 直接挂；workbench 场景由本进程的 app 对外、经反代访问。
 
     ``prefix`` 让整组端点可挂在子路径下（如 workbench 反代 ``/chat/*`` 到本进程
     根路径时无需前缀；开发调试想直接把本进程挂到 ``/chat`` 下时用 ``prefix="/chat"``）。
+    ``session_log_root`` 指向 DSH 落盘会话目录（``<研究根>/dsh-home/sessions``），
+    供 ``GET /sessions/{id}/history`` 重建历史展示；None 时该端点恒 404。
     ``client`` 由调用方持有但未启动——起停经 ``chat_lifespan`` 组合进宿主 app
     的 lifespan（一个 app 持一个 AcpClient = 一个 dsh 子进程，内含多会话）。
     """
@@ -255,9 +337,13 @@ def create_chat_router(
     known: set[str] = set()
     # 桥侧会话记账：首条用户消息（列表摘要标题）/ 最近上下文用量 / 创建时间
     meta: dict[str, dict[str, Any]] = {}
+    # 会话内单调事件序号（桥自分配，独立于 DSH 自身 seq）：SSE 重连重演去重用
+    seq_counters: dict[str, int] = {}
 
     def publish(session_id: str, event: dict[str, Any] | None) -> None:
         if event is not None:
+            seq_counters[session_id] = seq_counters.get(session_id, 0) + 1
+            event["seq"] = seq_counters[session_id]
             history.setdefault(session_id, deque(maxlen=HISTORY_LIMIT)).append(event)
             if event.get("sessionUpdate") == "usage_update":
                 entry = meta.get(session_id)
@@ -354,6 +440,29 @@ def create_chat_router(
         await _pin_openai_gateway_model(client, sid)
         return {"session_id": sid}
 
+    @router.get("/sessions/{sid}/history")
+    async def session_history(sid: str) -> dict[str, Any]:
+        """从 DSH 落盘日志重建会话历史（ACP resume 不重放，但会话已完整落盘）。
+
+        目录名是 cwd 的变形、不可推导——glob ``*/<sid>/session.v4.jsonl.zstd``
+        定位（会话目录通常只一个匹配，多个取最近写入）。找不到日志 404；
+        文件损坏/无法解压 502；解析全程跳过坏行与未知行。
+        """
+        if session_log_root is None:
+            raise HTTPException(404, "该会话无落盘日志")
+        matches = sorted(
+            session_log_root.glob(f"*/{sid}/{_SESSION_LOG_NAME}"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        if not matches:
+            raise HTTPException(404, "该会话无落盘日志")
+        try:
+            turns = _turns_from_session_log(matches[0])
+        except (OSError, zstandard.ZstdError) as error:
+            raise HTTPException(502, f"会话日志损坏或无法解压：{error}") from error
+        return {"turns": turns, "source": "session-log"}
+
     @router.get("/sessions")
     async def list_sessions() -> dict[str, Any]:
         """合并会话列表：活跃 = 桥记账（含摘要标题与最近用量），可恢复 = ACP session/list。"""
@@ -385,7 +494,7 @@ def create_chat_router(
         return {"sessions": sessions}
 
     @router.get("/sessions/{sid}/events")
-    async def events(sid: str, request: Request) -> EventSourceResponse:
+    async def events(sid: str, request: Request, after: int = 0) -> EventSourceResponse:
         if sid not in known:
             raise HTTPException(status_code=404, detail="未知会话")
 
@@ -393,10 +502,14 @@ def create_chat_router(
             queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
             hub.setdefault(sid, set()).add(queue)
             try:
-                # 先重放近期事件（晚订阅不丢上下文），再转实时推送
+                # 先重放近期事件（晚订阅不丢上下文），再转实时推送；
+                # after>0 时跳过 seq<=after 的历史项——SSE 重连只补新事件（去重由
+                # 页面 seen-seq 兜底：EventSource 重试沿用旧 URL，after 可能滞后）
                 for item in list(history.get(sid, ())):
                     if await request.is_disconnected():
                         return
+                    if after and (item.get("seq") or 0) <= after:
+                        continue
                     yield {"event": UPDATE_EVENT, "data": json.dumps(item, ensure_ascii=False)}
                 while True:
                     if await request.is_disconnected():
@@ -409,6 +522,23 @@ def create_chat_router(
                 hub.get(sid, set()).discard(queue)
 
         return EventSourceResponse(stream())
+
+    @router.post("/ingest/{sid}", status_code=202)
+    async def ingest(sid: str, request: Request, body: IngestRequest) -> dict[str, Any]:
+        """原生流插件（research_stream.mjs）回推入口：text-delta 合进该会话事件流。
+
+        仅接受回环来源（插件与 workbench 反代都住在本机回环）；未知会话 202 丢弃
+        （插件可能先于桥记账，或桥已重启丢失记账）；载荷类型不对 400。
+        """
+        client_host = request.client.host if request.client is not None else ""
+        if client_host not in _LOOPBACK_HOSTS:
+            raise HTTPException(status_code=403, detail="ingest 仅接受回环来源")
+        if body.sessionUpdate != "agent_message_delta":
+            raise HTTPException(status_code=400, detail="未知 ingest 载荷类型")
+        if sid not in known:
+            return {"accepted": False}
+        publish(sid, {"sessionUpdate": "agent_message_delta", "text": body.text})
+        return {"accepted": True}
 
     return router
 
@@ -432,16 +562,20 @@ def chat_lifespan(client: AcpClient) -> Callable[[FastAPI], AbstractAsyncContext
 
 
 def create_app(
-    client: AcpClient, *, default_cwd: Path | None = None, prefix: str = "/"
+    client: AcpClient, *, default_cwd: Path | None = None, prefix: str = "/",
+    session_log_root: Path | None = None,
 ) -> FastAPI:
     """独立成 app：自带 lifespan 与内嵌聊天原型页。
 
     日常由 workbench spawn 本进程（回环随机端口）并经 ``/chat/*`` 反代访问；
     ``--serve`` / ``python -m hsr_nous.agents.chat_server`` 独立模式仅开发调试。
-    ``GET /healthz`` 供 workbench 启动探活。
+    ``GET /healthz`` 供 workbench 启动探活；``session_log_root`` 传 DSH 落盘
+    会话目录（``<研究根>/dsh-home/sessions``）时启用历史重建端点。
     """
     app = FastAPI(title="HSR_Nous ACP chat bridge", lifespan=chat_lifespan(client))
-    app.include_router(create_chat_router(client, default_cwd=default_cwd, prefix=prefix))
+    app.include_router(create_chat_router(
+        client, default_cwd=default_cwd, prefix=prefix, session_log_root=session_log_root,
+    ))
 
     @app.get("/healthz")
     async def healthz() -> dict[str, bool]:
@@ -484,8 +618,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     root = _prepare_root(args.research_root or research_root())
+    # 原生流插件（research_stream.mjs）回推端口 = 本进程监听端口；dsh.py 的
+    # _environment 会把 HSR_NOUS_STREAM_* 透传进 dsh 子进程
+    os.environ["HSR_NOUS_STREAM_INGEST_PORT"] = str(args.port)
     client = AcpClient.dsh(root=root, dsh_bin=args.dsh_bin)
-    app = create_app(client, default_cwd=root / "workspace")
+    app = create_app(
+        client,
+        default_cwd=root / "workspace",
+        session_log_root=root / "dsh-home" / "sessions",
+    )
     print(f"研究根: {root}", file=sys.stderr)
     print(
         f"ACP 聊天桥: http://{args.host}:{args.port}"

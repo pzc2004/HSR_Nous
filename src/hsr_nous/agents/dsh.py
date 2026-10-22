@@ -89,6 +89,9 @@ def _environment(
         "HSR_NOUS_RESEARCH_ROOT": str(root),
         "HSR_NOUS_PYTHON": sys.executable,
         "HSR_NOUS_PYTHONPATH": str(repo_root() / "src"),
+        # HSR_NOUS_STREAM_* 透传：聊天桥原生流插件端口经此抵达 dsh 进程
+        # （chat_server 在 spawn 前设置 HSR_NOUS_STREAM_INGEST_PORT）
+        **{k: v for k, v in os.environ.items() if k.startswith("HSR_NOUS_STREAM_")},
         **overrides,
     }
 

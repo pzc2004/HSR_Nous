@@ -7,8 +7,10 @@ import json
 import socket
 import threading
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
+import zstandard
 from fastapi.testclient import TestClient
 
 from hsr_nous.agents.acp_client import AcpClient
@@ -326,3 +328,220 @@ def test_main_preflight_missing_dsh(monkeypatch, capsys):
     monkeypatch.setattr("hsr_nous.agents.dsh._executable", lambda _bin: "/nonexistent/dsh")
     assert chat_server.main(["--port", "0"]) == 1
     assert "找不到 DSH" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# 会话历史重建：DSH 落盘日志（zstd JSONL）→ GET /sessions/{id}/history
+# ---------------------------------------------------------------------------
+
+def _write_session_log(
+    log_root: Path, session_id: str, events: list[Any],
+    cwd_dir: str = "--root-HSR_Nous-workspace--",
+) -> Path:
+    """在 <log_root>/<cwd 变形>/<session_id>/session.v4.jsonl.zstd 造落盘日志。
+
+    ``events`` 元素为 dict（JSON 序列化）或 str（原样写入一行，用于坏行容错）。
+    """
+    target = log_root / cwd_dir / session_id
+    target.mkdir(parents=True)
+    raw = "".join(
+        (item if isinstance(item, str) else json.dumps(item, ensure_ascii=False)) + "\n"
+        for item in events
+    )
+    path = target / "session.v4.jsonl.zstd"
+    path.write_bytes(zstandard.ZstdCompressor().compress(raw.encode("utf-8")))
+    return path
+
+
+def _user_event(seq: int, text: str) -> dict[str, Any]:
+    # 真实落盘形状：扁平 content + source.kind=="user"（区别于 assistant 的
+    # data.message 嵌套）；runtime-context 注入另见 _injected_context_event
+    return {
+        "type": "user/message", "seq": seq,
+        "data": {
+            "role": "user",
+            "content": [{"type": "text", "text": text}],
+            "source": {"kind": "user"},
+        },
+    }
+
+
+def _injected_context_event(seq: int) -> dict[str, Any]:
+    """DSH 注入的 runtime-context 快照也记为 user/message，必须被过滤。"""
+    return {
+        "type": "user/message", "seq": seq,
+        "data": {
+            "role": "user",
+            "content": [{"type": "text", "text": "Current runtime context. This snapshot…"}],
+            "source": {"kind": "runtime-context", "form": "snapshot"},
+        },
+    }
+
+
+def _assistant_event(seq: int, blocks: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "type": "assistant/message", "seq": seq,
+        "data": {"message": {"role": "assistant", "content": blocks}},
+    }
+
+
+def _history_app(tmp_path: Path, log_root: Path | None):
+    holder: dict[str, Any] = {}
+    ready = threading.Event()
+    return create_app(
+        make_fake_client(resumable_handler, holder, ready),
+        default_cwd="/tmp/ws",
+        session_log_root=log_root,
+    ), ready
+
+
+def test_history_rebuilt_from_session_log(tmp_path):
+    """turns 按 seq 排序：user/assistant 的 text 块拼接，reasoning/工具行与坏行跳过。"""
+    log_root = tmp_path / "dsh-home" / "sessions"
+    _write_session_log(log_root, "disk-9", [
+        {"type": "session", "sessionId": "disk-9"},  # 首行无 seq，跳过
+        _user_event(1, "第一问"),
+        _assistant_event(2, [
+            {"type": "reasoning", "text": "内部思考不应出现"},
+            {"type": "text", "text": "回答一"},
+            {"type": "text", "text": "（续）"},
+        ]),
+        "{bad json line",  # 坏行容错
+        _injected_context_event(2),  # runtime-context 注入：记为 user 但非真用户轮，必须过滤
+        _user_event(3, "第二问"),
+        _assistant_event(4, [
+            {"type": "tool_use", "name": "mcp__nous__read_report"},
+            {"type": "text", "text": "回答二"},
+        ]),
+    ])
+    app, ready = _history_app(tmp_path, log_root)
+
+    with TestClient(app) as client:
+        assert ready.wait(timeout=5)
+        response = client.get("/sessions/disk-9/history")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["source"] == "session-log"
+        assert body["turns"] == [
+            {"role": "user", "text": "第一问"},
+            {"role": "assistant", "text": "回答一（续）"},
+            {"role": "user", "text": "第二问"},
+            {"role": "assistant", "text": "回答二"},
+        ]
+
+
+def test_history_not_found_when_no_log(tmp_path):
+    """无落盘日志（或未传 session_log_root）→ 404，页面走「历史不回放」降级。"""
+    app, ready = _history_app(tmp_path, tmp_path / "dsh-home" / "sessions")
+    with TestClient(app) as client:
+        assert ready.wait(timeout=5)
+        response = client.get("/sessions/nope/history")
+        assert response.status_code == 404
+        assert response.json()["detail"] == "该会话无落盘日志"
+
+    app_none, ready_none = _history_app(tmp_path, None)
+    with TestClient(app_none) as client:
+        assert ready_none.wait(timeout=5)
+        assert client.get("/sessions/any/history").status_code == 404
+
+
+def test_history_corrupt_log_returns_502(tmp_path):
+    """文件损坏（非 zstd 内容）→ 502 清晰中文错误。"""
+    log_root = tmp_path / "dsh-home" / "sessions"
+    target = log_root / "--root-HSR_Nous-workspace--" / "disk-9"
+    target.mkdir(parents=True)
+    (target / "session.v4.jsonl.zstd").write_bytes(b"not a zstd stream at all")
+    app, ready = _history_app(tmp_path, log_root)
+
+    with TestClient(app) as client:
+        assert ready.wait(timeout=5)
+        response = client.get("/sessions/disk-9/history")
+        assert response.status_code == 502
+        assert "会话日志损坏" in response.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
+# SSE 重连去重：桥侧 seq 单调 + events ?after= 重演过滤
+# ---------------------------------------------------------------------------
+
+
+def test_events_seq_monotonic_and_after_filter_skips_replay():
+    """每事件带会话内单调 seq；?after=N 重放只补 seq>N 的新事件。"""
+    holder: dict[str, Any] = {}
+    ready = threading.Event()
+    app = create_app(make_fake_client(chatty_handler, holder, ready), default_cwd="/tmp/ws")
+
+    with TestClient(app) as client:
+        assert ready.wait(timeout=5)
+        sid = client.post("/sessions", json={}).json()["session_id"]
+
+        client.post(f"/sessions/{sid}/prompt", json={"text": "第一轮"})
+        with client.stream("GET", f"/sessions/{sid}/events") as stream:
+            first = _read_events(stream, lambda e: e["sessionUpdate"] == "prompt_closed")
+        seqs = [e["seq"] for e in first]
+        assert all(isinstance(s, int) for s in seqs)
+        assert seqs == sorted(seqs) and len(set(seqs)) == len(seqs), "seq 应单调不重复"
+        after = max(seqs)
+
+        # 第二轮：带 after 订阅——重放跳过第一轮，只收新事件
+        client.post(f"/sessions/{sid}/prompt", json={"text": "第二轮"})
+        with client.stream("GET", f"/sessions/{sid}/events", params={"after": after}) as stream:
+            second = _read_events(stream, lambda e: e["sessionUpdate"] == "prompt_closed")
+        assert second, "after 过滤后仍应收到第二轮事件"
+        assert all(e["seq"] > after for e in second)
+        assert any(e["sessionUpdate"] == "agent_message_chunk" for e in second)
+
+
+# ---------------------------------------------------------------------------
+# 原生 token 流插件回推：POST /ingest/{sid} 合流
+# ---------------------------------------------------------------------------
+
+
+def test_ingest_delta_merges_into_event_stream():
+    """delta 经 publish 合流（带 seq）；未知会话 202 丢弃；未知载荷 400。"""
+    from hsr_nous.agents.chat_server import _LOOPBACK_HOSTS
+
+    holder: dict[str, Any] = {}
+    ready = threading.Event()
+    app = create_app(make_fake_client(chatty_handler, holder, ready), default_cwd="/tmp/ws")
+
+    with TestClient(app, client=("127.0.0.1", 50000)) as client:
+        assert ready.wait(timeout=5)
+        sid = client.post("/sessions", json={}).json()["session_id"]
+
+        # 未知会话：202 丢弃（插件可能先于桥记账）
+        ghost = client.post(
+            "/ingest/ghost", json={"sessionUpdate": "agent_message_delta", "text": "x"}
+        )
+        assert ghost.status_code == 202 and ghost.json() == {"accepted": False}
+
+        # 未知载荷类型：400（text 带上，让校验走到桥自己的类型闸）
+        bad = client.post(
+            f"/ingest/{sid}", json={"sessionUpdate": "mystery", "text": "x"}
+        )
+        assert bad.status_code == 400
+
+        # 回环校验：正常合流应被接受（starlette 1.9 的 TestClient 默认 client 是
+        # "testclient"，这里显式指定回环地址模拟插件/反代的真实来源）
+        assert "127.0.0.1" in _LOOPBACK_HOSTS and "::1" in _LOOPBACK_HOSTS
+        with client.stream("GET", f"/sessions/{sid}/events") as stream:
+            accepted = client.post(
+                f"/ingest/{sid}",
+                json={"sessionUpdate": "agent_message_delta", "text": "tok"},
+            )
+            assert accepted.status_code == 202 and accepted.json() == {"accepted": True}
+            deltas = _read_events(stream, lambda e: e["sessionUpdate"] == "agent_message_delta")
+        assert deltas[0]["text"] == "tok"
+        assert isinstance(deltas[0]["seq"], int), "ingest 事件同样带单调 seq"
+
+    # 非回环来源：403（安全闸——ingest 只该来自本机插件/反代）。单独造 app：
+    # 同一 fake client 不能进第二个 TestClient（lifespan 会重复 start）
+    holder2: dict[str, Any] = {}
+    ready2 = threading.Event()
+    app2 = create_app(make_fake_client(chatty_handler, holder2, ready2), default_cwd="/tmp/ws")
+    with TestClient(app2, client=("10.0.0.1", 40000)) as outsider:
+        assert ready2.wait(timeout=5)
+        denied = outsider.post(
+            "/ingest/ghost", json={"sessionUpdate": "agent_message_delta", "text": "x"}
+        )
+        assert denied.status_code == 403

@@ -30,8 +30,10 @@ _HOP_BY_HOP = frozenset({
     "host", "connection", "content-length", "transfer-encoding",
     "keep-alive", "upgrade", "te", "trailer",
 })
-# prompt 结算可能很久：整体超时放宽，连接超时保持短，让「子进程已死」快速变 503
+# prompt 结算可能很久：非 SSE 路径整体超时放宽，连接超时保持短，让「子进程已死」
+# 快速变 503。SSE 路径读超时 None（不掐 idle 长连）——连接生死由断开检测管理。
 _PROXY_TIMEOUT = httpx.Timeout(600.0, connect=5.0)
+_SSE_TIMEOUT = httpx.Timeout(None, connect=5.0)
 
 
 def _chat_proxy_router(base_url: str) -> APIRouter:
@@ -56,7 +58,9 @@ def _chat_proxy_router(base_url: str) -> APIRouter:
             request.method == "GET"
             and "text/event-stream" in request.headers.get("accept", "")
         )
-        client = httpx.AsyncClient(base_url=base_url, timeout=_PROXY_TIMEOUT)
+        client = httpx.AsyncClient(
+            base_url=base_url, timeout=_SSE_TIMEOUT if wants_sse else _PROXY_TIMEOUT
+        )
         if wants_sse:
             async def stream() -> AsyncIterator[bytes]:
                 try:

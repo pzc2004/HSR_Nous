@@ -76,10 +76,32 @@ python -m hsr_nous.agents.chat_server --port 8003 --host 127.0.0.1   # 同上
   `POST .../cancel` 取消；`GET /healthz` 供 workbench 启动探活。
 - `GET /sessions` 合并两侧：活跃 = 桥记账（摘要标题=首条用户消息截断、最近
   `usage_update` 的 used/size），可恢复 = ACP `session/list` 落盘会话。
-- `POST .../resume` 恢复落盘会话并纳入活跃记账（ACP resume 不重放历史，
-  页面标注「历史不回放」）。
+- `POST .../resume` 恢复落盘会话并纳入活跃记账（ACP resume 不重放历史；
+  `GET .../history` 另从 DSH 落盘日志 `dsh-home/sessions/*/<id>/session.v4.jsonl.zstd`
+  重建静态历史——按 seq 取 user/assistant 的 text 块、跳过 reasoning/工具事件与
+  坏行，页面恢复前先展示，无日志则保留「历史不回放」降级）。
 - 路由组支持 `prefix` 参数（如 `prefix="/chat"`），独立页 fetch/EventSource
   路径基于前缀生成。
+
+### 原生 token 流插件（research_stream.mjs）
+
+ACP 只按整条 committed 消息提交（probe 实证：update 源自 committed 事件，
+无 token 级流）；DSH 内部的逐 provider 增量经 `agent/assistant-stream` 事件
+对外可见（帧含 `start/chunk/end`，chunk 为 `{type:"text-delta", index, text}`
+等原始 provider 增量）。插件 `research_stream.mjs` 订阅该事件（`{global:true}`，
+载荷 `{agent, frame}`，`agent.session.id` 即会话 id），把 `text-delta` 帧逐条
+POST 回桥的 `POST /ingest/<sessionId>`（载荷 `{"sessionUpdate":
+"agent_message_delta", "text": ...}`）。桥 publish 进会话事件流（带单调 seq），
+页面收到 `agent_message_delta` 直写消息区、跳过打字机——**插件缺席时自动退回
+chunk+打字机降级**，链路任何一环失败都静默不影响主会话：
+
+- 端口经 `HSR_NOUS_STREAM_INGEST_PORT` 注入：chat_server 起服时写入自身
+  监听端口，`dsh.py` 的 `_environment` 把 `HSR_NOUS_STREAM_*` 透传进 dsh；
+  未注入（headless/stock web）时插件整体休眠。
+- 安全：`/ingest` 只接受回环来源（127.0.0.1/::1）；未知会话 202 丢弃（插件
+  可能先于桥记账）；未知载荷类型 400。
+- 重连去重：桥给每事件配会话内单调 `seq`，SSE `GET /sessions/{id}/events`
+  支持 `?after=N`（重放跳过 seq≤N）；页面自管重连并按 seq 去重。
 
 协议事实（2026-10-22 实测探针，dsh 0.2.1-rc.2，细节见 acp_client.py docstring）：
 
