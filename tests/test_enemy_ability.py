@@ -979,7 +979,9 @@ def test_camera_numeric_suffix_and_stack_properties():
         "atk": 50, "hp": 1000}
 
 
-def test_property_dynamic_value_write_then_read_is_explicitly_rejected():
+def test_property_dynamic_value_write_then_read_compiles_live():
+    """写后读（#26 期 2/3）：同技能 SetByProperty 后再 ByCompareDynamicValue——
+    旧"旧事件快照"拒因退役，改翻单 hook + effect 级活读条件。"""
     sources = {
         "character_config": {"SkillList": [{
             "Name": "Skill01", "SkillType": "Skill",
@@ -1011,8 +1013,15 @@ def test_property_dynamic_value_write_then_read_is_explicitly_rejected():
     }
     skills = [{"skill_id": "s1", "trigger_key": "Skill01", "param_list": []}]
     out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
-    assert not out["ok"]
-    assert any("旧事件快照" in item["reason"] for item in out["unsupported"])
+    assert out["ok"] and not out["unsupported"], out["unsupported"]
+    effects = out["hooks"][0]["effects"]
+    assert effects[0] == {
+        "effect_type": "set_dynamic_value", "target": "self", "dynamic_key": "Owner_ATK",
+        "amount": "base_stat_of($self.actor_id, 'atk')",
+    }
+    # 写后读分支：Buff 施加效果带 effect 级活读条件（执行时读帧覆盖层，非快照）。
+    assert effects[1]["effect_type"] == "apply_modifier"
+    assert "dynamic_of($self, 'Owner_ATK') >= 1000" in effects[1]["condition"]
 
     sources["abilities"]["A"]["OnStart"] = sources["abilities"]["A"]["OnStart"][:1]
     accepted = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
@@ -1160,7 +1169,7 @@ def test_self_dynamic_value_reads_runtime_value():
     assert runtime["dynamic_values"]["X"] == 4.0
 
 
-def test_dynamic_add_twice_and_write_read_rejected():
+def test_dynamic_add_twice_and_write_read_compiles_live():
     def add_task(key, value):
         return {
             "$type": "RPG.GameCore.SetDynamicValueByAddValue",
@@ -1202,15 +1211,17 @@ def test_dynamic_add_twice_and_write_read_rejected():
     }
     skills = [{"skill_id": "s1", "trigger_key": "Skill01", "param_list": []}]
     out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
-    assert not out["ok"]
-    assert any("旧事件快照" in item["reason"] for item in out["unsupported"])
+    assert out["ok"] and not out["unsupported"], out["unsupported"]
+    effects = [effect for hook in out["hooks"] for effect in hook["effects"]]
+    assert effects[3]["effect_type"] == "apply_modifier"
+    assert effects[3]["condition"] == "dynamic_of($event.target, 'X') == 1"
 
     sources["abilities"]["A"]["OnStart"] = sources["abilities"]["A"]["OnStart"][:3]
     accepted = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
     assert accepted["ok"] and not accepted["unsupported"]
     amounts = [effect["amount"] for hook in accepted["hooks"] for effect in hook["effects"]
                if effect["effect_type"] == "set_dynamic_value"]
-    assert amounts == [1, "dynamic_of($self, 'X') + 1", "dynamic_of($self, 'X') + 1"]
+    assert amounts == [1, "dynamic_of($self, 'X') + (1)", "dynamic_of($self, 'X') + (1)"]
 
 
 def test_conditional_and_unconditional_writes_keep_task_order():
@@ -1331,15 +1342,22 @@ def test_skill_param_switch_selects_static_case():
 
     from hsr_nous.sim_schema.config_ai import dynamic_value_hash
 
+    # 可变 CustomValue（生成期被 config_ai 写）→ 活读翻译：各 Case 效果带
+    # dynamic_of 等值守卫，Default 带全不等守卫（#26 期 2/3）。
     sources["custom_values"] = {"X": 0}
     sources["abilities"]["A"]["OnStart"][0]["Switch"] = _dynamic(
         "AQAR", hashes=[dynamic_value_hash("X")])
     sources["config_ai"] = {
         "$type": "RPG.GameCore.SetDynamicValueByHPRatio", "DynamicKey": {"Value": "X"},
     }
-    rejected = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
-    assert not rejected["ok"]
-    assert any("可变 CustomValue" in item["reason"] for item in rejected["unsupported"])
+    translated = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert translated["ok"] and not translated["unsupported"], translated["unsupported"]
+    effects = translated["hooks"][0]["effects"]
+    assert [effect["modifier_id"] for effect in effects] == ["A", "B", "C"]
+    assert effects[0]["condition"] == "dynamic_of($self, 'X') == 0"
+    assert effects[1]["condition"] == "dynamic_of($self, 'X') == 1"
+    assert effects[2]["condition"] == (
+        "dynamic_of($self, 'X') != 0 and dynamic_of($self, 'X') != 1")
 
     sources["custom_values"] = {"U1zRkAF7AV": 0}
     sources["abilities"]["A"]["OnStart"][0]["Switch"] = _dynamic(
@@ -2675,3 +2693,349 @@ def test_if_lesser_sting_references_resolve():
         assert name in sources["abilities"]
         assert name not in sources["missing_abilities"]
     assert not sources["ambiguous"]
+
+
+# ---------------------------------------------------------------------------
+# 执行帧感知翻译（#26 期 2/3）：真实样例编译产物结构钉 + 引擎级行为钉
+# ---------------------------------------------------------------------------
+
+def _real_compiler(enemy_id: str) -> AbilityCompiler:
+    from hsr_nous.pipeline.enemies.loader import get_enemy_ability_sources, get_enemy_skills
+    return AbilityCompiler(enemy_id, get_enemy_skills(enemy_id),
+                           get_enemy_ability_sources(enemy_id), level=80)
+
+
+def _effects_with(hooks, effect_type):
+    return [effect for hook in hooks for effect in hook.get("effects", [])
+            if effect.get("effect_type") == effect_type]
+
+
+@_need_ability
+def test_real_sw_boss_probability_branch_compiles_bind_roll():
+    """真实 SW_Boss_00（8024010）ByRandomChance(0.5) 召唤分支——
+    单 hook + bind_roll 在前 + Success/Failed 互补 roll 守卫（effect 级）。"""
+    result = _real_compiler("8024010").compile_enemy()
+    hooks = [hook for hook in result["hooks"]
+             if any(effect.get("effect_type") == "bind_roll"
+                    for effect in hook.get("effects", []))]
+    assert hooks, "应编译出概率分支 hook"
+    hook = hooks[0]
+    effects = hook["effects"]
+    assert effects[0]["effect_type"] == "bind_roll"
+    key = effects[0]["roll_key"]
+    assert key and "'" not in key
+    guards = [effect.get("condition", "") for effect in effects[1:]]
+    assert any(f"roll('{key}') < 0.5" in guard for guard in guards), guards
+    assert any(f"roll('{key}') >= 0.5" in guard for guard in guards), guards
+    # bind 无条件（守卫在分支效果上），且任何 effect 不丢 hook 级基础条件
+    assert "condition" not in effects[0]
+
+
+@_need_ability
+def test_real_sw_boss_write_then_read_guard_is_effect_level():
+    """真实 SW_Boss_00 写后读（Skill02_Phase02 Loop 分支：Set 后再 ByCompare）编译为
+    effect 级活读——旧"旧事件快照"拒因位置（Skill02First 键）现为 dynamic_of 守卫."""
+    result = _real_compiler("8024010").compile_enemy()
+    conditioned = [effect for effect in _effects_with(result["hooks"], "set_dynamic_value")
+                   if "Skill02First" in str(effect.get("condition", ""))]
+    assert conditioned, "写后读守卫应落在效果级 condition"
+    assert all(effect["condition"] == "dynamic_of($self, 'Skill02First') == 1"
+               for effect in conditioned)
+
+
+@_need_ability
+def test_real_sw_boss_skill02_phase02_no_write_read_rejection():
+    """旧拒因"同一技能写入后读取动态值会命中旧事件快照"在真实敌人上退役."""
+    result = _real_compiler("8024010").compile_enemy()
+    assert not any("旧事件快照" in item["reason"] for item in result["unsupported"])
+
+
+@_need_ability
+def test_real_cocolia_if_02_switch_live_guards():
+    """真实 CocoliaP1_00_IF_02（1004014）SwitchCaseByDynamicValue(SummonCount)——
+    活读翻译：Case 效果带 dynamic_of 等值守卫。"""
+    result = _real_compiler("1004014").compile_enemy()
+    assert not any("运行时 Switch 尚未注册" in item["reason"]
+                   for item in result["unsupported"])
+    guarded = [effect for hook in result["hooks"]
+               for effect in hook.get("effects", [])
+               if "dynamic_of($self, 'SummonCount') ==" in str(effect.get("condition", ""))]
+    assert guarded, "Switch 活读守卫应出现在效果级 condition"
+
+
+@_need_ability
+def test_real_cocolia_add_clamp_expression_compiles():
+    """真实 Cocolia IF_02 的 AddValue 钳制编译产物——同敌 Boss_Cocolia_BattleScore1
+    回调（AddValue=1, Min=0, Max=5）落在编译产物里：min/max 内联组合、读旧值走
+    dynamic_of（帧覆盖层优先=帧内累积）。卡 #26 点名样例 MinionCount(-1/0/4) 所在
+    modifier 回调因同技能其他拒因（LastSummonMonsters 目标别名）未达编译，其形状由
+    test_add_clamp_minion_count_shape 单元件钉。"""
+    result = _real_compiler("1004014").compile_enemy()
+    amounts = [effect.get("amount") for effect in
+               _effects_with(result["hooks"], "set_dynamic_value")]
+    clamped = [amount for amount in amounts
+               if isinstance(amount, str) and amount.startswith("min(max(")]
+    assert clamped, f"钳制表达式未编译出：{amounts}"
+    assert any("dynamic_of($self, 'FrozenScore') + (1)" in amount
+               and amount.endswith("), (0)), (5))") for amount in clamped), clamped
+
+
+def test_add_clamp_minion_count_shape():
+    """卡 #26 点名样例形状钉：Cocolia MinionCount AddValue=-1, Min=0, Max=4
+    （真实节点取自 Monster_W1_CocoliaP1_00_IF_02_Ability.json，此处经最小件复现其
+    完整字段）——钳制内联表达式逐字钉。"""
+    sources = {
+        "character_config": {"SkillList": [{
+            "Name": "Skill01", "SkillType": "Skill",
+            "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "A",
+        }]},
+        "abilities": {"A": {"Name": "A", "OnStart": [{
+            "$type": "RPG.GameCore.SetDynamicValueByAddValue",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "ModifierOwnerEntity"},
+            "Key": {"Value": "MinionCount"},
+            "AddValue": {"IsDynamic": False, "FixedValue": {"Value": -1}},
+            "Min": {"IsDynamic": False, "FixedValue": {"Value": 0}},
+            "Max": {"IsDynamic": False, "FixedValue": {"Value": 4}},
+            "ContextScope": "TargetEntity",
+        }]}},
+    }
+    skills = [{"skill_id": "s1", "trigger_key": "Skill01", "param_list": []}]
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"], out["unsupported"]
+    (effect,) = _effects_with(out["hooks"], "set_dynamic_value")
+    assert effect["dynamic_key"] == "MinionCount"
+    assert effect["amount"] == "min(max(dynamic_of($self, 'MinionCount') + (-1), (0)), (4))"
+
+
+def test_random_config_presentation_only_consumes_nothing():
+    """真实 SW_Boss_01 RandomConfig 壳（0.333/0.333/0.334，选项全表现）——
+    纯表现权重掷不消耗随机流、不产 bind_roll。"""
+    sources = {
+        "character_config": {"SkillList": [{
+            "Name": "Skill01", "SkillType": "Skill",
+            "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "A",
+        }]},
+        "abilities": {"A": {"Name": "A", "OnStart": [{
+            "$type": "RPG.GameCore.RandomConfig",
+            "OddsList": [
+                {"IsDynamic": False, "FixedValue": {"Value": 0.333}},
+                {"IsDynamic": False, "FixedValue": {"Value": 0.333}},
+                {"IsDynamic": False, "FixedValue": {"Value": 0.334}},
+            ],
+            "TaskList": [
+                [{"$type": "RPG.GameCore.TriggerEffect", "EffectPath": "fx/1"}],
+                [{"$type": "RPG.GameCore.TriggerEffect", "EffectPath": "fx/2"}],
+                [{"$type": "RPG.GameCore.TriggerEffect", "EffectPath": "fx/3"}],
+            ],
+        }]}},
+    }
+    skills = [{"skill_id": "s1", "trigger_key": "Skill01", "param_list": []}]
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    assert not _effects_with(out["hooks"], "bind_roll")
+
+
+def test_random_config_weighted_translation_structure():
+    """加权掷翻译结构（真实壳+机制替换件：语料中普通 RandomConfig 选项全为表现，
+    机制内容按真实 OddsList 壳替换）——bind scale=Σ权重，守卫为累计权重区间。"""
+    sources = {
+        "character_config": {"SkillList": [{
+            "Name": "Skill01", "SkillType": "Skill",
+            "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "A",
+        }]},
+        "abilities": {"A": {"Name": "A", "OnStart": [{
+            "$type": "RPG.GameCore.RandomConfig",
+            "OddsList": [
+                {"IsDynamic": False, "FixedValue": {"Value": 0.333}},
+                {"IsDynamic": False, "FixedValue": {"Value": 0.333}},
+                {"IsDynamic": False, "FixedValue": {"Value": 0.334}},
+            ],
+            "TaskList": [
+                [{"$type": "RPG.GameCore.SetDynamicValue", "DynamicKey": {"Value": "P"},
+                  "Value": {"IsDynamic": False, "FixedValue": {"Value": 1}}}],
+                [{"$type": "RPG.GameCore.SetDynamicValue", "DynamicKey": {"Value": "P"},
+                  "Value": {"IsDynamic": False, "FixedValue": {"Value": 2}}}],
+                [{"$type": "RPG.GameCore.SetDynamicValue", "DynamicKey": {"Value": "P"},
+                  "Value": {"IsDynamic": False, "FixedValue": {"Value": 3}}}],
+            ],
+        }]}},
+    }
+    skills = [{"skill_id": "s1", "trigger_key": "Skill01", "param_list": []}]
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"], out["unsupported"]
+    effects = out["hooks"][0]["effects"]
+    binds = [effect for effect in effects if effect["effect_type"] == "bind_roll"]
+    assert len(binds) == 1 and binds[0]["scale"] == pytest.approx(1.0)
+    key = binds[0]["roll_key"]
+    guards = [effect.get("condition", "") for effect in effects
+              if effect["effect_type"] == "set_dynamic_value"]
+    assert guards[0] == f"roll('{key}') <= 0.333"
+    assert guards[1] == f"roll('{key}') > 0.333 and roll('{key}') <= 0.666"
+    assert guards[2] == f"roll('{key}') > 0.666 and roll('{key}') <= 1.0"
+
+
+def test_random_config_memory_fields_stay_unsupported():
+    """真实 AML Boss IF RandomConfig 壳（RandomUnique + RandomMaskKey）——
+    战斗级记忆显式 unsupported，禁止猜测。"""
+    sources = {
+        "character_config": {"SkillList": [{
+            "Name": "Skill01", "SkillType": "Skill",
+            "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "A",
+        }]},
+        "abilities": {"A": {"Name": "A", "OnStart": [{
+            "$type": "RPG.GameCore.RandomConfig",
+            "OddsList": [{"IsDynamic": False, "FixedValue": {"Value": 1.0}}],
+            "RandomUnique": True,
+            "RandomMaskKey": {"Value": "Mask"},
+            "TaskList": [[{
+                "$type": "RPG.GameCore.SetDynamicValue", "DynamicKey": {"Value": "P"},
+                "Value": {"IsDynamic": False, "FixedValue": {"Value": 1}}}]],
+        }]}},
+    }
+    skills = [{"skill_id": "s1", "trigger_key": "Skill01", "param_list": []}]
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert not out["ok"]
+    assert any("战斗级随机记忆" in item["reason"] for item in out["unsupported"])
+    assert not _effects_with(out["hooks"], "bind_roll")
+
+
+def test_dynamic_copying_self_alias_translates():
+    """SetDynamicValueByCopying 自指源（真实分布：Caster/ModifierOwnerEntity/空）→
+    ToKey := dynamic_of($self, FromKey)；跨 modifier 读与非自指源拒绝。"""
+    def copying(from_alias, from_key="Src", to_key="Dst", modifier=None):
+        node = {
+            "$type": "RPG.GameCore.SetDynamicValueByCopying",
+            "FromTargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": from_alias},
+            "FromDynamicKey": {"Value": from_key},
+            "ToDynamicKey": {"Value": to_key},
+        }
+        if modifier:
+            node["FromModifierName"] = {"Value": modifier}
+        return node
+
+    sources = {
+        "character_config": {"SkillList": [{
+            "Name": "Skill01", "SkillType": "Skill",
+            "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "A",
+        }]},
+        "abilities": {"A": {"Name": "A", "OnStart": [
+            copying("Caster"), copying("Caster", "Src2", "Dst2"),
+            copying("LevelEntity"),
+        ]}},
+    }
+    skills = [{"skill_id": "s1", "trigger_key": "Skill01", "param_list": []}]
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    copies = _effects_with(out["hooks"], "set_dynamic_value")
+    assert [(effect["dynamic_key"], effect["amount"]) for effect in copies] == [
+        ("Dst", "dynamic_of($self, 'Src')"),
+        ("Dst2", "dynamic_of($self, 'Src2')"),
+    ]
+    assert any("动态拷贝" in item["reason"] for item in out["unsupported"])
+    assert not out["ok"]
+
+    sources["abilities"]["A"]["OnStart"] = [copying("Caster", modifier="M")]
+    rejected = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert any("跨 modifier" in item["reason"] for item in rejected["unsupported"])
+
+
+def test_event_mode_probability_branch_stays_unsupported():
+    """事件域（被动）概率分支可在执行帧外发射——显式拒收不猜（14_policy.md）。"""
+    sources = {
+        "character_config": {"SkillList": [{
+            "Name": "SkillP01", "SkillType": "Passive",
+            "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "A",
+        }]},
+        "abilities": {"A": {"Name": "A", "Modifiers": {"M": {
+            "BehaviorFlagList": ["Deathrattle"],
+            "_CallbackList": [{
+                "Event": "OnDeathrattle",
+                "CallbackConfig": [{
+                    "$type": "RPG.GameCore.PredicateTaskList",
+                    "Predicate": {"$type": "RPG.GameCore.ByRandomChance",
+                                  "Chance": {"IsDynamic": False, "FixedValue": {"Value": 0.5}}},
+                    "SuccessTaskList": [{
+                        "$type": "RPG.GameCore.SetDynamicValue", "DynamicKey": {"Value": "X"},
+                        "Value": {"IsDynamic": False, "FixedValue": {"Value": 1}}}],
+                }],
+            }],
+        }}}},
+    }
+    skills = [{"skill_id": "s1", "trigger_key": "SkillP01", "param_list": []}]
+    out = AbilityCompiler("fake", skills, sources).compile_passive("A", "s1")
+    assert not out["ok"]
+    assert any("帧外" in item["reason"] for item in out["unsupported"])
+    assert not _effects_with(out["hooks"], "bind_roll")
+
+
+def test_probability_branch_engine_level_roll_and_expected():
+    """引擎级：编译产物形态（bind_roll + 互补守卫）在 roll/expected 两模式下行为钉——
+    roll 模式同 seed 同分支（0.5 守卫两侧互斥、恰好一边生效）；
+    expected 模式绑 0.5 下邻浮点，< 0.5 分支恒生效、>= 0.5 分支恒不生效。"""
+    import random as _random
+    from hsr_nous.sim.compile.compiled import CompiledHook
+    from hsr_nous.sim_schema.expression import parse
+    from tests._builders import engine_vs_dummy
+
+    def build(mode, seed):
+        eng = engine_vs_dummy(mode=mode, seed=seed)
+        effects = (
+            {"effect_type": "bind_roll", "roll_key": "K"},
+            {"effect_type": "gain_resource", "resource_id": "lo", "amount": 1,
+             "condition": "roll('K') < 0.5"},
+            {"effect_type": "gain_resource", "resource_id": "hi", "amount": 1,
+             "condition": "roll('K') >= 0.5"},
+        )
+        eng._compiled_hooks = [CompiledHook(
+            owner_id="e1", event="on_action", condition_expr=None, effects=effects)]
+        eng._hooks._subscribe_compiled_hooks()
+        eng._execute_action(eng.state.actors["hero"], eng.actions_by_actor["hero"][0],
+                            _action_broadcast={
+                                "actor": "hero", "action_type": "basic", "action_id": "b",
+                                "target_type": "single", "actor_type": "character"})
+        return eng
+
+    # 行动结算（首段直伤暴击判定）先消耗主流一次，on_action 的 bind 取第二抽。
+    seq = _random.Random(11)
+    seq.random()
+    first_draw = seq.random()
+    eng = build("roll", 11)
+    st = eng.state.actors["e1"]
+    expected_lo, expected_hi = (1.0, 0.0) if first_draw < 0.5 else (0.0, 1.0)
+    assert st.resources.get("lo", 0.0) == expected_lo, "守卫两侧互斥且恰好一边生效"
+    assert st.resources.get("hi", 0.0) == expected_hi
+
+    eng_exp = build("expected", 11)
+    st_exp = eng_exp.state.actors["e1"]
+    assert st_exp.resources.get("lo", 0.0) == 1.0, "expected 绑 0.5 下邻浮点，< 0.5 恒真"
+    assert st_exp.resources.get("hi", 0.0) == 0.0
+
+
+def test_probability_branch_zero_cost_after_bind_engine_level():
+    """引擎级：bind 后同键读取零消耗——带守卫的两次读取只消耗主流一次."""
+    import random as _random
+    from hsr_nous.sim.compile.compiled import CompiledHook
+    from tests._builders import engine_vs_dummy
+
+    def build(amount):
+        eng = engine_vs_dummy(mode="roll", seed=23)
+        effects = (
+            {"effect_type": "bind_roll", "roll_key": "K"},
+            {"effect_type": "gain_resource", "resource_id": "d", "amount": amount},
+        )
+        eng._compiled_hooks = [CompiledHook(
+            owner_id="e1", event="on_action", condition_expr=None, effects=effects)]
+        eng._hooks._subscribe_compiled_hooks()
+        eng._execute_action(eng.state.actors["hero"], eng.actions_by_actor["hero"][0],
+                            _action_broadcast={
+                                "actor": "hero", "action_type": "basic", "action_id": "b",
+                                "target_type": "single", "actor_type": "character"})
+        return eng
+
+    single = build("roll('K')")
+    double = build("roll('K') + roll('K')")
+    seq = _random.Random(23)
+    seq.random()   # 暴击判定先消耗一流
+    first = seq.random()
+    assert single.state.actors["e1"].resources["d"] == pytest.approx(first)
+    assert double.state.actors["e1"].resources["d"] == pytest.approx(2 * first)
+    assert single.pipeline.rng.getstate() == double.pipeline.rng.getstate()

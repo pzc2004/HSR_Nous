@@ -1807,13 +1807,19 @@ class CombatEngine:
             runtime.setdefault("dynamic_values", {}).update(kv)
 
     def _execute_action(self, actor_state: ActorState, action: Action, *, _insert: bool = False,
-                        forced_target: Optional[ActorState] = None) -> None:
+                        forced_target: Optional[ActorState] = None,
+                        _action_broadcast: Optional[Dict[str, Any]] = None) -> None:
         """行动结算主流程入口：全程压执行帧——正常返回提交、异常整帧丢弃.
 
         嵌套执行（trigger_action 插入行动/追击、终结技插队经此入口）压子帧，子帧提交
         后其写入并入父帧覆盖层（子执行=完整隔离单元）；同窗 hooks/modifier 回调
         （本行动 emit 出的事件链）共享本帧——"modifier 回调写→同窗后续事件读"的
         跨事件链载体。帧语义见 frame.py 与 23_event_hook_system.md §23.15。
+
+        `_action_broadcast`：on_action 广播载荷的**静态部分**（actor/action_type/
+        action_id/target_type/actor_type/insert/tag……）——传入时由本入口在弹栈前补
+        `target`/`sp_consumed` 发射，广播随行动执行同帧（编译产物概率分支挂
+        on_action 仍落在帧内）；None = 调用方自发自收（tests 直调等旧口径不变）。
         """
         frame = ExecutionFrame(action_id=action.action_id,
                                actor_id=actor_state.actor.actor_id)
@@ -1824,6 +1830,33 @@ class CombatEngine:
         except Exception:
             self._frame_stack.pop()
             raise
+        if _action_broadcast is not None:
+            # 载荷全字面 dict（事件 payload 收割闸要求发射点 AST 可见——变量/解包不可见，
+            # 见 tests/test_event_payload_registry）：插入式行动带 insert/tag
+            # （trigger_action 口径），常态行动形状对齐（无插入标记——
+            # TestUltimateFiresOnAction 钉）。
+            if _action_broadcast.get("insert"):
+                self.bus.emit("on_action", {
+                    "actor": _action_broadcast["actor"],
+                    "action_type": _action_broadcast["action_type"],
+                    "action_id": _action_broadcast["action_id"],
+                    "target_type": _action_broadcast["target_type"],
+                    "actor_type": _action_broadcast["actor_type"],
+                    "target": self._last_target_id,
+                    "sp_consumed": self._last_sp_consumed,
+                    "insert": True,
+                    "tag": str(_action_broadcast.get("tag", "")),
+                }, self.state)
+            else:
+                self.bus.emit("on_action", {
+                    "actor": _action_broadcast["actor"],
+                    "action_type": _action_broadcast["action_type"],
+                    "action_id": _action_broadcast["action_id"],
+                    "target_type": _action_broadcast["target_type"],
+                    "actor_type": _action_broadcast["actor_type"],
+                    "target": self._last_target_id,
+                    "sp_consumed": self._last_sp_consumed,
+                }, self.state)
         self._frame_stack.pop()
         self._commit_frame(frame)
 
@@ -2203,14 +2236,10 @@ class CombatEngine:
         玩家手动点放+手选目标）：不耗能量/充能、不入形态机、**不发 on_ultimate**（非终结技，
         误发会带偏 on_ultimate hook 族）；行动结算与 on_action 广播同 _execute_action 口径。
         """
-        self._execute_action(caster, action)
-        self.bus.emit("on_action", {"actor": caster.actor.actor_id,
-                                     "action_type": action.action_type,
-                                     "action_id": action.action_id,
-                                     "target_type": action.target_type,
-                                     "target": self._last_target_id,
-                                     "sp_consumed": self._last_sp_consumed,
-                                     "actor_type": caster.actor.actor_type}, self.state)
+        self._execute_action(caster, action, _action_broadcast={
+            "actor": caster.actor.actor_id, "action_type": action.action_type,
+            "action_id": action.action_id, "target_type": action.target_type,
+            "actor_type": caster.actor.actor_type})
         return True
 
     def _activate_ultimate(self, st: ActorState) -> bool:
@@ -2306,17 +2335,24 @@ class CombatEngine:
                     initial_ratio=ratio,
                 )
         else:
-            self._execute_action(caster, ult)
-        # 终结技施放成功也发 on_action（官方 "uses an ability" 三层措辞在案——
-        # on_action = 一切能力施放；入口变身技与常态技同口径，activate_ultimate 免费激活
-        # 同经此漏斗同发）。形状对齐常态行动；序 = 先 on_action 后 on_ultimate
-        self.bus.emit("on_action", {"actor": caster.actor.actor_id,
-                                     "action_type": ult.action_type,
-                                     "action_id": ult.action_id,
-                                     "target_type": ult.target_type,
-                                     "target": self._last_target_id,
-                                     "sp_consumed": self._last_sp_consumed,
-                                     "actor_type": caster.actor.actor_type}, self.state)
+            # 终结技施放成功也发 on_action（官方 "uses an ability" 三层措辞在案——
+            # on_action = 一切能力施放；activate_ultimate 免费激活同经此漏斗同发）。
+            # 形状对齐常态行动；序 = 先 on_action 后 on_ultimate（on_action 随行动同帧，
+            # on_ultimate 由调用方在帧外补发）。
+            self._execute_action(caster, ult, _action_broadcast={
+                "actor": caster.actor.actor_id, "action_type": ult.action_type,
+                "action_id": ult.action_id, "target_type": ult.target_type,
+                "actor_type": caster.actor.actor_type})
+        if entry is not None:
+            # 入口变身技不经 _execute_action——on_action 照发（旧调用方口径：entry 与
+            # 常态同漏斗同发），帧外广播（变身副作用不属于行动执行帧）。
+            self.bus.emit("on_action", {"actor": caster.actor.actor_id,
+                                        "action_type": ult.action_type,
+                                        "action_id": ult.action_id,
+                                        "target_type": ult.target_type,
+                                        "target": self._last_target_id,
+                                        "sp_consumed": self._last_sp_consumed,
+                                        "actor_type": caster.actor.actor_type}, self.state)
         self.bus.emit("on_ultimate", {"source": caster.actor.actor_id, "action": ult.action_id,
                                       "target": self._last_target_id}, self.state)
         return True
@@ -2475,13 +2511,10 @@ class CombatEngine:
                 action = self._select_enemy_policy_action(actor_state)
             if action is None:
                 return
-        self._execute_action(actor_state, action, forced_target=target_override)
-        self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": action.action_type,
-                                     "action_id": action.action_id,
-                                     "target_type": action.target_type,
-                                     "target": self._last_target_id,
-                                     "sp_consumed": self._last_sp_consumed,
-                                     "actor_type": actor.actor_type}, self.state)
+        self._execute_action(actor_state, action, forced_target=target_override, _action_broadcast={
+            "actor": actor.actor_id, "action_type": action.action_type,
+            "action_id": action.action_id, "target_type": action.target_type,
+            "actor_type": actor.actor_type})
 
     def trigger_action(self, actor_state: ActorState, action: Action, *, tag: str = "insert",
                        pool_override: Optional[float] = None,
@@ -2504,14 +2537,14 @@ class CombatEngine:
         if pool_override is not None:
             self._aha_pool_override = float(pool_override)
         try:
-            self._execute_action(actor_state, action, _insert=True, forced_target=forced_target)
-            self.bus.emit("on_action", {
-                "actor": actor_state.actor.actor_id, "action_type": action.action_type,
-                "action_id": action.action_id, "target_type": action.target_type,
-                "target": self._last_target_id,
-                "sp_consumed": self._last_sp_consumed,
-                "insert": True, "tag": tag, "actor_type": actor_state.actor.actor_type,
-            }, self.state)
+            self._execute_action(actor_state, action, _insert=True, forced_target=forced_target,
+                                 _action_broadcast={
+                                     "actor": actor_state.actor.actor_id,
+                                     "action_type": action.action_type,
+                                     "action_id": action.action_id,
+                                     "target_type": action.target_type,
+                                     "insert": True, "tag": tag,
+                                     "actor_type": actor_state.actor.actor_type})
         finally:
             # 恢复在 emit 之后——覆写锚罩整个代放含其 on_action 段钩（凡读池处同锚：
             # 行动层与 hook 段一致结算，欢愉主终结技固定 20 族实证）
@@ -2588,13 +2621,10 @@ class CombatEngine:
                   if self.pipeline.mode == MODE_ROLL and self.pipeline.rng is not None
                   else targets[0])
         action = replace(action, target_type=target_type)
-        self._execute_action(actor_state, action, forced_target=target)
-        self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": action.action_type,
-                                     "action_id": action.action_id,
-                                     "target_type": action.target_type,
-                                     "target": self._last_target_id,
-                                     "sp_consumed": self._last_sp_consumed,
-                                     "actor_type": actor.actor_type}, self.state)
+        self._execute_action(actor_state, action, forced_target=target, _action_broadcast={
+            "actor": actor.actor_id, "action_type": action.action_type,
+            "action_id": action.action_id, "target_type": action.target_type,
+            "actor_type": actor.actor_type})
         return True
 
     def _run_turn(self, actor_state: ActorState, kind: str) -> None:
@@ -2657,13 +2687,11 @@ class CombatEngine:
                             if self._turn_consumed:
                                 pass   # 决策点内放变身（ult_now 入口技）= 本回合行动已被消耗
                             else:
-                                self._execute_action(actor_state, action)
-                                self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": action.action_type,
-                                                     "action_id": action.action_id,
-                                                     "target_type": action.target_type,
-                                                     "target": self._last_target_id,
-                                                     "sp_consumed": self._last_sp_consumed,
-                                                     "actor_type": actor.actor_type}, self.state)
+                                self._execute_action(actor_state, action, _action_broadcast={
+                                    "actor": actor.actor_id, "action_type": action.action_type,
+                                    "action_id": action.action_id,
+                                    "target_type": action.target_type,
+                                    "actor_type": actor.actor_type})
                                 # 阶段 3 · 行动后窗口
                                 self._try_ultimate(actor_state, ULT_AFTER_ACTION)
                                 self._count_state_action(actor_state, had_state_at_turn_start)
@@ -2707,16 +2735,13 @@ class CombatEngine:
         if sdef is None or sdef.control != "manual":
             self._auto_target_ctx += 1     # 自动回合目标免问（嵌套 trigger 同免）
         try:
-            self._execute_action(actor_state, action)
+            self._execute_action(actor_state, action, _action_broadcast={
+                "actor": actor.actor_id, "action_type": action.action_type,
+                "action_id": action.action_id, "target_type": action.target_type,
+                "actor_type": actor.actor_type})
         finally:
             if sdef is None or sdef.control != "manual":
                 self._auto_target_ctx -= 1
-        self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": action.action_type,
-                                     "action_id": action.action_id,
-                                     "target_type": action.target_type,
-                                     "target": self._last_target_id,
-                                     "sp_consumed": self._last_sp_consumed,
-                                     "actor_type": actor.actor_type}, self.state)
 
     # ------------------------------------------------------------------
     # 主循环

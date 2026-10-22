@@ -271,6 +271,7 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "absorb_modifier": frozenset({"modifier_name", "resource_id"}),
     "set_resource": frozenset({"resource_id", "amount"}),
     "set_dynamic_value": frozenset({"dynamic_key", "amount", "amount_target"}),
+    "bind_roll": frozenset({"roll_key", "scale"}),
     "once_per_battle": frozenset({"latch_id"}),
     "refund_bank": frozenset({"resource_id"}),
     "gain_skill_point": frozenset({"amount", "overflow_to"}),

@@ -126,6 +126,7 @@ hooks:
 | `random_choice` | **已实现**（hook 通道——`options` 中随机执行一个 effect；expected 取首项，roll 均匀随机） |
 | `break_damage` / `cancel_event` / `set_resource` / `heal_self` / `adjust_stacks` | **已实现**（hook 通道；原引擎暗原语，本节补登，见下） |
 | `set_dynamic_value` | **已实现**（hook 通道——ConfigAI 动态值设值，`dynamic_key` + `amount`，见下） |
+| `bind_roll` | **已实现**（hook 通道——执行帧共享掷骰绑定锚，`roll_key` + 可选 `scale`（表达式槽）；编译器概率分支翻译的前置绑定，帧语义与分域规则见 `23_event_hook_system.md` §23.15） |
 | `absorb_modifier` | **已实现**（hook 通道——按名称吸收可驱散 modifier，累计层数入持有者资源，见下） |
 | `once_per_battle` | **已实现**（hook 通道——战斗级 latch；同 `latch_id` 后续 hook 效果不再执行，见下） |
 | `heal` / `summon` / `dismiss_summon` / `trigger_dot` / `adjust_duration` / `add_toughness_bar` / `restore_toughness` / `reduce_toughness` | **已实现**（hook 通道——2026-09 收编：heal=任意目标治疗；summon/dismiss=召唤物入离场；trigger_dot=强制结算目标 DoT 不耗 duration（scope/dot_element 选择性过滤 + ratio 引爆比例可选，缺省全结全额）；adjust_duration=时长 ±N ≠ refresh；add_toughness_bar=追加韧性条（虚韧性族，`03_actor.md` §3.10 条序模型）；restore_toughness=恢复韧性并解除击破态；reduce_toughness=固定削韧并支持 floor 保底） |
@@ -992,6 +993,23 @@ on_insufficient: "fail"      # "fail" | "clamp" | "consume_all"
 `ByCompareMonsterPhase` / 阶段门控读取；其余键仍写动态值表。
 外宇宙之冰的 `XP_Ice_Elite_Powerful_Modifier` 在 `OnStack/OnDestroy` 把 `Phase_Flag`
 设为 2/1，是首个实例。
+
+#### `bind_roll`【已实现】
+
+执行帧共享掷骰绑定锚（23_event_hook_system.md §23.15）——编译器概率分支翻译
+（`ByRandomChance`/`RandomConfig`）的前置绑定：
+
+```yaml
+- effect_type: "bind_roll"
+  roll_key: "Skill02_OnStart_1"   # 必填，帧级绑定键（编译器按节点路径生成稳定键）
+  scale: "0.5 + 0.3"             # 可选表达式槽，缺省 1——绑定值 = roll(roll_key) × scale
+```
+
+绑定后同键 `roll('<键>')` 读取零消耗返回绑定值；roll 模式采 `pipeline.rng`（消耗主流一次），
+expected 模式绑 `0.5 的下邻浮点`（与 `mechanic_chance` 的 `p>=0.5` 期望口径逐比特一致）。
+守卫示例（`ByRandomChance` 翻译）：Success 效果 `condition: "roll('k') < 0.5"`、
+Failed 效果 `condition: "roll('k') >= 0.5"`。帧外调用显式报错（同 `roll` 分域规则）；
+`RandomConfig` 翻译用 `scale=Σ权重` + 累计权重区间守卫（14_policy.md 概率分支节）。
 
 #### `once_per_battle`【已实现】
 

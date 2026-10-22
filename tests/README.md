@@ -48,6 +48,7 @@ pytest tests/test_doc_lint.py -v
 
 ## 修改记录
 
+- 执行帧期 2/3（编译器翻译）：`test_enemy_ability` 扩真实样例钉——SW_Boss_00 概率分支 bind_roll 结构/写后读 effect 级守卫、Cocolia IF_02 Switch 活读守卫与 AddValue 钳制表达式、RandomConfig 加权翻译/表现跳过/战斗级记忆拒收、Copying 自指翻译、事件域概率拒收、引擎级 roll/expected 两模式行为钉；三个"旧事件快照拒收"测试改写为活读翻译语义钉
 - 新增横向族 `test_execution_frame_v26`（执行帧 #26 语义钉，见「测试组织」）
 
 - 补登记闸 19（生产写保护闸，1a7ef51 引入；编号无闸 18——按测试文件实际编号）：tests/ 调 `write_*_template` 必须显式 `out_dir=`，缺省写生产 `data/sim_templates/`（标注层团灭事故见测试文件头注）

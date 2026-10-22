@@ -8,6 +8,7 @@ CompiledHook 订阅进事件总线、hook 条件/数值的白名单表达式求�
 """
 from __future__ import annotations
 
+import math
 import types
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
@@ -1112,6 +1113,23 @@ class HookRuntime:
                         frame.write(t2.actor.actor_id, key, float(value))
                     else:
                         runtime.setdefault("dynamic_values", {})[key] = float(value)
+        elif t == "bind_roll":
+            # 执行帧共享掷骰绑定锚（23 §23.15 / 05_effects §bind_roll）：编译器概率分支
+            # （ByRandomChance/RandomConfig）翻译的前置绑定——绑定值 = roll(roll_key) × scale。
+            # roll 模式采 pipeline.rng（消耗主流一次）；expected 模式绑 0.5 的下邻浮点
+            # （与 mechanic_chance 的 p>=0.5 期望口径逐比特一致，两通道不许两种期望语义）。
+            # 帧外调用显式报错（roll 只活在行动执行内）。
+            frame = self._engine.current_frame
+            if frame is None:
+                raise ExpressionError(
+                    f"bind_roll({eff.get('roll_key')!r}) 需要活动执行帧"
+                    f"——仅行动执行内的 effect 表达式可用")
+            scale = self._hook_amount(eff["scale"], st, payload) if "scale" in eff else 1.0
+            key = str(eff["roll_key"])
+            if self._engine.pipeline.mode == MODE_ROLL:
+                frame.roll_bind(key, lambda: self._engine.pipeline.rng.random() * scale)
+            else:
+                frame.roll_bind(key, lambda: math.nextafter(0.5, 0.0) * scale)
         elif t == "refund_bank":
             # bank 返还（16 §16.12 糖展开原语）：<rid>_bank → <rid> clamp 回填——
             # ③防递归：from_bank=True（不回流）；多出作废（银行全清，钉字面口径）

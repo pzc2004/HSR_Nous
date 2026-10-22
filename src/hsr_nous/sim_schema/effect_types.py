@@ -28,6 +28,9 @@ ENGINE_EFFECT_TYPES = frozenset({
     "gain_resource",     # 自定义资源 +=（发 on_resource_gain）
     "set_resource",      # 自定义资源直接设值
     "set_dynamic_value", # ConfigAI 动态值直接设值（dynamic_key + amount，写敌方 policy 运行态）
+    "bind_roll",        # 执行帧共享掷骰绑定锚（roll_key + 可选 scale——编译器概率分支
+                        # 翻译前置绑定，23_event_hook_system §23.15；roll 模式采主流、
+                        # expected 绑 0.5 下邻浮点，与 mechanic_chance 期望口径一致）
     "once_per_battle",  # 战斗级 latch（latch_id 已存在则终止当前 hook 剩余效果）
     "refund_bank",       # bank 返还（16 §16.12 糖展开原语：<rid>_bank → <rid> clamp 回填不回流）
     "gain_skill_point",  # 战技点 +=（可携 overflow_to——溢出恢复转记资源池，花火 1130603 族）
@@ -90,5 +93,5 @@ POLICY_SELECTOR_DICT_TYPES = frozenset({"min", "max", "random", "has_modifier", 
 EFFECT_EXPR_SLOTS = frozenset({
     "amount", "ratio", "scaling_atk", "scaling_hp", "delta", "percent", "floor",
     "toughness_dmg", "punchline_source", "pool_override", "elation",
-    "instances_expr", "repeat_scaling_atk",
+    "instances_expr", "repeat_scaling_atk", "scale",
 })

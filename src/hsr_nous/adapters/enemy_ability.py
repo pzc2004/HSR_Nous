@@ -3,6 +3,15 @@
 只按上游节点类型注册转换，不写怪物/技能 ID 分支。TBGD 提供数值与结构；
 Fandom 仅由调用方传入名字和受击回能等文本补充。未注册节点、未知动态哈希、
 条件分支或目标语义不明都会进入 ``unsupported``，候选不得因此定稿。
+
+执行帧感知翻译（#26 期 2/3，语义锚 23_event_hook_system.md §23.15 +
+14_policy.md 概率分支节）：写后读谓词（同技能写入后再 ByCompareDynamicValue/
+ByCompareMonsterPhase）与概率分支（ByRandomChance/RandomConfig）编译为
+**单 hook + 纯 effect 级 condition**——effect 级 condition 是执行时活读，
+读得到帧覆盖层的未提交写入；概率分支前置 ``bind_roll`` 绑定共享掷骰（roll 键
+按节点路径生成稳定键）。PostfixExpr 中被写键的动态哈希经键名反查表回落为
+``dynamic_of`` 活读。概率分支限主动技能域（事件域可在帧外发射）；战斗级随机
+记忆（RandomUnique/RandomMaskKey/RandomCount）保持显式 unsupported。
 """
 from __future__ import annotations
 
@@ -115,6 +124,7 @@ TASK_HANDLERS = {
     "RPG.GameCore.ModifySPNew": "_compile_modify_energy",
     "RPG.GameCore.ModifyTeamBoostPoint": "_compile_modify_skill_point",
     "RPG.GameCore.PredicateTaskList": "_compile_predicate_tasks",
+    "RPG.GameCore.RandomConfig": "_compile_random_config",
     "RPG.GameCore.Retarget": "_compile_retarget",
     "RPG.GameCore.RemoveModifier": "_compile_remove_modifier",
     "RPG.GameCore.RemoveModifierByBehaviorFlag": "_compile_remove_modifier_by_behavior_flag",
@@ -124,6 +134,7 @@ TASK_HANDLERS = {
     "RPG.GameCore.SetDynamicValue": "_compile_define_dynamic",
     "RPG.GameCore.SetDynamicValueByAddValue": "_compile_dynamic_add",
     "RPG.GameCore.SetDynamicValueByCharacterCount": "_compile_character_count",
+    "RPG.GameCore.SetDynamicValueByCopying": "_compile_dynamic_copying",
     "RPG.GameCore.SetDynamicValueByHPRatio": "_compile_hp_ratio_dynamic",
     "RPG.GameCore.SetDynamicValueByModifierValue": "_compile_modifier_value",
     "RPG.GameCore.SetDynamicValueByProperty": "_compile_property_value",
@@ -303,6 +314,7 @@ class _Context:
     summons: List[Dict[str, Any]] = field(default_factory=list)
     unsupported: List[Dict[str, str]] = field(default_factory=list)
     handled: List[str] = field(default_factory=list)
+    live_condition: str = "true"
 
 
 class AbilityCompiler:
@@ -334,6 +346,19 @@ class AbilityCompiler:
         }
         self.dynamic_keys, self.written_dynamic_keys = self._scan_dynamic_keys()
         self.dynamic_symbols = self._character_symbols()
+        # 被写键的哈希 → dynamic_of 活读回落（最低优先级符号层）：PostfixExpr 读取
+        # 本敌任意已登记动态键（含生成期被写键与 modifier 自槽）时不再"未知哈希"——
+        # 活读走四层读链最高优先的帧覆盖层（写后读，#26 期 2/3）；同名哈希冲突不回落。
+        name_symbols: Dict[int, str] = {}
+        for name in self.dynamic_keys:
+            if any(ch in name for ch in "'\"\\"):
+                continue
+            hashed = dynamic_value_hash(name)
+            if hashed in name_symbols:
+                name_symbols.pop(hashed, None)   # 冲突撤回落（保持显式拒绝）
+            else:
+                name_symbols[hashed] = f"dynamic_of($self.actor_id, '{name}')"
+        self.dynamic_name_symbols = name_symbols
         # 只读 CustomValue 与 SkillParam 分命名空间，保留 Switch 的哈希冲突检测。
         self.custom_value_symbols = {
             dynamic_value_hash(str(name)): value
@@ -363,6 +388,12 @@ class AbilityCompiler:
 
     @staticmethod
     def _add_effect(ctx: _Context, effect: Dict[str, Any]) -> None:
+        if ctx.live_condition != "true":
+            # 帧感知分支（写后读/概率）的 effect 级活读守卫：执行时求值，读得到帧
+            # 覆盖层（#26 期 2/3）；与 hook 级快照条件（ctx.condition → _condition）
+            # 正交互——两层都求值。
+            effect = {**effect, "condition": AbilityCompiler._and_condition(
+                str(effect.get("condition") or "true"), ctx.live_condition)}
         if ctx.condition != "true":
             effect = {**effect, "_condition": ctx.condition}
             target = effect.get("target")
@@ -382,6 +413,21 @@ class AbilityCompiler:
             ctx.pre_effects.append(effect)
         else:
             ctx.effects.append(effect)
+
+    @staticmethod
+    def _add_live_effect(ctx: _Context, effect: Dict[str, Any], guard: str) -> None:
+        """帧感知分支的效果入口：guard 链入 ctx.live_condition 后经 _add_effect 落
+        **effect 级 condition**（执行时活读，读得到帧覆盖层）。"""
+        previous = ctx.live_condition
+        ctx.live_condition = AbilityCompiler._and_condition(previous, guard)
+        AbilityCompiler._add_effect(ctx, effect)
+        ctx.live_condition = previous
+
+    @staticmethod
+    def _stable_roll_key(path: str) -> str:
+        """概率分支 roll 稳定键：节点路径 sanit 成表达式安全的标识（帧 rolls 表键）."""
+        return "R" + "".join(ch if (ch.isalnum() or ch == "_") else "_"
+                             for ch in str(path))[:96]
 
     @staticmethod
     def _make_hooks(ctx: _Context, base_condition: str, *,
@@ -419,7 +465,8 @@ class AbilityCompiler:
 
     def _value(self, raw: Any, ctx: _Context, path: str,
                symbols: Optional[Dict[int, Any]] = None) -> Any:
-        selected = ({**self.custom_value_symbols, **self.dynamic_symbols, **ctx.count_expressions}
+        selected = ({**self.dynamic_name_symbols, **self.custom_value_symbols,
+                     **self.dynamic_symbols, **ctx.count_expressions}
                     if symbols is None else {**self.custom_value_symbols, **symbols})
         try:
             return compile_dynamic_value(raw, selected)
@@ -664,6 +711,12 @@ class AbilityCompiler:
                         and self._presentation_only(task.get("FailedTaskList") or [])):
                     continue
                 return False
+            if node_type == "RPG.GameCore.RandomConfig":
+                if all(self._presentation_only(
+                        option if isinstance(option, list) else [option])
+                        for option in task.get("TaskList") or []):
+                    continue
+                return False
             return False
         return True
 
@@ -763,8 +816,25 @@ class AbilityCompiler:
             return None if value is None else not value
         return None
 
+    def _predicate_reads_written(self, predicate: Dict[str, Any], ctx: _Context) -> bool:
+        """谓词树是否读取了本技能已写入的动态值/阶段（写后读——必须走 effect 级活读，
+        hook 级快照发生在任何 effect 之前，读不到帧覆盖层；#26 期 2/3）."""
+        node_type = str((predicate or {}).get("$type") or "")
+        if node_type == "RPG.GameCore.ByCompareDynamicValue":
+            raw_key = predicate.get("DynamicKey") or {}
+            key = raw_key.get("Value") if isinstance(raw_key, dict) else raw_key
+            return str(key) in ctx.dynamic_writes
+        if node_type == "RPG.GameCore.ByCompareMonsterPhase":
+            return "current_phase" in ctx.dynamic_writes
+        if node_type in {"RPG.GameCore.ByAnd", "RPG.GameCore.ByAny"}:
+            return any(self._predicate_reads_written(child, ctx)
+                       for child in predicate.get("PredicateList") or [])
+        if node_type == "RPG.GameCore.ByNot":
+            return self._predicate_reads_written(predicate.get("Predicate") or {}, ctx)
+        return False
+
     def _predicate_expr(self, predicate: Dict[str, Any], ctx: _Context,
-                        path: str) -> Optional[str]:
+                        path: str, *, allow_written: bool = False) -> Optional[str]:
         node_type = str((predicate or {}).get("$type") or "")
         alias = self._alias(predicate)
         target = self._predicate_target(alias)
@@ -782,8 +852,10 @@ class AbilityCompiler:
             count_expr = ctx.count_expressions.get(dynamic_value_hash(str(key)))
             if count_expr is not None and target == "$self.actor_id":
                 return f"({count_expr}) {operator} {compare}"
-            if str(key) in ctx.dynamic_writes:
-                self._issue(ctx, path, node_type, "同一技能写入后读取动态值会命中旧事件快照")
+            if str(key) in ctx.dynamic_writes and not allow_written:
+                # 调用方（Retarget where/目标过滤等无 effect 级 condition 承载的语境）
+                # 无法表达写后读活读——保持拒绝；PredicateTaskList 分支走 allow_written。
+                self._issue(ctx, path, node_type, "写后读谓词仅限 PredicateTaskList 分支活读")
                 return None
             namespace = "$self" if target == "$self.actor_id" else target
             return f"dynamic_of({namespace}, '{key}') {operator} {compare}"
@@ -791,8 +863,8 @@ class AbilityCompiler:
             if alias not in {"", "Caster", "ModifierOwnerEntity"}:
                 self._issue(ctx, path, node_type, f"阶段谓词目标未注册：{alias}")
                 return None
-            if "current_phase" in ctx.dynamic_writes:
-                self._issue(ctx, path, node_type, "同一技能递增后读取阶段会命中旧事件快照")
+            if "current_phase" in ctx.dynamic_writes and not allow_written:
+                self._issue(ctx, path, node_type, "写后读阶段谓词仅限 PredicateTaskList 分支活读")
                 return None
             compare = self._number(predicate.get("CompareValue"), ctx, f"{path}/CompareValue")
             operator = self._compare_operator(predicate.get("CompareType"))
@@ -1051,15 +1123,95 @@ class AbilityCompiler:
             return None
         return probe.damages
 
+    def _compile_probability_guards(self, task: Dict[str, Any], ctx: _Context,
+                                    path: str) -> Optional[Tuple[str, str]]:
+        """`ByRandomChance` 谓词 → (success 守卫, failed 守卫)；非该谓词或不可用返回 None.
+
+        真实数据 109 节点全为静态 `Chance`（0-1）+ 无 Inverse；Chance 可动态（表达式）。
+        守卫用 effect 级 condition 承载——hook 级快照发生在任何 effect 之前，概率分支
+        必须落 effect 级（执行帧 §23.15）。"""
+        predicate = task.get("Predicate") or {}
+        if str(predicate.get("$type") or "") != "RPG.GameCore.ByRandomChance":
+            return None
+        raw_chance = predicate.get("Chance", predicate.get("CompareValue"))
+        chance = self._value(raw_chance, ctx, f"{path}/Predicate/Chance")
+        if chance is None:
+            self._issue(ctx, path, str(predicate.get("$type")), "概率分支的 Chance 未注册")
+            return None
+        shown = f"({chance})" if isinstance(chance, str) else str(chance)
+        key = self._stable_roll_key(f"{path}/Predicate/ByRandomChance")
+        less = f"roll('{key}') < {shown}"
+        no_less = f"roll('{key}') >= {shown}"
+        if predicate.get("Inverse"):
+            less, no_less = no_less, less
+        self._add_live_effect(ctx, {
+            "effect_type": "bind_roll", "roll_key": key}, "true")
+        return less, no_less
+
+    def _compile_live_branch(self, tasks: List[Dict[str, Any]], guard: str,
+                             ctx: _Context, path: str, stack: Tuple[str, ...]) -> None:
+        """帧感知分支编译：守卫落 effect 级活读（写后读/概率共用），伤害记录按分支
+        条件重发为 deal_damage（同既有条件伤害口径，但条件走 effect 级）。"""
+        previous = ctx.live_condition
+        ctx.live_condition = self._and_condition(previous, guard)
+        before = len(ctx.damages)
+        self._compile_tasks(tasks, ctx, path, stack)
+        if len(ctx.damages) != before:
+            if before == 0:
+                self._issue(ctx, path, "ConditionalDamage",
+                            "条件主伤或后续主伤重排尚未由 Action/Hook 时序表达")
+                del ctx.damages[before:]
+                ctx.live_condition = previous
+                return
+            added = list(ctx.damages[before:])
+            del ctx.damages[before:]
+            for record in added:
+                target = self._hook_target(record["alias"], ctx)
+                if target is None:
+                    self._issue(ctx, path, "ConditionalDamage",
+                                f"条件附加段目标未注册：{record['alias']}")
+                    continue
+                self._add_live_effect(ctx, {
+                    "effect_type": "deal_damage", "target": target,
+                    "damage_type": record["element"],
+                    "scaling_hp" if record["formula"] == "ByMaxHP" else "scaling_atk": record["ratio"],
+                    "toughness_dmg": (record["stance_value"] if record["stance_value"] is not None
+                                      else float(ctx.skill.get("sp_hit_base") or 0)
+                                      * (record["stance_ratio"] or 0)),
+                }, "true")
+        ctx.live_condition = previous
+
     def _compile_predicate_tasks(self, task: Dict[str, Any], ctx: _Context,
                                  path: str, stack: Tuple[str, ...]) -> None:
         if (self._presentation_only(task.get("SuccessTaskList") or [])
                 and self._presentation_only(task.get("FailedTaskList") or [])):
             return
-        predicate = self._predicate_expr(task.get("Predicate") or {}, ctx, f"{path}/Predicate")
-        if predicate is None:
-            self._issue(ctx, path, str(task.get("$type")), "条件谓词或分支未完整支持")
-            return
+        is_chance = str((task.get("Predicate") or {}).get("$type") or "") == \
+            "RPG.GameCore.ByRandomChance"
+        probability: Optional[Tuple[str, str]] = None
+        if is_chance:
+            if ctx.mode != "action":
+                # 事件域概率分支可在帧外发射（DoT 跳伤致死等）——bind_roll/roll 需要
+                # 活动执行帧，显式拒收不猜（14_policy.md 概率分支节）。
+                self._issue(ctx, path, str(task.get("$type")),
+                            "事件域概率分支可在执行帧外发射，暂不注册")
+                return
+            probability = self._compile_probability_guards(task, ctx, path)
+            if probability is None:
+                return   # Chance 不可用已记 unsupported
+        live = probability is not None or self._predicate_reads_written(
+            task.get("Predicate") or {}, ctx)
+        predicate = None
+        if probability is not None:
+            success_guard, failed_guard = probability
+        else:
+            predicate = self._predicate_expr(
+                task.get("Predicate") or {}, ctx, f"{path}/Predicate",
+                allow_written=live)
+            if predicate is None:
+                self._issue(ctx, path, str(task.get("$type")), "条件谓词或分支未完整支持")
+                return
+            success_guard, failed_guard = predicate, self._negate_condition(predicate)
         success = self._damage_only_records(
             task.get("SuccessTaskList") or [], ctx, f"{path}/SuccessTaskList", stack)
         failed = self._damage_only_records(
@@ -1068,6 +1220,19 @@ class AbilityCompiler:
             # 两支规范化伤害完全相同：条件与伤害无关，只在原位置结算一次。
             self._compile_tasks(task.get("SuccessTaskList") or [], ctx,
                                 f"{path}/SharedDamage", stack)
+            return
+        if live:
+            # 帧感知路径：守卫全落 effect 级活读，不动 hook 级 ctx.condition
+            # （外层快照条件若存在仍叠加生效——_add_live_effect 正交互）。
+            base_counts = dict(ctx.count_expressions)
+            self._compile_live_branch(
+                task.get("SuccessTaskList") or [], success_guard,
+                ctx, f"{path}/SuccessTaskList", stack)
+            ctx.count_expressions = dict(base_counts)
+            self._compile_live_branch(
+                task.get("FailedTaskList") or [], failed_guard,
+                ctx, f"{path}/FailedTaskList", stack)
+            ctx.count_expressions = base_counts
             return
         base = ctx.condition
         base_counts = dict(ctx.count_expressions)
@@ -1281,34 +1446,115 @@ class AbilityCompiler:
                              path: str, stack: Tuple[str, ...]) -> None:
         raw_key = task.get("Key") or {}
         key = raw_key.get("Value") if isinstance(raw_key, dict) else raw_key
-        add = self._number(task.get("AddValue"), ctx, f"{path}/AddValue")
-        minimum = self._number(task.get("Min"), ctx, f"{path}/Min") if "Min" in task else None
-        maximum = self._number(task.get("Max"), ctx, f"{path}/Max") if "Max" in task else None
+        # AddValue/Min/Max 允许已解析表达式（动态槽经 PostfixExpr 符号层）——钳制用
+        # min/max 内联组合，不加引擎原语；读旧值走 dynamic_of 四层读链（帧覆盖层
+        # 优先），语义 = 帧内累积（#26 期 2/3，14_policy.md）。
+        add = self._value(task.get("AddValue"), ctx, f"{path}/AddValue")
+        minimum = self._value(task.get("Min"), ctx, f"{path}/Min") if "Min" in task else None
+        maximum = self._value(task.get("Max"), ctx, f"{path}/Max") if "Max" in task else None
         target = self._hook_target(self._alias(task), ctx)
-        if not key or add is None or target != "self":
-            self._issue(ctx, path, str(task.get("$type")), "动态加值键/增量/自指目标未注册")
+        if (not key or add is None
+                or ("Min" in task and minimum is None)
+                or ("Max" in task and maximum is None)
+                or target != "self"):
+            self._issue(ctx, path, str(task.get("$type")), "动态加值键/增量/钳制/自指目标未注册")
             return
-        expression = f"dynamic_of($self, '{key}') + {add}"
+        expression = f"dynamic_of($self, '{key}') + ({add})"
         if minimum is not None:
-            expression = f"max({expression}, {minimum})"
+            expression = f"max({expression}, ({minimum}))"
         if maximum is not None:
-            expression = f"min({expression}, {maximum})"
+            expression = f"min({expression}, ({maximum}))"
         ctx.dynamic_writes.add(str(key))
         self._add_effect(ctx, {
             "effect_type": "set_dynamic_value", "target": "self",
             "dynamic_key": str(key), "amount": expression,
         })
 
+    def _compile_dynamic_copying(self, task: Dict[str, Any], ctx: _Context,
+                                 path: str, stack: Tuple[str, ...]) -> None:
+        """SetDynamicValueByCopying：ToKey := dynamic_of($self, FromKey)——与解释器同口径
+        （enemy_ai `_run_tasks`：FromTargetType 须自指别名，写入总是落施放者运行态）；
+        `FromModifierName` 跨 modifier 读与 LevelEntity/CasterSummoner 等非自指源拒绝。
+        读旧值走四层读链（帧覆盖层优先，写后读语义正确）。"""
+        from hsr_nous.sim_schema.config_ai import is_self_target_alias
+        raw_to = task.get("ToDynamicKey") or {}
+        raw_from = task.get("FromDynamicKey") or {}
+        to_key = raw_to.get("Value") if isinstance(raw_to, dict) else raw_to
+        from_key = raw_from.get("Value") if isinstance(raw_from, dict) else raw_from
+        from_alias = str((task.get("FromTargetType") or {}).get("Alias") or "")
+        if not to_key or not from_key or not is_self_target_alias(from_alias) \
+                or task.get("FromModifierName"):
+            self._issue(ctx, path, str(task.get("$type")),
+                        "动态拷贝的源/目标键、自指源或未注册的跨 modifier 读")
+            return
+        ctx.dynamic_writes.add(str(to_key))
+        self._add_effect(ctx, {
+            "effect_type": "set_dynamic_value", "target": "self",
+            "dynamic_key": str(to_key),
+            "amount": f"dynamic_of($self, '{from_key}')",
+        })
+
+    def _compile_random_config(self, task: Dict[str, Any], ctx: _Context,
+                               path: str, stack: Tuple[str, ...]) -> None:
+        """RandomConfig 权重掷（无战斗级记忆字段时）→ bind_roll + 累计权重区间守卫.
+
+        与上游 `rng.random()*Σ <= 累计` 同浮点序（bind 绑 u×Σ，守卫比累计值）；
+        `RandomUnique`/`RandomMaskKey`/`RandomCount` 是战斗级记忆/不放回语义，
+        保持显式 unsupported 进 human_queue，禁止猜测。"""
+        memory_fields = [field for field in ("RandomUnique", "RandomMaskKey", "RandomMaskTarget",
+                                             "AutoResetRandomMask", "RandomCount")
+                         if field in task]
+        if memory_fields:
+            self._issue(ctx, path, str(task.get("$type")),
+                        f"战斗级随机记忆字段尚未注册：{sorted(memory_fields)}")
+            return
+        if ctx.mode != "action":
+            # 同 ByRandomChance：事件域概率分支可在帧外发射，显式拒收不猜。
+            self._issue(ctx, path, str(task.get("$type")),
+                        "事件域概率分支可在执行帧外发射，暂不注册")
+            return
+        task_list = task.get("TaskList") or []
+        odds = task.get("OddsList") or []
+        options = [option if isinstance(option, list) else [option]
+                   for option in task_list]
+        if all(self._presentation_only(option) for option in options):
+            return   # 纯表现权重掷：无可观察效果，不消耗随机流
+        if not options or len(options) != len(odds):
+            self._issue(ctx, path, str(task.get("$type")), "RandomConfig 权重/任务表缺数或对齐")
+            return
+        weights: List[float] = []
+        for index, raw in enumerate(odds):
+            weight = self._number(raw, ctx, f"{path}/OddsList/{index}")
+            if weight is None:
+                self._issue(ctx, path, str(task.get("$type")), "RandomConfig 权重必须是静态数值")
+                return
+            weights.append(float(weight))
+        if any(weight < 0 for weight in weights) or sum(weights) <= 0:
+            self._issue(ctx, path, str(task.get("$type")), "RandomConfig 权重须非负且和为正")
+            return
+        key = self._stable_roll_key(f"{path}/RandomConfig")
+        self._add_live_effect(ctx, {
+            "effect_type": "bind_roll", "roll_key": key, "scale": sum(weights)}, "true")
+        previous = ctx.live_condition
+        acc_before = 0.0
+        for index, weight in enumerate(weights):
+            acc_after = acc_before + weight   # 运行和累计——与上游同浮点序，不做减法
+            upper = f"roll('{key}') <= {acc_after}"
+            guard = upper if index == 0 else \
+                f"roll('{key}') > {acc_before} and {upper}"
+            ctx.live_condition = self._and_condition(previous, guard)
+            self._compile_tasks(options[index], ctx, f"{path}/Odds/{index}", stack)
+            acc_before = acc_after
+        ctx.live_condition = previous
+
     def _compile_define_dynamic(self, task: Dict[str, Any], ctx: _Context,
                                 path: str, stack: Tuple[str, ...]) -> None:
         raw_key = task.get("DynamicKey") or task.get("Key") or {}
         key = raw_key.get("Value") if isinstance(raw_key, dict) else raw_key
         raw_value = task["ResetValue"] if "ResetValue" in task else task.get("Value")
-        symbols = dict(self.dynamic_symbols)
-        for dynamic_key in self.written_dynamic_keys:
-            symbols.setdefault(
-                dynamic_value_hash(dynamic_key), f"dynamic_of($self.actor_id, '{dynamic_key}')")
-        value = self._value(raw_value, ctx, f"{path}/Value", symbols) if raw_value is not None else 0
+        # 自指/被写键的哈希读取经 _value 的 dynamic_name_symbols 统一回落活读
+        # （与 ConfigAI 解释器同口径：Define/Set 均为绝对写，ResetValue/Value 皆写）。
+        value = self._value(raw_value, ctx, f"{path}/Value") if raw_value is not None else 0
         alias = self._alias(task)
         if not alias and task.get("$type") == "RPG.GameCore.SetDynamicValue":
             # 上游省略 TargetType 的 SetDynamicValue 由施放者持有；ConfigAI 也从自身读取该键。
@@ -1444,9 +1690,13 @@ class AbilityCompiler:
     def _custom_value_is_readonly(self, name: str) -> bool:
         return name not in self.written_dynamic_keys
 
-    def _switch_value(self, raw: Any, ctx: _Context, path: str) -> Optional[float]:
+    def _switch_value(self, raw: Any, ctx: _Context, path: str) -> Optional[Tuple[str, Any]]:
+        """Switch 解析：("static", 值) = 生成期唯一选支（SkillParam 符号/只读 CustomValue/
+        静态数值）；("live", 键名) = 被写动态键或生成期可见写入的可变 CustomValue——
+        由 `_compile_switch` 翻活读（dynamic_of 条件守卫）；不可用记 unsupported 返 None。"""
         if not isinstance(raw, dict) or not raw.get("IsDynamic"):
-            return self._number(raw, ctx, path)
+            value = self._number(raw, ctx, path)
+            return ("static", value) if value is not None else None
         expr = raw.get("PostfixExpr") or {}
         hashes = expr.get("DynamicHashes") or []
         if expr.get("OpCodes") != "AQAR" or expr.get("FixedValues") or len(hashes) != 1:
@@ -1471,12 +1721,16 @@ class AbilityCompiler:
             if not _is_number(value):
                 self._issue(ctx, path, "SwitchCaseByDynamicValue", "运行时 Switch 尚未注册")
                 return None
-            return value
+            return ("static", value)
+        if not matches and len(hash_names) == 1:
+            return ("live", self._validated_switch_key(ctx, path, str(next(iter(hash_names)))))
         if not matches:
             self._issue(ctx, path, "SwitchCaseByDynamicValue", "CustomValue 哈希缺失或冲突")
             return None
         name, value = matches[0]
         if not self._custom_value_is_readonly(name):
+            if name in self.dynamic_keys:
+                return ("live", self._validated_switch_key(ctx, path, str(name)))
             self._issue(ctx, path, "SwitchCaseByDynamicValue",
                         f"可变 CustomValue 的运行时 Switch 尚未注册：{name}")
             return None
@@ -1484,13 +1738,19 @@ class AbilityCompiler:
         if not _is_number(value):
             self._issue(ctx, path, "SwitchCaseByDynamicValue", f"CustomValue 非数值：{name}")
             return None
-        return value
+        return ("static", value)
+
+    @staticmethod
+    def _validated_switch_key(ctx: _Context, path: str, name: str) -> Optional[str]:
+        if any(ch in name for ch in "'\"\\"):
+            AbilityCompiler._issue(ctx, path, "SwitchCaseByDynamicValue",
+                                   f"活读 Switch 键名非法：{name!r}")
+            return None
+        return name
 
     def _compile_switch(self, task: Dict[str, Any], ctx: _Context,
                         path: str, stack: Tuple[str, ...]) -> None:
-        switch_value = self._switch_value(task.get("Switch"), ctx, f"{path}/Switch")
-        if switch_value is None:
-            return
+        resolved = self._switch_value(task.get("Switch"), ctx, f"{path}/Switch")
         cases: List[Tuple[float, List[Dict[str, Any]]]] = []
         seen = set()
         for index, row in enumerate(task.get("CaseTaskList") or []):
@@ -1503,9 +1763,33 @@ class AbilityCompiler:
                 return
             seen.add(case_value)
             cases.append((case_value, row.get("TaskList") or []))
-        selected = next((tasks for value, tasks in cases if value == switch_value),
-                        task.get("DefaultTaskList") or [])
-        self._compile_tasks(selected, ctx, f"{path}/Selected", stack)
+        if resolved is not None and resolved[0] == "static":
+            selected = next((tasks for value, tasks in cases if value == resolved[1]),
+                            task.get("DefaultTaskList") or [])
+            self._compile_tasks(selected, ctx, f"{path}/Selected", stack)
+            return
+        if resolved is None or resolved[1] is None:
+            return   # Switch 不可用已记 unsupported
+        # 活读翻译：各 Case 编译为 effect 级条件守卫 dynamic_of($self, '键') == Case 值
+        # 的分支组（#26 期 2/3，14_policy.md SwitchCase 节）；DefaultTaskList 守卫为
+        # 全部 Case 值不等。
+        key_name = resolved[1]
+        default_tasks = task.get("DefaultTaskList") or []
+        if not cases and not default_tasks:
+            return
+        previous = ctx.live_condition
+        for case_value, tasks in cases:
+            ctx.live_condition = self._and_condition(
+                previous, f"dynamic_of($self, '{key_name}') == {case_value}")
+            self._compile_tasks(tasks, ctx, f"{path}/Case/{case_value}", stack)
+        if default_tasks:
+            unmatched = " and ".join(
+                f"dynamic_of($self, '{key_name}') != {case_value}"
+                for case_value, _tasks in cases)
+            ctx.live_condition = (self._and_condition(previous, unmatched)
+                                  if unmatched else previous)
+            self._compile_tasks(default_tasks, ctx, f"{path}/Default", stack)
+        ctx.live_condition = previous
 
     def _compile_monster_phase(self, task: Dict[str, Any], ctx: _Context,
                                path: str, stack: Tuple[str, ...]) -> None:

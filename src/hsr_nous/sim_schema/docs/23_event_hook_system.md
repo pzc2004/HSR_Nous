@@ -403,7 +403,9 @@ sim 引擎启动时扫描所有模板的 `hooks` 字段，构建事件分发表�
 
 - 帧随 `_execute_action` 同步调用栈生灭：进入压栈、正常返回提交、**异常整帧丢弃**——
   与 ConfigAI 解释器选不出技能时回滚 dynamic_values 的既有先例（`enemy_ai.py`
-  `choose_action`）同口径。
+  `choose_action`）同口径。帧覆盖范围含本行动的 `on_action` 广播（引擎调用方把广播载荷
+  传入 `_execute_action`，在弹栈前发射）——概率分支（`bind_roll`/`roll`）编译产物挂在
+  on_action 上仍在帧内；调用方随后发射的其他事件（如 `on_ultimate`）在帧外。
 - 嵌套执行（`trigger_action` 插入行动/追击、终结技代放）压**子帧**；子执行是完整
   隔离单元——子帧的写入对子执行内部可见、对外不可见；**子帧提交后其写入并入父帧
   覆盖层**（父帧后续读者可见；父帧若回滚，子帧已提交的写入一并丢弃）。最外层帧提交
@@ -446,5 +448,12 @@ repeatable-read（事件间快照）之上叠 read-your-writes（执行内覆盖
   保证同 seed 两模式采样序列一致（存档/回放世界线一致的前提）。
 - 回放确定性：同 seed + 同决策序 → 同采样序自动成立（绑定后读取零消耗，
   求值序冻结无需扩展）。
+- `bind_roll` 原语（编译器概率分支翻译的前置绑定锚，`05_effects.md` §5.2 登记）：
+  `roll_key`（稳定键）+ 可选 `scale`（缺省 1）——effect 域把 `roll(roll_key) × scale`
+  绑定进当前帧（roll 模式采 `pipeline.rng`；expected 模式绑 `0.5 的下邻浮点 × scale`，
+  与 `mechanic_chance` 的 `p>=0.5` 期望口径逐比特一致）；守卫用 `roll('<键>')` 读绑定值。
+  帧外调用显式报错（同 `roll` 分域规则）。敌人编译产物的概率分支只允许挂在帧内事件
+  （on_become_target/on_action/after_being_hit）；事件域（被动/生命周期回调，可在
+  DoT 跳伤致死等帧外时刻发射）的概率分支暂不注册。
 
 ---

@@ -220,10 +220,13 @@ sequence 解释器冒充完整专属 AI。`SelectAISkillTarget` 支持 modifier 
 解析候选，任意一个满足 `Predicate` 即为真；目标别名/序列仍走静态支持表，未知项拒绝。
 `AICustomStringTagSelector` 按 `Actor.groups` 中的 `CustomStringTag` 过滤，
 `InverseResultFlag` 取补集；敌人模板 `groups` 来自上游 `CustomValueTags`。
-`SwitchCaseByDynamicValue` 执行固定 `Switch` 值对应的 `CaseTaskList`，无匹配走
-`DefaultTaskList`。生成器可用 `MonsterConfig.CustomValues` 把 `AQAR` 单动态值读取归一化为
-固定值：键名经已验证的 .NET Framework 字符串哈希与 `DynamicHashes` 对账；未解析的动态
-Switch/Case 仍由静态闸拒绝，不猜测哈希含义。
+`SwitchCaseByDynamicValue`：Switch 为 `AQAR` 单动态值读取。键名可静态解析
+（SkillParam 符号/只读 CustomValue）时生成期选定唯一 `CaseTaskList`，无匹配走
+`DefaultTaskList`；键名解析到**本敌动态键**（生成期被写过的键，含可变 CustomValue）时
+翻**活读**——每个 Case 的任务编译为 effect 级条件守卫 `dynamic_of($self, '键') == Case值`
+的分支组（数值用变量、结构用组合，不加新原语），无匹配且声明 `DefaultTaskList` 时其
+守卫为全部 Case 值不等；Case 值必须是静态数值且不重复。哈希缺失/冲突仍显式拒绝，
+不猜测哈希含义。
 `ByCheckCustomValueBool` 的 `Key.Hash` 经同一哈希算法与 pipeline 全量 `CustomValueTags`
 名册对账并归一化为 `Key.Value`，运行时检查目标 `Actor.groups`；未解析键以
 `custom_bool:Key` 拒绝，不把未知哈希当成恒假。`ByCompareHP` 以 `hp_of(target)` 读取当前
@@ -246,8 +249,13 @@ Retarget 内读取 `ParamEntity` 时，`target: self` 仍写施放者动态值�
 `CasterSummoner` 经 `summoner_of` 解析召唤者；`MaxStance` 以
 `base_stat_of(..., 'max_toughness')` 读取基础韧性上限，`CurrentStance` 以 `toughness_of`
 读取当前韧性。`DefineDynamicValue`/`SetDynamicValue` 的自指动态键读取改用
-`dynamic_of($self.actor_id, key)` 在效果执行时取值，不再要求静态字面量；谓词写入后读取的
-旧快照闸保持独立，不随之放宽。`SetDynamicValueByModifierValue` 的 `Layer`/`LifeTime`
+`dynamic_of($self.actor_id, key)` 在效果执行时取值，不再要求静态字面量。谓词写入后读取
+（同技能 `Set/Define/Add/Copy` 或 `SetMonsterPhase` 之后再 `ByCompareDynamicValue`/
+`ByCompareMonsterPhase`）自执行帧（#26）落地起**改翻帧感知活读**：整支谓词编译为
+**单 hook + 纯 effect 级 condition**（effect 级 condition 是执行时活读，读得到帧覆盖层
+的未提交写入），不再以"旧事件快照"拒收；PostfixExpr 里被写键的动态哈希经键名反查表回落为
+`dynamic_of($self.actor_id, key)` 读取（同名哈希冲突不回落）。无写后读的普通谓词仍走
+hook 级快照条件（事件间确定性语义不变）。`SetDynamicValueByModifierValue` 的 `Layer`/`LifeTime`
 读取分别编译为 `stacks(...)`/`modifier_duration(...) × Multiplier`；省略 `ReadTargetType`
 时读取施放者/当前 modifier 持有者的已命名 modifier，`ParamEntity` 同样经 `amount_target`
 逐目标求值，其他值类型与其他目标仍显式拒绝。DoT 数值读取与摘除共用同技能来源绑定闸，
@@ -269,13 +277,32 @@ Retarget 内读取 `ParamEntity` 时，`target: self` 仍写施放者动态值�
 以 trigger/`EntryAbility` 对齐 TBGD 技能，编译器递归消费 Ability 任务树与 modifier 定义；
 `PostfixExpr` 的动态哈希必须能由 `DynamicValues.Floats.ReadInfo` 或 modifier 内的显式赋值
 还原。`TASK_HANDLERS`/`EVENT_HANDLERS` 未注册的节点、无法唯一绑定的被动、缺失引用和
-未证明的条件分支都记为 `unsupported`，不得拿部分结果冒充完整收编。完整支持的主动技能
+未证明的条件分支都记为 `unsupported`，不得拿部分结果冒充完整收编。写后读/概率分支经
+执行帧改翻后，"同一技能写入后读取动态值会命中旧事件快照"与"运行时 Switch 尚未注册"
+两类旧拒因退役；概率分支限主动技能域（事件域帧外发射暂不注册），战斗级随机记忆
+（`RandomUnique`/`RandomMaskKey`）保持显式 unsupported。完整支持的主动技能
 在正式生成器中优先走该路径；下述 Fandom 文本转换属于尚未迁移机制族的遗留路径。
 `TargetInfo.AllTeamMember` 映射 `ally_aoe`，敌方行动时该类型返回全部存活友方怪物，
 不落入玩家目标池。属性件仅在整个 stat 块可静态证明全为增益时标 `buff`；正向
 `vulnerability`、任一负向其他 stat 或任一未判号表达式仍按保守 `debuff` 处理。
 条件伤害只在谓词分支前已有主伤记录时转为 `on_action` 的 `deal_damage`，保留分支条件；
 此时它属于主伤后的附加段。谓词前没有主伤时仍拒绝，避免条件主伤或后续主伤被错误重排。
+概率分支（`PredicateTaskList` 的谓词为 `ByRandomChance`，109 节点全为静态 Chance）编译为
+**单 hook + effect 级 condition**：前置 `bind_roll`（`roll_key` 按节点路径生成稳定键，
+`scale` 缺省 1）绑定共享掷骰，Success 分支效果带 `roll('<键>') < Chance`、Failed 分支带
+`roll('<键>') >= Chance` 的 effect 级 condition——hook 级快照发生在任何 effect 之前，
+概率分支必须落 effect 级（执行帧 `23_event_hook_system.md` §23.15）。`RandomConfig`（无 `RandomUnique`/`RandomMaskKey`/
+`RandomCount`，权重静态且和为正）按同一结构翻译：bind 带 `scale=Σ权重`，各选项守卫为
+累计权重区间 `roll('<键>') <= 累计_i and roll('<键>') > 累计_{i-1}`（与上游
+`rng.random()*Σ <= 累计` 同浮点序）；带战斗级记忆字段（`RandomUnique`/`RandomMaskKey`/
+`RandomCount`）的节点保持 unsupported 进 human_queue，禁止猜测。事件域（被动/生命周期回调）
+的概率分支因可在帧外发射（DoT 跳伤致死等）暂不注册，只翻主动技能域；写后读类活读
+（不消耗随机流）两域均可。`bind_roll` 的 expected 模式绑 `0.5×scale`（0.5 取 0.5 的下邻
+浮点），与 `mechanic_chance` 的 `p>=0.5` 期望口径逐比特一致。
+`SetDynamicValueByCopying`（自指目标）编译为 `amount: dynamic_of($self, '<FromKey>')`
+的 `set_dynamic_value`；`SetDynamicValueByAddValue` 的 Min/Max 钳制用表达式
+`min(max(dynamic_of + AddValue, Min), Max)` 内联组合（AddValue/Min/Max 可为已解析表达式，
+读的是帧覆盖层旧值——帧内累积语义），不加引擎原语。
 单目标 `FireProjectile` 允许缺省或 `AbilityTargetEntity` 主目标；`OnProjectileHit` 支持
 主目标直伤与已注册的非伤害任务，Retarget 内投射物仍拒绝。`FireWaveProjectile` 以
 `Count` 展开为 `Action.instances`，逐段复用 `PerProjectileDamage`；`OnProjectileHitClientOnly`
