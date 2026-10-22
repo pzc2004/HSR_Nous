@@ -30,6 +30,7 @@ hsr-data-update = "hsr_nous.pipeline.update:main"
 hsr-sim = "hsr_nous.sim.cli:main"
 hsr-research-mcp = "hsr_nous.research.permissions.mcp:main"
 hsr-research-agent = "hsr_nous.agents.cli:main"
+hsr-research-chat = "hsr_nous.agents.interactive:main"
 hsr-research-web = "hsr_nous.research.workbench.cli:main"
 
 [tool.hatch.build.targets.wheel]

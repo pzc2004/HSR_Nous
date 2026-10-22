@@ -1,6 +1,6 @@
 # agents
 
-外部 Agent harness 适配层。当前只有 DSH headless，不包含自研 Agent loop、ACP、交互式前端或共享 Memory。
+外部 Agent harness 适配层。headless 单次调用之外新增交互式原型（DSH web 面）；不包含自研 Agent loop、ACP 或共享 Memory。
 
 ## 准备
 
@@ -28,6 +28,17 @@ HSR_NOUS_LLM_AGENTS_API_BASE=
 
 DSH 启动时自行读取 `.env`；启动器只检查文件是否存在以选择 OpenAI 兼容 profile，不读取或打印其中的值。也可通过 `--allow-model-env` 显式传入同名环境变量。`.env` 已被 gitignore，应使用独立测试凭据且权限设为 600。
 
+## 交互式原型（DSH web）
+
+```bash
+hsr-research-chat              # 起服务（默认 8002 端口，仅回环绑定）
+hsr-research-chat --port 8080  # 换端口
+```
+
+启动后打印 `dsh web:` 令牌化 URL——**即访问凭证，注意保密**。远程开发场景（如 VS Code Remote 端口转发）在本地浏览器打开时把 host 换成本地 `localhost`；经反代暴露需要 `--trusted-host` 另配，不在本原型范围。
+
+与 headless 同一信任边界：内置工具全禁、只读沙箱、仅 `mcp__nous__*` 白名单工具可用，人直接在浏览器里驱动多轮研究会话（提案→执行→复核）。会话状态在 DSH 自己的隔离 `dsh-home` 下，研究产物仍归研究根。
+
 ## 可信边界
 
 - DSH 只能调用 `mcp__nous__submit_claim/read_investigation/read_report/resolve_evidence/submit_candidate_set/submit_candidate_proposals/start_candidate_set/start_candidate_proposals/read_candidate_task/wait_candidate_task/cancel_candidate_task/resume_candidate_task/read_candidate_set_report`；配置禁用与插件 guard 同时拒绝其他工具。
@@ -43,4 +54,4 @@ DSH 启动时自行读取 `.env`；启动器只检查文件是否存在以选择
 
 ## 限制
 
-局部 npm 安装、独立 HOME 和工具白名单不等于 OS 级安全沙箱；DSH 与 MCP 仍是本机进程。当前不支持多轮交互、开放式多候选搜索或真实模型 CI。标准测试使用回环地址上的隔离 Messages 服务；真实模型 smoke 已另行使用独立凭据验证，不进入 CI。
+局部 npm 安装、独立 HOME 和工具白名单不等于 OS 级安全沙箱；DSH 与 MCP 仍是本机进程。交互式原型为人工看护场景：Agent 的每次工具调用与提交都在网关白名单内，但成本与误用风险由使用者自负（模型按 token 计费）。开放式多候选搜索与真实模型 CI 仍不支持。标准测试使用回环地址上的隔离 Messages 服务；真实模型 smoke 已另行使用独立凭据验证，不进入 CI。
