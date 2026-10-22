@@ -200,10 +200,8 @@ class StageCompiler:
         self, spec: Dict[str, Any], *, roots: Sequence[Union[str, Path]], hook_compiler: Any = None,
     ) -> tuple[Actor, List[Any], Optional[CompiledEnemyPolicy], List[Any], List[Any], Dict[str, Any]]:
         """inline 敌人 / enemy_template 引用 → (Actor, actions, policy, hooks, summons, resources)."""
-        from hsr_nous.sim_schema.action import Action
-
-        _check_keys(spec, _ENEMY_KEYS, where=f"enemy {spec.get('actor_id') or spec.get('enemy_template')!r}")
         e_desc = f"enemy {spec.get('actor_id') or spec.get('enemy_template')!r}"
+        _check_keys(spec, _ENEMY_KEYS, where=e_desc)
         level = int(spec.get("level", 80))
         if not (1 <= level <= 120):
             raise ValueError(f"{e_desc} level {level} 越界（合法 1-120，13_validator §13.3）")
@@ -232,6 +230,7 @@ class StageCompiler:
             stats.weakness = list(spec["weakness"] if "weakness" in spec else (tpl.get("weakness") or []))
             _check_weakness(stats.weakness, where=f"enemy 模板 {spec['enemy_template']}")
             stats.resistance = {k: float(v) for k, v in (tpl.get("resistance") or {}).items()}
+            _check_resistance(stats.resistance, where=f"enemy 模板 {spec['enemy_template']}")
             actor = Actor(
                 # actor_id/name 引用侧可覆盖：同模板多放（一波同型怪/多个沙包）靠它去重——
                 # 不覆盖则多份引用同 id，compile() 重复闸炸（引擎按 id 键控只剩一只=静默吞）
@@ -239,8 +238,8 @@ class StageCompiler:
                 name=spec.get("name") or tpl.get("name", tpl["enemy_id"]),
                 actor_type="monster", level=level,
                 stats=stats,
+                groups=list(tpl.get("groups") or []),
             )
-            actor.groups = list(tpl.get("groups") or [])
             capabilities = tpl.get("capabilities") or {}
             _check_keys(capabilities, _SUMMON_CAPABILITY_KEYS,
                         where=f"enemy 模板 {spec['enemy_template']} capabilities")
@@ -284,8 +283,8 @@ class StageCompiler:
             actor_type="monster",
             level=level,
             stats=stats,
+            groups=list(spec.get("groups") or []),
         )
-        actor.groups = list(spec.get("groups") or [])
         policy = _parse_enemy_policy(spec.get("policy"), where=f"{e_desc} policy")
         return actor, [], policy, [], [], {}
 
