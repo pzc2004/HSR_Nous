@@ -18,6 +18,7 @@ from hsr_nous.sim.state import MOON_COCOON_ID, ActorState
 from hsr_nous.sim_schema.action import DOT_KIND_ELEMENTS, ELEMENTS, Action
 from hsr_nous.sim_schema.config_ai import MONSTER_RANK_VALUES
 from hsr_nous.sim_schema.effect_types import HOOK_TARGET_SELECTORS
+from hsr_nous.sim_schema.expression import ExpressionError
 
 if TYPE_CHECKING:
     from hsr_nous.sim.engine import CombatEngine
@@ -192,7 +193,12 @@ class HookRuntime:
         速度 buff 重复刷 + 充能 +2 而非 +1）。alive 判定保持执行时
         （同旧口径：前序效果致死者不再触发；放逐**不**静默——军功体系这类全局机制
         挂在事件上继续生效（实战确认：放逐刻律德菈充能/奇袭照跑）；waterfall 链不走此路
-        （取消/改写依赖前序更新，必须逐个）。"""
+        （取消/改写依赖前序更新，必须逐个）。
+
+        与执行帧的分层共存（23_event_hook_system.md §23.15）：本快照冻结的是**已提交态**；
+        执行帧覆盖层是"执行内未提交写入"，快照层的 condition 同为帧内读者、照常经
+        `config_ai_dynamic_value` 读覆盖层（read-your-writes），但读不到同窗 hook 效果
+        对普通状态的未提交改动——repeatable-read 与 read-your-writes 两层互不替代。"""
         passed = []
         for h in hooks:
             st = self._engine.state.actors.get(h.owner_id)
@@ -204,13 +210,16 @@ class HookRuntime:
             self._run_hook_effects(st, h, payload)
 
     def _hook_condition_ok(self, h, st: ActorState, payload: Dict[str, Any]) -> bool:
-        """hook 条件求值（快照与逐 hook 共用）：失败按不触发 + 战斗日志留 ⚠（B8 同口径）。"""
+        """hook 条件求值（快照与逐 hook 共用）：失败按不触发 + 战斗日志留 ⚠（B8 同口径）。
+
+        condition 是快照域——`_roll_readonly=True`：roll 只许读已绑定键、
+        禁止采样（condition 无副作用的纯洁性，§23.15 分域规则）。"""
         if h.condition_expr is None:
             return True
         try:
             return bool(self._engine._expr.evaluate(
                 h.condition_expr, self._hook_ctx(st, payload),
-                functions=self._hook_functions(st)))
+                functions=self._hook_functions(st, _roll_readonly=True)))
         except Exception as e:
             self._engine.state.log.append(
                 f"AV{self._engine.state.clock:.1f}: ⚠ hook {h.owner_id}/{h.event} 条件求值失败按不触发处理：{e!r}")
@@ -285,8 +294,13 @@ class HookRuntime:
             expr=self._engine._expr, event_ns=event_ns, self_ns=self_ns)
         return float(len(selected))
 
-    def _hook_functions(self, st: ActorState) -> Dict[str, Any]:
-        """hook 表达式可用的宿主函数实现（stacks/enemies_alive：§22.4 登记，缺省 0 钉死）."""
+    def _hook_functions(self, st: ActorState, *, _roll_readonly: bool = False) -> Dict[str, Any]:
+        """hook 表达式可用的宿主函数实现（stacks/enemies_alive：§22.4 登记，缺省 0 钉死）.
+
+        `_roll_readonly`：condition（快照）域为 True——roll 只读已绑定、禁止采样；
+        其余求值域（effect amount/effect 级 condition/target_filter/命中域）为
+        False——roll 首调采样绑定。分域规则见 23_event_hook_system.md §23.15。
+        """
         # 目标反查两通道（原 21 处内联样板收编——is_adjacent 内联 _resolve 先例上提共享）：
         # `_resolve` = has_modifier 通道（四分支全型：ActorState 直用 / _HookSelfNS 拆包 ._st /
         # actor_id 属性（$it 命名空间）反查 / 裸 str 反查；查无 → None，各宿主按自身缺省口径
@@ -679,6 +693,21 @@ class HookRuntime:
             # roll 真掷 / expected ≥0.5 生效（银狼 LV.999 Top Loot Box 族；bool→1.0/0.0）
             return 1.0 if self._engine.pipeline.mechanic_chance(float(p)) else 0.0
 
+        def roll(key: Any) -> float:
+            # 执行级随机绑定（23 §23.15）：effect 域首调采样一次（消耗主流 pipeline.rng）
+            # 绑定当前帧、后续读取零消耗；condition（快照）域（_roll_readonly）只许读
+            # 已绑定键、读未绑定显式报错——condition 无副作用的纯洁性不破；无活动
+            # 执行帧（策略/available_if 等决策期求值）显式报错——roll 只活在行动执行内。
+            # 绑定不跨帧提交合并（frame.py docstring）。
+            frame = self._engine.current_frame
+            name = str(key)
+            if frame is None:
+                raise ExpressionError(
+                    f"roll({name!r}) 需要活动执行帧——仅行动执行内的 effect 表达式可用")
+            if _roll_readonly:
+                return frame.roll_read(name)
+            return frame.roll_bind(name, self._engine.pipeline.rng.random)
+
         def count_team(path: Any = "", group: Any = "") -> float:
             # 队伍编成计数（按命途——长夜月 1413103 变档/昔涟 1415102 进战追忆族；
             # 口径钉：含阵亡编成口径，engine._count_team_group 单漏斗）；
@@ -796,7 +825,8 @@ class HookRuntime:
                 "modifier_source": modifier_source,
                 "count": count, "count_selected": count_selected,
                 "unique_sources": unique_sources,
-                "mechanic_chance": mechanic_chance, "actor_type_of": actor_type_of,
+                "mechanic_chance": mechanic_chance, "roll": roll,
+                "actor_type_of": actor_type_of,
                 "hp_of": hp_of, "max_hp_of": max_hp_of, "toughness_of": toughness_of,
                 "resource_of": resource_of,
                 "dynamic_of": dynamic_of, "count_team": count_team,
@@ -1054,6 +1084,9 @@ class HookRuntime:
             key = str(eff["dynamic_key"])
             # amount_target 只提供 $target 求值语境，写入仍由 target 决定；
             # 每个读取候选依次求值并写入，空候选不写，多候选后者覆盖前者。
+            # 执行帧内写入进帧覆盖层（写后读：同执行内立即可读，提交时才落已提交态、
+            # 异常随帧回滚丢弃）；帧外维持直写已提交态（§23.15 四层读取链）。
+            frame = self._engine.current_frame
             read_targets = (self._hook_target_states(eff["amount_target"], st, payload)
                             if "amount_target" in eff else None)
             if read_targets is not None and not read_targets:
@@ -1075,6 +1108,8 @@ class HookRuntime:
                         if not float(value).is_integer():
                             raise ValueError(f"current_phase 必须为整数，得到 {value!r}")
                         runtime["current_phase"] = int(value)
+                    elif frame is not None:
+                        frame.write(t2.actor.actor_id, key, float(value))
                     else:
                         runtime.setdefault("dynamic_values", {})[key] = float(value)
         elif t == "refund_bank":

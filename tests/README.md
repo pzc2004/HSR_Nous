@@ -44,9 +44,11 @@ pytest tests/test_doc_lint.py -v
 
 按版本线组织：`test_engine_v01`（直伤闭环）→ `test_engine_v02`（击破/敌动/波次）→ `test_compile`（编译层）→ `test_modifier_v04`（modifier 完整版）→ `test_template_gen` / `test_enemy_template`（模板生成+全量冒烟）→ `test_state_machine_v06`（形态机）→ `test_multitarget_v07` / `test_policy_v07` / `test_multihit_v07`（多目标/策略/多段）→ `test_montecarlo_v08` / `test_perf_v08`（方差/性能看守）→ `test_*_v09` 族（`test_hit_chain_e2e_v09` 命中链 / `test_hit_energy_v09` 受击回能 / `test_shield_v09` 护盾 / `test_survival_v09` 生存 / `test_compile_merge_v09` 编译合并）→ `test_taunt_v10`（嘲讽）→ `test_cycle_v11`（轮次）。实验层专项：`test_montecarlo_experiment`（终止 survival/wipe、结果分类器、指标族、CSV、版本指纹四件 e2e 钉）。
 
-版本线之外的横向族：hook DSL 与模板 e2e（`test_hook_dsl` / `test_ruan_mei_template` / `test_tribbie_template` / `test_phainon_*` / `test_thanatoplum`——手工模板真身在 `data/library/`（机制库正典根，git 追踪），测试编译经 `template_roots=TEST_TEMPLATE_ROOTS` 注入（正典根优先于 data/sim_templates 生成根，见 `tests/template_materialize.py`））、`test_caveats_channel`（近似置信度通道三层钉：caveats 词表闸/编译聚合/结果附带+确定性无关钉）、`test_extract_caveats`（提取脚本 `_classify` 规则闸钉：空账/完成陈述不误提、真挂账不误杀）、`test_save_restore`（真·全状态存档与恢复两层钉：三编队 roll+expected 世界线全等（含 JSON 落盘往返/转波后存档/累积队列非空时刻）+ 完备性闸（存档字段策略表 ↔ dataclasses 反射、引擎/调度器/管线/hooks 字段「存档∪豁免」二分））、`test_doc_lint`（文档闸，见上）、`test_pipeline*` / `test_crosscheck_optimizer`（数据管道与对拍）。`scheduler_debug.py` 是调度器调试辅助（行动条预览/快照，纯测试消费的白箱视图，不是测试文件，pytest 不收集）。
+版本线之外的横向族：hook DSL 与模板 e2e（`test_hook_dsl` / `test_ruan_mei_template` / `test_tribbie_template` / `test_phainon_*` / `test_thanatoplum`——手工模板真身在 `data/library/`（机制库正典根，git 追踪），测试编译经 `template_roots=TEST_TEMPLATE_ROOTS` 注入（正典根优先于 data/sim_templates 生成根，见 `tests/template_materialize.py`））、`test_execution_frame_v26`（执行帧语义钉：写后读三层链/跨事件链/提交跨执行可见/回滚丢弃/嵌套隔离+提交合并/roll 首采后续零消耗（RNG 流位置断言）/condition 读未绑定拒绝/同 seed 存档回放逐字段全等——裁决卡 `designs/DECISIONS.md` #26，文档锚 23_event_hook_system.md §23.15）、`test_caveats_channel`（近似置信度通道三层钉：caveats 词表闸/编译聚合/结果附带+确定性无关钉）、`test_extract_caveats`（提取脚本 `_classify` 规则闸钉：空账/完成陈述不误提、真挂账不误杀）、`test_save_restore`（真·全状态存档与恢复两层钉：三编队 roll+expected 世界线全等（含 JSON 落盘往返/转波后存档/累积队列非空时刻）+ 完备性闸（存档字段策略表 ↔ dataclasses 反射、引擎/调度器/管线/hooks 字段「存档∪豁免」二分））、`test_doc_lint`（文档闸，见上）、`test_pipeline*` / `test_crosscheck_optimizer`（数据管道与对拍）。`scheduler_debug.py` 是调度器调试辅助（行动条预览/快照，纯测试消费的白箱视图，不是测试文件，pytest 不收集）。
 
 ## 修改记录
+
+- 新增横向族 `test_execution_frame_v26`（执行帧 #26 语义钉，见「测试组织」）
 
 - 补登记闸 19（生产写保护闸，1a7ef51 引入；编号无闸 18——按测试文件实际编号）：tests/ 调 `write_*_template` 必须显式 `out_dir=`，缺省写生产 `data/sim_templates/`（标注层团灭事故见测试文件头注）
 - 首行结构描述勘正：目录实为扁平布局（版本线 + 横向族，见「测试组织」），非与 `src/hsr_nous/` 对应

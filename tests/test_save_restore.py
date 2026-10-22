@@ -353,6 +353,8 @@ class TestCompletenessGate:
         "_resource_decls": "编译产物",
         "state_entry_actions": "编译产物",
         "_trigger_order": "编译产物",
+        "_frame_stack": "执行帧栈（瞬态——随 _execute_action 调用栈生灭，行动结算完恒空；"
+                        "档间恒静息零值，同 bus._depth 口径；帧语义见 sim/frame.py）",
     }
 
     def test_engine_attrs_partitioned(self):

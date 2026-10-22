@@ -176,7 +176,7 @@ def _unmask_strings(expr: str, literals: List[str]) -> str:
 #: 13_validator §13.5.2 + 22_syntax_reference §22.4/§22.10 为镜像复述，
 #: 一致由 tests/test_doc_lint.py 词表闸保证——改白名单只改这里）
 EFFECT_FUNCTIONS = frozenset(
-    {"min", "max", "abs", "round", "clamp", "sum", "chance", "in_zone", "stacks", "sum_stacks",
+    {"min", "max", "abs", "round", "clamp", "sum", "chance", "roll", "in_zone", "stacks", "sum_stacks",
      "modifier_duration",
      "enemies_alive", "has_modifier", "modifier_source", "count", "count_selected", "count_modifier", "unique_sources", "mechanic_chance",
      "actor_type_of", "hp_of", "max_hp_of", "toughness_of", "resource_of", "dynamic_of", "count_team", "stat_of",

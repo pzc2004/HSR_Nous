@@ -43,7 +43,16 @@ def _compare(actual: float, expected: float, compare_type: str) -> bool:
 
 
 def config_ai_dynamic_value(engine: Any, actor_id: str, key: str) -> float:
-    """按 ConfigAI 运行态、已核初值与缺省规则读取动态值."""
+    """按执行帧覆盖层、ConfigAI 运行态、已核初值与缺省规则读取动态值.
+
+    读取链四层优先级（23_event_hook_system.md §23.15）：① 当前帧覆盖层（执行内
+    未提交写入，仅帧内读者可见——写后读）→ ② 已提交态 → ③ 核定初值 → ④ 缺省。
+    """
+    frame = engine.current_frame
+    if frame is not None:
+        overlay = frame.writes.get(actor_id)
+        if overlay is not None and key in overlay:
+            return float(overlay[key])
     runtime = engine._enemy_policy_state.get(actor_id, {})
     if key == "current_phase":
         return float(runtime.get("current_phase", 1))

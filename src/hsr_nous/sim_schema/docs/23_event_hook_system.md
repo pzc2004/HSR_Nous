@@ -386,4 +386,65 @@ sim 引擎启动时扫描所有模板的 `hooks` 字段，构建事件分发表�
 6. ~~Hook 与 modifier trigger 体系是否合并？~~ **已裁决：合并**——本章为统一事件总线正文档，见 §23.12
 7. ~~`random_select` effect 是否独立 effect_type？~~ **已答**：以 `random_pick` 登记（`05_effects.md` §5.2，待收编）——独立 effect_type，非 hook 特例
 
+### 23.15 执行帧（ExecutionFrame）
+
+> 裁决卡：`designs/DECISIONS.md` #26（2026-10-22）。实现：`sim/frame.py`（帧件）、
+> `engine._execute_action`（压栈/提交/回滚）、`enemy_ai.config_ai_dynamic_value`
+> （读取链）、`hooks._hook_functions`（`roll` 宿主注入）。
+
+**执行帧** = 一次行动执行（`_execute_action` 全程）的瞬态上下文，承载两类"执行内"语义：
+
+1. **写后读（read-your-writes）**：`set_dynamic_value` 在行动执行内的写入先入帧覆盖层，
+   同执行内（含同窗事件链上后续 hook 的 condition/effect）立即可读；
+2. **执行级随机绑定（共享掷骰）**：`roll(key)` 一次执行内首次求值采样一次、绑定帧内，
+   后续读取零消耗——同一次攻击的多处表达式读到同一个骰子。
+
+#### 帧的生灭与提交/回滚
+
+- 帧随 `_execute_action` 同步调用栈生灭：进入压栈、正常返回提交、**异常整帧丢弃**——
+  与 ConfigAI 解释器选不出技能时回滚 dynamic_values 的既有先例（`enemy_ai.py`
+  `choose_action`）同口径。
+- 嵌套执行（`trigger_action` 插入行动/追击、终结技代放）压**子帧**；子执行是完整
+  隔离单元——子帧的写入对子执行内部可见、对外不可见；**子帧提交后其写入并入父帧
+  覆盖层**（父帧后续读者可见；父帧若回滚，子帧已提交的写入一并丢弃）。最外层帧提交
+  时覆盖层才合并进已提交态 `_enemy_policy_state[...]["dynamic_values"]`。
+- 同窗 hooks / modifier 回调（同一行动 emit 出的事件链）**共享父帧**——
+  "modifier 回调写 → 同窗后续事件读"的跨事件链载体就是本帧。
+- 帧是**瞬态**字段（覆盖层/绑定表都不进存档）——已提交 dynamic_values 照旧走
+  `#25` 存档通道，世界线一致口径不变。
+
+#### dynamic_value 四层读取链
+
+`config_ai_dynamic_value`（与 `dynamic_of()` 宿主函数同通道）读取优先级：
+
+```
+① 当前帧覆盖层（未提交写入，仅帧内读者可见）
+② 已提交态（_enemy_policy_state[...]["dynamic_values"]）
+③ 核定初值（config_ai_initial_values）
+④ 缺省（AIFlag/AICounter 族 1，其他 0；current_phase 缺省 1）
+```
+
+注意与 §23 快照语义的分层共存：**hook 级 condition 的快照求值一字未改**——快照冻结的
+是"已提交态"（事件发生前的面板/modifier 等）；帧覆盖层是"执行内未提交写入"，快照层
+的 condition 也是帧内读者，照常读覆盖层（read-your-writes），但读不到**同窗其他 hook
+效果已落地、且还没写进覆盖层**的普通状态改动。等价数据库隔离级别的分层：
+repeatable-read（事件间快照）之上叠 read-your-writes（执行内覆盖层）。
+
+#### `roll(key)` 分域规则
+
+| 求值域 | 语义 |
+|--------|------|
+| effect 执行层（effect `amount`/effect 级 `condition`/`target_filter`/命中域） | 首调采样一次（消耗主 RNG 流 `pipeline.rng` 一次）并绑定帧内；后续读取零消耗返回绑定值 |
+| hook 级 condition（快照层，`_hook_condition_ok`） | **只许读已绑定**——读未绑定键显式报错（该错按 hook condition 求值失败口径处理：⚠ 日志 + 不触发），**禁止采样**——condition 无副作用的纯洁性不破（双跑类病例安全） |
+| 无活动执行帧（策略/available_if 等决策期求值） | 显式报错——roll 只活在行动执行内 |
+
+- 绑定表以**帧**为命名空间（不按 actor 分键）：一次执行内所有求值点共享一份绑定；
+  **绑定不跨帧提交合并**——子帧提交只合并写入，父帧再读同键视为未绑定（effect 层
+  重新采样）。跨执行的战斗级随机记忆（上游 `RandomMaskKey`/`RandomUnique` 类）走
+  持久态，不归帧（编译器翻译期另行钉）。
+- 两种模式（roll/expected）都消耗主流一次——与 `chance()`/`random()` 同口径，
+  保证同 seed 两模式采样序列一致（存档/回放世界线一致的前提）。
+- 回放确定性：同 seed + 同决策序 → 同采样序自动成立（绑定后读取零消耗，
+  求值序冻结无需扩展）。
+
 ---

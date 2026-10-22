@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 from hsr_nous.sim.bus import EventBus
 from hsr_nous.sim.compile.expr_compiler import ExprCompiler
 from hsr_nous.sim.enemy_ai import ConfigAIInterpreter
+from hsr_nous.sim.frame import ExecutionFrame
 from hsr_nous.sim.hooks import HookRuntime, _CondSelfNS, _HookSelfNS  # noqa: F401  # _HookSelfNS 为 re-export（tests 直引本模块）
 from hsr_nous.sim.modifiers import ModifierBook
 from hsr_nous.sim.pipeline import MODE_ROLL, SettlementPipeline
@@ -190,6 +191,9 @@ class CombatEngine:
         # 大吉大利「攻击消耗战技点额外触发」/23053 耗点叠层族；before_consume 抵扣后
         # 净值，_execute_action 每次行动覆写）
         self._last_sp_consumed: int = 0
+        # 执行帧栈（#26——随 _execute_action 调用栈生灭的瞬态上下文；战斗任意静止
+        # 时刻恒空，不进存档）：帧语义见 sim/frame.py 与 23_event_hook_system.md §23.15
+        self._frame_stack: List[ExecutionFrame] = []
         # 缺省读簿（rulebook constants.initial_sp / initial_energy_ratio——引擎零数值字面量）
         self.initial_sp = initial_sp if initial_sp is not None else self.pipeline.initial_sp_default()
         self.state.skill_points = self.initial_sp
@@ -1780,8 +1784,51 @@ class CombatEngine:
                      if variant.get("scaling") is not None else action.scaling),
         )
 
+    @property
+    def current_frame(self) -> Optional[ExecutionFrame]:
+        """当前活动执行帧（栈顶；帧外=None）——dynamic_value 覆盖层读链与 roll 绑定锚."""
+        return self._frame_stack[-1] if self._frame_stack else None
+
+    def _commit_frame(self, frame: ExecutionFrame) -> None:
+        """帧提交：覆盖层写入并入父帧（嵌套子执行）或已提交态 dynamic_values（最外层）.
+
+        只在正常返回路径调用（异常路径整帧丢弃，engine._execute_action 包装层口径）；
+        rolls 绑定不随提交合并——绑定以帧为生命周期（frame.py docstring）。
+        """
+        if self._frame_stack:
+            parent = self._frame_stack[-1]
+            for actor_id, kv in frame.writes.items():
+                parent.writes.setdefault(actor_id, {}).update(kv)
+            return
+        for actor_id, kv in frame.writes.items():
+            runtime = self._enemy_policy_state.setdefault(actor_id, {
+                "seq_idx": 0, "cooldown_left": {}, "current_phase": 1,
+                "dynamic_values": {}})
+            runtime.setdefault("dynamic_values", {}).update(kv)
+
     def _execute_action(self, actor_state: ActorState, action: Action, *, _insert: bool = False,
                         forced_target: Optional[ActorState] = None) -> None:
+        """行动结算主流程入口：全程压执行帧——正常返回提交、异常整帧丢弃.
+
+        嵌套执行（trigger_action 插入行动/追击、终结技插队经此入口）压子帧，子帧提交
+        后其写入并入父帧覆盖层（子执行=完整隔离单元）；同窗 hooks/modifier 回调
+        （本行动 emit 出的事件链）共享本帧——"modifier 回调写→同窗后续事件读"的
+        跨事件链载体。帧语义见 frame.py 与 23_event_hook_system.md §23.15。
+        """
+        frame = ExecutionFrame(action_id=action.action_id,
+                               actor_id=actor_state.actor.actor_id)
+        self._frame_stack.append(frame)
+        try:
+            self._execute_action_inner(actor_state, action, _insert=_insert,
+                                       forced_target=forced_target)
+        except Exception:
+            self._frame_stack.pop()
+            raise
+        self._frame_stack.pop()
+        self._commit_frame(frame)
+
+    def _execute_action_inner(self, actor_state: ActorState, action: Action, *, _insert: bool = False,
+                              forced_target: Optional[ActorState] = None) -> None:
         actor = actor_state.actor
         self._last_sp_consumed = 0   # 每次行动覆写（sp_consumed 载荷槽——无耗点行动清零防串账）
         if forced_target is None:
