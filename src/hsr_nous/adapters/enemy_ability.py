@@ -111,12 +111,24 @@ IGNORED_TASK_TYPES = frozenset({
     "RPG.GameCore.WaitParallelTimeStamp",
     "RPG.GameCore.WaitSecond",
     "RPG.GameCore.WaitTimelineFinish",
+    # —— 任务节点长尾族（14_policy.md 任务节点长尾节）：数据形态核证为纯表现 ——
+    "RPG.GameCore.TriggerCustomString",       # 客户端自定义串（Level_SpecialWin 等 UI/表现触发）
+    "RPG.GameCore.ModifyDefaultTeamFormation",  # 站位编排参数（LocalZOffset/CentralXOffset 显示位）
+    "RPG.GameCore.RemoveEntityFromTeamFormation",
+    "RPG.GameCore.MappingAttachPoint",        # 模型挂点映射
+    "RPG.GameCore.SetEntityArtRotation",      # 模型朝向
+    "RPG.GameCore.SetTargetUniqueName",       # 高亮寻址标记（UniqueName 寻址链未收编，标记本体无战斗语义）
+    "RPG.GameCore.ClearActionBarHighlightEntity",
+    "RPG.GameCore.SwitchChallengeBossInfoPanelState",  # UI 面板（Add/Remove 同族已在列）
+    "RPG.GameCore.PreloadBattleEventByID",    # 战斗事件预载（表现资产）
 })
 
 #: 注册表即节点覆盖矩阵；值为 AbilityCompiler 方法名。
 TASK_HANDLERS = {
     "RPG.GameCore.AddModifier": "_compile_add_modifier",
+    "RPG.GameCore.AddWeakness": "_compile_add_weakness",
     "RPG.GameCore.DamageByAttackProperty": "_compile_damage",
+    "RPG.GameCore.DamageStance": "_compile_damage_stance",
     "RPG.GameCore.DispelStatus": "_compile_dispel_status",
     "RPG.GameCore.DefineDynamicValue": "_compile_define_dynamic",
     "RPG.GameCore.ForceKill": "_compile_force_kill",
@@ -151,6 +163,10 @@ TASK_HANDLERS = {
     "RPG.GameCore.TriggerAbility": "_compile_trigger_ability",
     "RPG.GameCore.TriggerAnimStateWithMove": "_compile_animation_events",
     "RPG.GameCore.TurnInsertAbility": "_compile_trigger_ability",
+    "RPG.GameCore.SetResilience": "_compile_set_resilience",
+    "RPG.GameCore.StackWeakness": "_compile_stack_weakness_task",
+    "RPG.GameCore.ClearWeakness": "_compile_clear_weakness",
+    "RPG.GameCore.PerformDelayExecute": "_compile_perform_delay_execute",
 }
 EVENT_HANDLERS = {
     "OnDeathrattle": "_compile_deathrattle",
@@ -617,7 +633,8 @@ class AbilityCompiler:
                 continue
             method_name = TASK_HANDLERS.get(node_type)
             if method_name is None:
-                self._issue(ctx, node_path, node_type or "<missing $type>", "未注册任务节点")
+                reason = self._UNREGISTERED_TASK_REASONS.get(node_type, "未注册任务节点")
+                self._issue(ctx, node_path, node_type or "<missing $type>", reason)
                 index += 1
                 continue
             ctx.handled.append(node_type)
@@ -1197,8 +1214,128 @@ class AbilityCompiler:
         if node_type == "RPG.GameCore.ByNot":
             child = self._predicate_expr(predicate.get("Predicate") or {}, ctx, f"{path}/Predicate")
             return self._negate_condition(child) if child is not None else None
-        self._issue(ctx, path, node_type or "<missing $type>", "未注册条件谓词")
+        translated = self._translate_longtail_predicate(predicate, ctx, path, node_type,
+                                                        alias, target)
+        if translated is not None:
+            return translated or None   # "" = 已记拒因的失败分支
+        reason = self._UNREGISTERED_PREDICATE_REASONS.get(node_type, "未注册条件谓词")
+        self._issue(ctx, path, node_type or "<missing $type>", reason)
         return None
+
+    #: 谓词长尾族逐型拒因（14_policy.md 任务节点长尾节）——未注册谓词 default 查表。
+    _UNREGISTERED_PREDICATE_REASONS = {
+        "RPG.GameCore.ByCheckModifierCallBackName": "modifier 回调名内省谓词无引擎载体",
+        "RPG.GameCore.ByCheckModifierCallBackBehaviorFlag": "modifier 回调旗标内省谓词无引擎载体",
+        "RPG.GameCore.ByTargetTeam": "队伍侧判定（TeamDark/Light）与 actor_type 词表映射待实测钉",
+        "RPG.GameCore.ByIsTeamLocationIndexType": "站位索引体系（左/右位）未收编",
+        "RPG.GameCore.ByCompareStageType": "关卡类型语境运行时无载体（编译器不知关卡）",
+        "RPG.GameCore.ByCompareStageID": "关卡 ID 语境运行时无载体",
+        "RPG.GameCore.ByCompareBattleEventID": "战斗事件体系未收编",
+        "RPG.GameCore.ByTargetListIntersects": "目标集交集无表达式原语（ByTargetListAny 已收编）",
+        "RPG.GameCore.ByCompareAbilityProperty": "当前技能属性运行时载体缺",
+        "RPG.GameCore.ByCompareParamString": "参数串比较语境未收编",
+        "RPG.GameCore.ByIsTargetValid": "目标有效性判定语义未钉",
+        "RPG.GameCore.ByCompareSomatoType": "体型（somato）体系未收编",
+        "RPG.GameCore.ByCharacterSomatoWidthType": "体宽体系未收编",
+        "RPG.GameCore.ByCharacterDamageType": "角色伤害属性谓词载体缺",
+        "RPG.GameCore.ByIsTurnActionEntity": "行动实体判定仅回合语境可翻——见语境拒因",
+        "RPG.GameCore.ByDistance": "距离体系（站位域）未收编",
+        "RPG.GameCore.ByCompareCustomValue": "CustomValue 数值比较语境未收编",
+    }
+
+    #: 当前技能类型词表（ByCurrentSkillType → on_action 载荷 action_type）
+    _SKILL_TYPE_TO_ACTION = {"Ultra": "ultimate", "Ultimate": "ultimate",
+                             "Skill": "skill", "BPSkill": "skill",
+                             "Normal": "basic", "Attack": "basic"}
+
+    def _translate_longtail_predicate(self, predicate: Dict[str, Any], ctx: _Context,
+                                      path: str, node_type: str, alias: str,
+                                      target: Optional[str]) -> Optional[str]:
+        """谓词长尾族翻译（14_policy.md）：当前技能名/类型（on_action 语境）、伤害
+        属性（伤害事件语境）、持有弱点（has_weakness 宿主）、UniqueID 自身静态支。
+        语境不符显式拒（谓词语境无对应事件载荷），不猜。"""
+        if node_type == "RPG.GameCore.ByCurrentSkillName":
+            if ctx.event != "on_action":
+                self._issue(ctx, path, node_type, f"当前技能名谓词需 on_action 语境（实得 {ctx.event}）")
+                return ""
+            trigger = str(predicate.get("SkillName") or "")
+            skill = self.skills.get(trigger)
+            if skill is None:
+                self._issue(ctx, path, node_type, f"技能名未绑定 TBGD 技能：{trigger!r}")
+                return ""
+            return f"$event.action_id == '{skill['skill_id']}'"
+        if node_type == "RPG.GameCore.ByCurrentSkillType":
+            if ctx.event != "on_action":
+                self._issue(ctx, path, node_type, f"当前技能类型谓词需 on_action 语境（实得 {ctx.event}）")
+                return ""
+            mapped = self._SKILL_TYPE_TO_ACTION.get(str(predicate.get("SkillType") or ""))
+            if mapped is None:
+                self._issue(ctx, path, node_type,
+                            f"技能类型词表外：{predicate.get('SkillType')!r}")
+                return ""
+            return f"$event.action_type == '{mapped}'"
+        if node_type == "RPG.GameCore.ByIsDamageType":
+            if ctx.event not in {"after_being_hit", "before_take_damage", "on_hp_decrease"}:
+                self._issue(ctx, path, node_type,
+                            f"伤害属性谓词需伤害事件语境（实得 {ctx.event}）")
+                return ""
+            if target is None:
+                self._issue(ctx, path, node_type, f"伤害属性谓词目标未注册：{alias}")
+                return ""
+            elements = [_element(raw) for raw in predicate.get("DamageTypeList") or []]
+            if not elements or any(not e for e in elements):
+                self._issue(ctx, path, node_type, "伤害属性词表外")
+                return ""
+            checks = [f"$event.damage_type == '{e}'" for e in elements]
+            return "(" + " or ".join(checks) + ")"
+        if node_type == "RPG.GameCore.ByAttackType":
+            if ctx.event not in {"after_being_hit", "before_take_damage"}:
+                self._issue(ctx, path, node_type,
+                            f"攻击类型谓词需伤害事件语境（实得 {ctx.event}）")
+                return ""
+            mapped_map = {"DOT": "dot", "Insert": "follow_up", "Skill": "skill",
+                          "Ultra": "ultimate", "Normal": "basic"}
+            raw_types = [str(t) for t in predicate.get("AttackTypes") or []]
+            mapped = [mapped_map.get(t) for t in raw_types]
+            if not mapped or any(m is None for m in mapped):
+                self._issue(ctx, path, node_type,
+                            f"攻击类型词表外：{[t for t, m in zip(raw_types, mapped) if m is None]}")
+                return ""
+            checks = [f"$event.action_type == '{m}'" for m in mapped]
+            return "(" + " or ".join(checks) + ")"
+        if node_type == "RPG.GameCore.ByHasStanceWeak":
+            if target is None:
+                self._issue(ctx, path, node_type, f"弱点谓词目标未注册：{alias}")
+                return ""
+            element = _element((predicate.get("WeakType") or {}).get("DamageType")
+                               if isinstance(predicate.get("WeakType"), dict)
+                               else predicate.get("WeakType"))
+            if not element:
+                self._issue(ctx, path, node_type, "弱点元素词表外")
+                return ""
+            return f"has_weakness({target}, '{element}')"
+        if node_type == "RPG.GameCore.ByCompareMonsterUniqueID":
+            # 自身静态支：ModifierOwnerEntity/Caster 的 UniqueID 是本敌编译期知识
+            # （同 ByCompareMonsterID 静态求值先例）；跨实例/波次后缀交互待钉，拒。
+            if alias not in {"", "Caster", "ModifierOwnerEntity"}:
+                self._issue(ctx, path, node_type, f"UniqueID 谓词目标未注册：{alias}")
+                return ""
+            value = _fixed(predicate.get("TargetMonsterUniqueID"))
+            if not _is_number(value):
+                self._issue(ctx, path, node_type, "UniqueID 比较值必须是静态数值")
+                return ""
+            hit = str(self.enemy_id) == str(int(value))
+            return "1 == 1" if hit else "1 == 0"
+        if node_type == "RPG.GameCore.ByIsTurnOwnerEntity":
+            if ctx.event not in {"on_turn_start", "on_turn_end", "on_action"}:
+                self._issue(ctx, path, node_type,
+                            f"回合实体谓词需回合/行动事件语境（实得 {ctx.event}）")
+                return ""
+            if target in {None, "$self.actor_id"}:
+                return "$event.actor == $self.actor_id"
+            self._issue(ctx, path, node_type, f"回合实体谓词目标未注册：{alias}")
+            return ""
+        return None  # 未接管——走 _UNREGISTERED_PREDICATE_REASONS
 
     def _damage_only_records(self, tasks: Iterable[Dict[str, Any]], ctx: _Context,
                              path: str, stack: Tuple[str, ...]) -> Optional[List[Dict[str, Any]]]:
@@ -1642,6 +1779,158 @@ class AbilityCompiler:
             self._compile_tasks(options[index], ctx, f"{path}/Odds/{index}", stack)
             acc_before = acc_after
         ctx.live_condition = previous
+
+    #: 任务位未注册节点的逐型拒因（14_policy.md 任务节点长尾节）——default 分支查表，
+    #: 不再只报"未注册任务节点"。键=上游 $type 全名，值=写清理由的拒因文本。
+    _UNREGISTERED_TASK_REASONS = {
+        "RPG.GameCore.LockHP": "比例阈值锁血——引擎 hp_lock 仅钳 1 血，Threshold 比例语义无载体",
+        "RPG.GameCore.CreateBattleEvent": "战斗事件体系（EventID 时间条）未收编",
+        "RPG.GameCore.ModifyDamageData": "攻击数据装配期（伤害结算前属性改写）无发射点",
+        "RPG.GameCore.RetargetList": "多目标重定向逐目标语义待钉（现 Retarget 仅收 MaxNumber=1）",
+        "RPG.GameCore.SetHP": "ModifyValue 绝对值/比例歧义未钉（锁血配合族，待实测）",
+        "RPG.GameCore.DefineHPSharedGroup": "HP 共享组（连坐血条）未收编",
+        "RPG.GameCore.AddStageAbilityByName": "行动表动态加装（阶段进化）未收编",
+        "RPG.GameCore.OwnerEntityAddAbility": "能力动态加装未收编",
+        "RPG.GameCore.TriggerParallelAbility": "并行能力触发（多能力同刻执行语义）未收编",
+        "RPG.GameCore.LockActionDelayChange": "推条锁（Whitelist 白名单式）未收编",
+        "RPG.GameCore.ModifyCurrentSkillDelayCost": "当次技能 AV 消耗改写时机未收编",
+        "RPG.GameCore.AttachEntityUnselectable": "目标不可选标记通道未收编（actor 级非 modifier 级）",
+        "RPG.GameCore.AttachSkillTypeDisable": "技能类型禁用（形态机 locked_actions 不通用）未收编",
+        "RPG.GameCore.TriggerStanceCountDown": "多韧性条倒计时未收编",
+        "RPG.GameCore.SetDynamicValueByVariateType": "VariateType 动态值变体（MaxMonsterPhase 等引擎内建枚举）未收编",
+        "RPG.GameCore.SetModifierDynamicValue": "modifier 级动态值命名空间未收编",
+        "RPG.GameCore.SetModifierValue": "modifier 值改写（无 ModifierName 自指语境）未钉",
+        "RPG.GameCore.AddGlobalDynamicOffset": "关卡级全局偏移表（ConfigName 引用）未收编",
+        "RPG.GameCore.SetEntityActionState": "具名实体行动态开关（UniqueName 寻址链）未收编",
+        "RPG.GameCore.ConstructBodyPart": "部位构造（PartName/MonsterID 组装）未收编",
+        "RPG.GameCore.StackProperty": "任务位立即面板改写无 modifier 载体语义待钉（OnStack 回调内才是已收编形态）",
+        "RPG.GameCore.StackStatusResistance": "任务位立即效果抵抗改写无载体语义待钉",
+        "RPG.GameCore.StackWeakResistance": "任务位立即效果抵抗改写无载体语义待钉",
+        "RPG.GameCore.SetActionDelayNearTarget": "近目标 AV 对齐改写未收编",
+        "RPG.GameCore.AttachEntityVisible": "实体可见性开关（条件显隐机制）未收编",
+        "RPG.GameCore.HideMonsterHUD": "HUD 显隐（纯表现遗漏件）",
+    }
+
+    _ALL_WEAKNESS = {"Physical", "Fire", "Ice", "Thunder", "Wind", "Quantum", "Imaginary"}
+
+    @staticmethod
+    def _toughness_lock_id(skill_id: str) -> str:
+        return f"ENEMY_{skill_id}_TOUGHNESS_LOCK"
+
+    def _compile_damage_stance(self, task: Dict[str, Any], ctx: _Context,
+                               path: str, stack: Tuple[str, ...]) -> None:
+        """DamageStance（ForceStanceDamage=true）→ reduce_toughness（14_policy.md 长尾节）.
+
+        DefenderTargetType=被削韧者；StanceValue=削韧量（表达式通道）。StanceDamageType
+        属性与 Force=false 的削韧减免交互引擎无载体——Force=false 显式拒，属性照算为已知近似。"""
+        if not task.get("ForceStanceDamage"):
+            self._issue(ctx, path, str(task.get("$type")),
+                        "ForceStanceDamage=false 的削韧减免交互未收编（只收 Force=true）")
+            return
+        target = self._hook_target(self._alias({"TargetType": task.get("DefenderTargetType")}), ctx)
+        value = self._value(task.get("StanceValue"), ctx, f"{path}/StanceValue")
+        if target is None or value is None:
+            self._issue(ctx, path, str(task.get("$type")), "削韧目标或削韧量未注册")
+            return
+        self._add_effect(ctx, {"effect_type": "reduce_toughness", "target": target,
+                               "amount": value})
+
+    def _compile_add_weakness(self, task: Dict[str, Any], ctx: _Context,
+                              path: str, stack: Tuple[str, ...]) -> None:
+        """AddWeakness → 永久弱点植入 modifier（weakness_add 引擎消费点在案：有效弱点并集）."""
+        element = _element(task.get("DamageType"))
+        target = self._hook_target(self._alias(task), ctx)
+        if not element or target is None:
+            self._issue(ctx, path, str(task.get("$type")), "弱点元素或目标未注册")
+            return
+        skill_id = str(ctx.skill.get("skill_id") or self.enemy_id)
+        self._add_effect(ctx, {
+            "effect_type": "apply_modifier", "target": target,
+            "modifier": {
+                "modifier_id": f"ENEMY_{skill_id}_WEAKNESS_{element.upper()}",
+                "name": f"Weakness {element}",
+                "modifier_type": "debuff", "duration": 0, "dispellable": False,
+                "weakness_add": [element],
+            },
+        })
+
+    def _compile_stack_weakness_task(self, task: Dict[str, Any], ctx: _Context,
+                                     path: str, stack: Tuple[str, ...]) -> None:
+        """任务位 StackWeakness 分流（区别于 OnStack 回调内的 visit_stack 消费）：
+        OPType=Protected 且全七属性 → toughness_lock modifier；无 OPType 且 WeakList
+        恰单元素 → AddWeakness 同翻；其余显式拒。"""
+        target = self._hook_target(self._alias(task), ctx)
+        weak_list = [str(w) for w in task.get("WeakList") or []]
+        if task.get("OPType") == "Protected":
+            if set(weak_list) != self._ALL_WEAKNESS:
+                self._issue(ctx, path, str(task.get("$type")),
+                            "只支持全七属性 WeakList 的 Protected 韧性锁（既有口径同）")
+                return
+            if target is None:
+                self._issue(ctx, path, str(task.get("$type")), "韧性锁目标未注册")
+                return
+            skill_id = str(ctx.skill.get("skill_id") or self.enemy_id)
+            self._add_effect(ctx, {
+                "effect_type": "apply_modifier", "target": target,
+                "modifier": {
+                    "modifier_id": self._toughness_lock_id(skill_id),
+                    "name": "Toughness Lock",
+                    "modifier_type": "buff", "duration": 0, "dispellable": False,
+                    "max_stack": 1, "stack_mode": "replace",
+                    "toughness_lock": True,
+                },
+            })
+            return
+        if len(weak_list) == 1:
+            proxy = {"TargetType": task.get("TargetType"),
+                     "DamageType": weak_list[0]}
+            self._compile_add_weakness(proxy, ctx, path, stack)
+            return
+        self._issue(ctx, path, str(task.get("$type")),
+                    f"任务位 StackWeakness 形态未收编：OPType={task.get('OPType')!r} "
+                    f"WeakList={weak_list!r}")
+
+    def _compile_clear_weakness(self, task: Dict[str, Any], ctx: _Context,
+                                path: str, stack: Tuple[str, ...]) -> None:
+        """ClearWeakness（Protected 全七）→ 摘 toughness_lock 同件（与任务位
+        StackWeakness 锁配对命名）；其余形态显式拒。"""
+        target = self._hook_target(self._alias(task), ctx)
+        weak_list = {str(w) for w in task.get("WeakList") or []}
+        if task.get("OPType") != "Protected" or weak_list != self._ALL_WEAKNESS:
+            self._issue(ctx, path, str(task.get("$type")),
+                        "只支持全七属性 WeakList 的 Protected 韧性锁清除")
+            return
+        if target is None:
+            self._issue(ctx, path, str(task.get("$type")), "韧性锁清除目标未注册")
+            return
+        skill_id = str(ctx.skill.get("skill_id") or self.enemy_id)
+        self._add_effect(ctx, {
+            "effect_type": "remove_modifier", "target": target,
+            "modifier_id": self._toughness_lock_id(skill_id), "reason": "weakness_clear",
+        })
+
+    def _compile_set_resilience(self, task: Dict[str, Any], ctx: _Context,
+                                path: str, stack: Tuple[str, ...]) -> None:
+        """SetResilience（纯 `$type` 或 DoReset=true）→ restore_toughness（恢复满+解击破
+        同语义，Gepard 真实样例形态）；DoReset=false / 带 Resilience 值显式拒。"""
+        extra = set(task) - {"$type", "DoReset", "TargetType"}
+        if extra or task.get("DoReset") is False:
+            self._issue(ctx, path, str(task.get("$type")),
+                        f"SetResilience 变体未收编：{sorted(extra)} DoReset={task.get('DoReset')!r}")
+            return
+        target = self._hook_target(self._alias(task), ctx) or "self"
+        self._add_effect(ctx, {"effect_type": "restore_toughness", "target": target})
+
+    def _compile_perform_delay_execute(self, task: Dict[str, Any], ctx: _Context,
+                                       path: str, stack: Tuple[str, ...]) -> None:
+        """PerformDelayExecute：纯表现内容忽略（语料 88 节点全表现——Perform 时点
+        模型/特效对齐）；机制内容显式拒（延迟执行时机未收编）。"""
+        tasks = task.get("PerformTaskList") or []
+        if self._presentation_only(tasks):
+            ctx.handled.append(str(task.get("$type")))
+            return
+        self._issue(ctx, path, str(task.get("$type")),
+                    "Perform 时点延迟执行（机制内容）时机未收编")
 
     def _compile_define_dynamic(self, task: Dict[str, Any], ctx: _Context,
                                 path: str, stack: Tuple[str, ...]) -> None:

@@ -310,7 +310,36 @@ hook 级快照条件（事件间确定性语义不变）。`SetDynamicValueByMod
 （上节），其无载体事件按 `_PASSIVE_EVENT_MAP` 逐条显式拒收。写后读/概率分支经
 执行帧改翻后，"同一技能写入后读取动态值会命中旧事件快照"与"运行时 Switch 尚未注册"
 两类旧拒因退役；概率分支限主动技能域（事件域帧外发射暂不注册），战斗级随机记忆
-（`RandomUnique`/`RandomMaskKey`）保持显式 unsupported。完整支持的主动技能
+（`RandomUnique`/`RandomMaskKey`/`RandomCount`）保持显式 unsupported。**任务节点长尾族（2026-10-22/23
+收编）**：表现类零成本进 `IGNORED_TASK_TYPES`（TriggerCustomString 客户端串/
+ModifyDefaultTeamFormation+RemoveEntityFromTeamFormation 站位编排/MappingAttachPoint
+挂点映射/SetEntityArtRotation/SetTargetUniqueName+ClearActionBarHighlightEntity 高亮寻址/
+SwitchChallengeBossInfoPanelState UI 面板/PreloadBattleEventByID 预载）。机制族翻译：
+`DamageStance`（ForceStanceDamage=true）→ `reduce_toughness`（DefenderTargetType=被削韧
+者；`StanceDamageType` 属性与 Force=false 的削韧减免交互引擎无载体，照算削韧=已知近似、
+Force=false 显式拒）；`SetResilience`（纯 `$type` 或 DoReset=true）→ `restore_toughness`
+（恢复满+解击破同语义；DoReset=false/带 Resilience 值拒）；`AddWeakness` →
+`apply_modifier(weakness_add=[元素])`（永久弱点植入，命名 `ENEMY_<skill_id>_WEAKNESS_<元素>`，
+dispellable=false 防误驱散）；任务位 `StackWeakness` 分流——OPType=Protected 且全七属性
+→ `toughness_lock` modifier（命名 `ENEMY_<skill_id>_TOUGHNESS_LOCK`，与 `ClearWeakness`
+（Protected 全七）摘除同件配对；非全七拒），无 OPType 且 WeakList 恰单元素 → 转
+AddWeakness 同翻，其余拒；`PerformDelayExecute` 纯表现内容忽略、机制内容显式拒
+（Perform 时点延迟执行时机未收编）。其余未注册任务节点经 `_UNREGISTERED_TASK_REASONS`
+逐型写理由（LockHP 比例阈值 vs 引擎钳 1 血/CreateBattleEvent 战斗事件体系/RetargetList
+多目标重定向/SetHP 绝对比例歧义/DefineHPSharedGroup HP 共享组/AddStageAbilityByName 等
+行动表动态加装/LockActionDelayChange 推条锁/AttachEntityUnselectable 不可选标记/
+AttachSkillTypeDisable 技能类型禁用/TriggerStanceCountDown 多韧条倒计时/SetModifierValue
+族 modifier 值改写/AddGlobalDynamicOffset 关卡级偏移表/SetEntityActionState 具名实体
+行动态/ConstructBodyPart 部位构造/任务位 StackProperty+StackStatusResistance+
+StackWeakResistance 立即面板改写无 modifier 载体——语义待钉全列明），不再只报
+"未注册任务节点"。谓词长尾同批收编：`ByCurrentSkillName`/`ByCurrentSkillType`（on_action
+语境，`$event.action_id`/`$event.action_type` 窄化，SkillParam 绑定与词表外类型显式拒）、
+`ByIsDamageType`/`ByAttackType`（伤害事件语境 `$event.damage_type`/`action_type` 窄化，
+词表外拒）、`ByHasStanceWeak` → `has_weakness(target, 元素)`、`ByCompareMonsterUniqueID`
+自身静态支（ByCompareMonsterID 静态求值先例同口径，跨实例拒）、`ByIsTurnOwnerEntity`
+（回合/行动事件语境 `$event.actor` 窄化）；语境不符一律显式拒（谓词语境无对应事件载荷），
+其余未注册谓词经 `_UNREGISTERED_PREDICATE_REASONS` 逐型写理由（modifier 回调名/旗标内省/
+站位索引/关卡语境/目标集交集/体型体系/侧判定词表待实测钉等）。完整支持的主动技能
 在正式生成器中优先走该路径；下述 Fandom 文本转换属于尚未迁移机制族的遗留路径。
 `TargetInfo.AllTeamMember` 映射 `ally_aoe`，敌方行动时该类型返回全部存活友方怪物，
 不落入玩家目标池。属性件仅在整个 stat 块可静态证明全为增益时标 `buff`；正向

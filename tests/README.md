@@ -48,6 +48,7 @@ pytest tests/test_doc_lint.py -v
 
 ## 修改记录
 
+- 任务节点/谓词长尾族收编：`test_enemy_ability` 扩长尾钉——DamageStance→reduce_toughness（含引擎级削韧落地）/弱点植入+韧性锁+清除配对/SetResilience 回韧/PerformDelayExecute 两态/表现类 IGNORED 零成本钉/逐型拒因钉；谓词族语境门控钉（当前技能名/类型/伤害属性/弱点持有/UniqueID 静态支）
 - 被动事件族收编：`test_enemy_ability` 扩被动通道钉——真实样例（Kafka Passive01 双触发挂载/BGM LevelEntity 显式拒、AML Minion02 击破回调 on_break 映射、Lesser Sting 亡语钩按事件选取）+ 手工样例（OnHPChange 无载体显式拒/纯表现忽略、双触发互斥、OnListenModifierDispel 映射结构、引擎级 on_battle_start 挂载生效钉）；`_is_passive_row`（SkillType=Passive）修正顺带消除"主动技能不存在"假拒因
 - 执行帧期 2/3（编译器翻译）：`test_enemy_ability` 扩真实样例钉——SW_Boss_00 概率分支 bind_roll 结构/写后读 effect 级守卫、Cocolia IF_02 Switch 活读守卫与 AddValue 钳制表达式、RandomConfig 加权翻译/表现跳过/战斗级记忆拒收、Copying 自指翻译、事件域概率拒收、引擎级 roll/expected 两模式行为钉；三个"旧事件快照拒收"测试改写为活读翻译语义钉
 - 新增横向族 `test_execution_frame_v26`（执行帧 #26 语义钉，见「测试组织」）
