@@ -42,26 +42,44 @@ hsr-research-chat --port 8080  # 换端口
 
 stock web 定位自此降级为 **capability matrix 试验台**（AUTORESEARCH_DESIGN §16 要求的"DSH 开始接入前一页 capability matrix"）：DSH 自带 UI 的呈现行为在那里观察，生产聊天路径走下面的 ACP 桥。
 
-## ACP 桥（--serve）
+## ACP 聊天桥（workbench 代管的子进程）
+
+聊天前端已并入研究台——**唯一对外入口是 `hsr-research-web`（默认 8001）**，
+聊天是其中一个视图（AGENT_DEV_PLAN 阶段 C / AGENT_UX_OVERVIEW 左聊右文档工作区）。
+桥本体是独立部署单元：**workbench 不 import 本包任何代码**，它在启动时 spawn
+`python -m hsr_nous.agents.chat_server`（回环随机端口、代管生命周期），只做
+`/chat/*` 流式反代——进程边界即模块边界（workbench 代管本地服务，同 sim.web
+本地服务先例）。缺模型配置或 DSH 时子进程前置校验即非零退出，workbench 探活
+失败后降级为无聊天。
 
 ```bash
-hsr-research-chat --serve                # 起桥（默认 8003 端口，仅回环绑定）
-hsr-research-chat --serve --port 8080
+hsr-research-web                      # 研究台单页：聊天视图 + 研究视图（默认 8001）
+hsr-research-chat --serve             # 独立桥模式（默认 8003），仅开发调试
+python -m hsr_nous.agents.chat_server --port 8003 --host 127.0.0.1   # 同上
 ```
 
 架构：
 
 ```
-浏览器（vanilla JS 原型页，内嵌于 chat_server）
+浏览器（研究台单页聊天视图，workbench web_static/index.html）
   ↔ POST 下发 / SSE 推送（EventSource，sse-starlette）
-  ↔ chat_server（FastAPI，一个 app 持一个 AcpClient）
+  ↔ workbench:8001（唯一对外；/chat/* 流式反代：SSE 逐 chunk 透传 + POST 透传）
+  ↔ chat_server 独立进程（回环随机端口，workbench spawn + /healthz 探活）
   ↔ AcpClient（asyncio，换行分隔 JSON-RPC over stdio，见 acp_client.py）
   ↔ dsh --profile acp（叠加 research/openai 两补丁，nous MCP 网关挂在内）
 ```
 
-人在我们自己的页面聊天，DSH 完全退到幕后；一个 AcpClient = 一个 dsh 子进程
-（内含多会话），POST /sessions 建会话、POST .../prompt 下发（202）、
-GET .../events 推 `session/update` 流、POST .../cancel 取消、GET /sessions 列表。
+路由契约（对外经 workbench 是 `/chat/*` 前缀；桥自身端点在根路径）：
+
+- `POST /sessions`（可带首条 prompt）建会话；`POST .../prompt` 下发（202，
+  重复下发 409）；`GET .../events` 推 `session/update` 流（200 条环形历史重放）；
+  `POST .../cancel` 取消；`GET /healthz` 供 workbench 启动探活。
+- `GET /sessions` 合并两侧：活跃 = 桥记账（摘要标题=首条用户消息截断、最近
+  `usage_update` 的 used/size），可恢复 = ACP `session/list` 落盘会话。
+- `POST .../resume` 恢复落盘会话并纳入活跃记账（ACP resume 不重放历史，
+  页面标注「历史不回放」）。
+- 路由组支持 `prefix` 参数（如 `prefix="/chat"`），独立页 fetch/EventSource
+  路径基于前缀生成。
 
 协议事实（2026-10-22 实测探针，dsh 0.2.1-rc.2，细节见 acp_client.py docstring）：
 

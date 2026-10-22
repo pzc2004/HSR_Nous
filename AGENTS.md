@@ -35,7 +35,7 @@ src/hsr_nous/
 │   ├── core/        # 执行、只读 artifact、可信计算、JSON 报告与后台 worker
 │   ├── permissions/ # CapabilityPolicy + ResearchGateway + MCP（外部权限边界）
 │   ├── web/         # 可选外部检索与证据（Search/Fetch provider + WebEvidenceStore）
-│   └── workbench/   # 只读研究台（任务、图表与证据下钻）
+│   └── workbench/   # 研究台（任务/图表/证据下钻；代管本地聊天桥子进程：spawn+回环反代，不 import agents）
 ├── agents/        # 外部 Agent harness 适配（DSH headless + 工具白名单；不直接制造可信结论）
 ├── ops/           # 生产运行时与批量流水线（DAG 执行器 + 生产 DAG——打标 annotator 首租）
 └── account/       # Mihoyo 账号集成（HoYoLAB API，keyring 优先）
