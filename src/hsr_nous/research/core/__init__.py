@@ -40,7 +40,11 @@ from hsr_nous.research.core.kernel import (
 from hsr_nous.research.core.report import ReportComposer
 from hsr_nous.research.core.runner import RunCancelledError, TrialRunner
 from hsr_nous.research.core.variants import PreparedVariant, VariantMaterializer
-from hsr_nous.research.core.worldline import WorldlineRunner, verify_worldline
+from hsr_nous.research.core.worldline import (
+    WorldlineRunner,
+    derive_child_spec,
+    verify_worldline,
+)
 
 __all__ = [
     "ARTIFACT_SCHEMA_VERSION",
@@ -67,6 +71,7 @@ __all__ = [
     "compare",
     "confidence_interval",
     "distribution",
+    "derive_child_spec",
     "implementation_hash",
     "make_claim_id",
     "make_comparison_set",

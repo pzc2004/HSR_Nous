@@ -9,6 +9,7 @@ TrialRunner：任何异常（编译失败、脚本失配、随机耗尽）都转
 
 from __future__ import annotations
 
+import json
 from dataclasses import asdict
 from typing import Any
 
@@ -16,7 +17,12 @@ from hsr_nous.common import research_root
 from hsr_nous.research.core.artifacts import ArtifactStore
 from hsr_nous.research.core.fingerprint import collect_worldline_fingerprint
 from hsr_nous.research.core.runner import _events, _final_modifiers
-from hsr_nous.research.schema import WorldlineArtifact, WorldlineSpec, canonical_json
+from hsr_nous.research.schema import (
+    WorldlineArtifact,
+    WorldlineSpec,
+    canonical_json,
+    content_hash,
+)
 from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.montecarlo import RunRecorder
 from hsr_nous.sim.scripted import run_scripted
@@ -98,3 +104,59 @@ class WorldlineRunner:
 def verify_worldline(store: ArtifactStore, worldline_id: str) -> WorldlineArtifact:
     """读时全量校验入口：read_worldline 本身即完成身份/字节/证据深度重算，直接转发。"""
     return store.read_worldline(worldline_id)
+
+
+def _plain_json(value: Any) -> Any:
+    """冻结视图（mappingproxy/元组嵌套）→ 可改 plain JSON 形数据。
+
+    deepcopy 不支持 mappingproxy；经 canonical JSON 往返既解开只读包装又保证
+    数据是 canonical JSON 兼容形态（与构造期 _snapshot 的内容同构）。
+    """
+    return json.loads(canonical_json(value))
+
+
+def derive_child_spec(
+    parent: WorldlineArtifact,
+    *,
+    script: list[dict[str, Any]] | None = None,
+    ultimate_script: list[dict[str, Any]] | None = None,
+    random_values: tuple[float, ...] | list[float] | None = None,
+    initial_sp: int | None = None,
+    initial_energy_ratio: float | None = None,
+    note: str | None = None,
+) -> WorldlineSpec:
+    """从父代世界线派生子代声明：声明式覆盖，未指定的字段一律继承父值。
+
+    - `script`/`ultimate_script` 覆盖 build["build"]["policy"] 的对应键；
+      `initial_sp`/`initial_energy_ratio` 替换顶层字段；`random_values` 给则
+      使用（转 tuple）——其余（stage、build 其余部分、未点名的资源字段）
+      原样继承（压缩优先：派生是声明式覆盖，不引入 diff 格式）；
+    - `derived_from` 绑定父代 worldline_id 与其 worldline.json 的
+      content_hash（= content_hash(parent.to_dict())，与 publish 时的存储
+      哈希同公式），可选 note 为人类可读派生说明；
+    - 父代是 failed artifact 允许派生——"修脚本错误再跑"是合法场景；
+      父链是否完整由读侧校验（read_worldline 的父链上溯）保证。
+    """
+    build = _plain_json(parent.spec.build)
+    policy = build["build"]["policy"]
+    if script is not None:
+        policy["script"] = _plain_json(list(script))
+    if ultimate_script is not None:
+        policy["ultimate_script"] = _plain_json(list(ultimate_script))
+    derived_from: dict[str, Any] = {
+        "worldline_id": parent.worldline_id,
+        "content_hash": content_hash(parent.to_dict()),
+    }
+    if note:
+        derived_from["note"] = note
+    return WorldlineSpec(
+        build=build,
+        stage=_plain_json(parent.spec.stage),
+        random_values=(tuple(random_values) if random_values is not None
+                       else parent.spec.random_values),
+        initial_sp=parent.spec.initial_sp if initial_sp is None else initial_sp,
+        initial_energy_ratio=(parent.spec.initial_energy_ratio
+                              if initial_energy_ratio is None
+                              else initial_energy_ratio),
+        derived_from=derived_from,
+    )

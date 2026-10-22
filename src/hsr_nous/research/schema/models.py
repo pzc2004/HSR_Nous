@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass, fields
@@ -25,6 +26,9 @@ EXECUTION_STATUSES = frozenset({
 ARTIFACT_STATUSES = frozenset({"partial", "complete"})
 WORLDLINE_STATUSES = frozenset({"completed", "failed"})
 WORLDLINE_SCHEMA_VERSION = "worldline-v1"
+#: derived_from 内身份/内容哈希的闭合格式：完整 64 位小写十六进制 SHA-256
+_DERIVED_FROM_ID_RE = re.compile(r"[0-9a-f]{64}\Z")
+_DERIVED_FROM_KEYS = frozenset({"worldline_id", "content_hash", "note"})
 METRIC_DIRECTIONS = {
     "total_damage": "higher_is_better",
     "action_value": "lower_is_better",
@@ -506,6 +510,7 @@ class WorldlineSpec(_DataModel):
     random_values: tuple[float, ...]
     initial_sp: int | None = None
     initial_energy_ratio: float | None = None
+    derived_from: Mapping | None = None
 
     def __post_init__(self) -> None:
         super().__post_init__()
@@ -532,11 +537,38 @@ class WorldlineSpec(_DataModel):
             normalized.append(number)
         # 归一化为 float：canonical JSON 里 0 与 0.0 字节不同，归一化保证身份稳定
         object.__setattr__(self, "random_values", tuple(normalized))
+        _validate_derived_from(self.derived_from)
 
     @property
     def spec_hash(self) -> str:
         """声明内容的 canonical 内容哈希（发布与读时重算共用）。"""
         return content_hash(self)
+
+
+def _validate_derived_from(derived_from: Mapping | None) -> None:
+    """derived_from 形状闸：闭集键 + 两项 64 位小写 hex + 可选 str note。
+
+    此处只验形状不验存在性/血缘——self-parent 与成环由 store 读侧拦截，
+    父代是否真实存在同样属于读取期事实而非构造期事实。
+    """
+    if derived_from is None:
+        return
+    if not isinstance(derived_from, Mapping):
+        raise ValueError("WorldlineSpec derived_from 必须是 mapping 或 None")
+    unknown = set(derived_from) - _DERIVED_FROM_KEYS
+    if unknown:
+        raise ValueError(
+            f"derived_from 只允许 worldline_id/content_hash/note 键，实得 {sorted(unknown)}"
+        )
+    for key in ("worldline_id", "content_hash"):
+        value = derived_from.get(key)
+        if not isinstance(value, str) or not _DERIVED_FROM_ID_RE.fullmatch(value):
+            raise ValueError(
+                f"derived_from.{key} 必须是 64 位小写十六进制 SHA-256，实得 {value!r}"
+            )
+    note = derived_from.get("note")
+    if note is not None and not isinstance(note, str):
+        raise TypeError(f"derived_from.note 必须是字符串，实得 {note!r}")
 
 
 @dataclass(frozen=True)

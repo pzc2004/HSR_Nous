@@ -669,6 +669,57 @@ class ArtifactStore:
                 or observed.get("random_total") != len(artifact.spec.random_values)):
             raise ArtifactIntegrityError("random audit does not match the scripted sequence")
 
+    def _validate_worldline_lineage(self, artifact: WorldlineArtifact) -> None:
+        """读时父链校验：迭代上溯 derived_from，visited 防环，父缺失/断链即拒。
+
+        每步只做链环对账——读父 payload（字节 canonical + content_hash 字段重算 +
+        worldline_id 字段与路径一致）、与子女记录的 content_hash 比对、取其
+        derived_from 继续；父代的完整契约校验由它自己被 read_worldline 时保证
+        （读是闸），此处不递归 read_worldline，深度即链长，环由 visited 拦截。
+        """
+        visited = {artifact.worldline_id}
+        current_derived = artifact.spec.derived_from
+        while current_derived is not None:
+            parent_id = current_derived.get("worldline_id")
+            expected_hash = current_derived.get("content_hash")
+            if (not isinstance(parent_id, str) or not _ID_RE.fullmatch(parent_id)
+                    or not isinstance(expected_hash, str)):
+                raise ArtifactIntegrityError(
+                    f"世界线父链断裂：derived_from 记录形状非法（worldline_id={parent_id!r}）"
+                )
+            # visited 首跳即含自身 id——parent_id 命中即自环，后续跳命中即成环
+            if parent_id in visited:
+                raise ArtifactIntegrityError(
+                    f"世界线父链成环：{parent_id} 已在本条祖先链中（自环或循环派生）"
+                )
+            parent_path = self.worldline_path(parent_id)
+            if not parent_path.exists():
+                raise ArtifactIntegrityError(
+                    f"世界线父链断裂：父代 {parent_id} 的 worldline.json 不存在（孤儿派生）"
+                )
+            payload = self._read_json(parent_path)
+            supplied_hash = payload.pop("content_hash", None)
+            if supplied_hash != content_hash(payload):
+                raise ArtifactIntegrityError(
+                    f"世界线父链断裂：父代 {parent_id} 的 content_hash 重算不符"
+                )
+            if payload.get("worldline_id") != parent_id:
+                raise ArtifactIntegrityError(
+                    f"世界线父链断裂：父代 {parent_id} 的 worldline_id 字段与路径不符"
+                )
+            if supplied_hash != expected_hash:
+                raise ArtifactIntegrityError(
+                    f"世界线父链断裂：子女记录的父代内容哈希与父代 {parent_id} "
+                    "实际内容不符（换父/改父即断链）"
+                )
+            parent_spec = payload.get("spec")
+            if not isinstance(parent_spec, Mapping):
+                raise ArtifactIntegrityError(
+                    f"世界线父链断裂：父代 {parent_id} 缺少 spec 声明"
+                )
+            visited.add(parent_id)
+            current_derived = parent_spec.get("derived_from")
+
     def publish_worldline(self, artifact: WorldlineArtifact) -> bool:
         if artifact.status not in {"completed", "failed"}:
             raise ArtifactIntegrityError(f"unsupported worldline status: {artifact.status!r}")
@@ -708,6 +759,7 @@ class ArtifactStore:
                 worldline_id, modifier["actor_id"], modifier["engine_modifier_id"]
             ):
                 raise ArtifactIntegrityError("modifier_id does not match final modifier")
+        self._validate_worldline_lineage(artifact)
         return artifact
 
     def claim_path(self, trial_id: str, record_id: str) -> Path:

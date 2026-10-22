@@ -26,6 +26,7 @@ worldline-v1 回答"这一条完全声明的轨迹执行出来是什么"——`W
 | `random_values` | tuple[float, ...] | 固定随机序列，逐项实数且 0 ≤ v < 1 |
 | `initial_sp` | int \| None | 开局战技点（缺省走引擎缺省） |
 | `initial_energy_ratio` | float \| None | 开局能量比（缺省走引擎缺省） |
+| `derived_from` | Mapping \| None | 父世界线引用（派生声明），形状与语义见「派生与父链」节；缺省 None = 独立世界线 |
 
 构造期校验（违反即拒）：
 
@@ -33,6 +34,9 @@ worldline-v1 回答"这一条完全声明的轨迹执行出来是什么"——`W
   非 scripted 策略拒收；
 - `random_values` 逐项校验语义同 `ScriptedRandom`（拒 bool/非实数/NaN/越界），
   并归一化为 float（canonical JSON 里 `0` 与 `0.0` 字节不同，归一化保证身份稳定）；
+- `derived_from` 非 None 时必须是 mapping，键集闭集
+  `{worldline_id, content_hash, note}`：`worldline_id`/`content_hash` 逐项匹配
+  `^[0-9a-f]{64}$`（64 位小写十六进制 SHA-256），`note` 若存在必须是 str；
 - `spec_hash` property = `content_hash(spec)`，发布与读时重算共用。
 
 ## 世界线指纹
@@ -140,7 +144,78 @@ sim/save_load.py）。
    一致；failed：`failure_reasons` 非空且 `final_save` 为 None；
 6. events 的 ordinal 必须恰为 `range(n)` 冻结序，每条 `event_id` 以
    worldline_id 为坐标重算；modifiers 每条 `modifier_id` 重算；
-7. `schema_version == "worldline-v1"`。
+7. `schema_version == "worldline-v1"`；
+8. 携带 `derived_from` 时父链完整校验（见下节「派生与父链」）。
 
 `verify_worldline(store, worldline_id)` 是读时全量校验的便捷入口，直接转发
 `read_worldline`。
+
+## 派生与父链（lineage）
+
+世界线支持声明式派生：子代 spec 的 `derived_from` 记录父代身份与父代
+worldline.json 的 content_hash，把"这条世界线是从哪条改出来的"固化进证据链。
+
+### derived_from 形状
+
+```json
+{"worldline_id": "<64 位小写 hex>", "content_hash": "<64 位小写 hex>", "note": "<可选人类可读说明>"}
+```
+
+- `worldline_id`：父代身份哈希；
+- `content_hash`：父代 worldline.json 的 `content_hash` 字段值，即
+  `content_hash(父 artifact.to_dict())`——与 `publish_worldline` 发布时的
+  存储哈希同公式，派生即对父代证据字节的内容寻址引用；
+- `note`：可选，人类可读派生说明（如"窗口条目微调重跑"）。
+
+### 身份绑定
+
+`derived_from` 是 `WorldlineSpec` 字段，自然进入 `spec.to_dict()` 并参与
+worldline_id 哈希——**改父子关系必然改子代身份**；同时 worldline.json 内嵌
+spec 与已发布 spec.json 的既有对账（「与已发布 spec 一致」校验）保证两份副本
+一致。任何单边篡改都会在身份重算或 spec 对账处触发 IntegrityError。
+
+### 派生便捷函数
+
+`research/core/worldline.py` 的 `derive_child_spec(parent, *, script=None,
+ultimate_script=None, random_values=None, initial_sp=None,
+initial_energy_ratio=None, note=None)`：
+
+- deepcopy 父代 spec.build 后按非 None 覆盖项替换：`script` →
+  `build["build"]["policy"]["script"]`，`ultimate_script` → 同 policy 的
+  `ultimate_script`，`initial_sp`/`initial_energy_ratio` 替换顶层对应字段，
+  `random_values` 给则使用（转 tuple）；
+- **未指定的字段一律继承父值**——压缩优先：派生是声明式覆盖，不引入 diff 格式；
+- 组 `derived_from = {"worldline_id": parent.worldline_id,
+  "content_hash": content_hash(parent.to_dict()), 可选 note}`；
+- 父代是 failed artifact 允许派生——"修脚本错误再跑"是合法场景
+  （`derive_child_spec` 不检查父 status）。
+
+### 读时父链校验
+
+`read_worldline` 在上述校验之后追加 `_validate_worldline_lineage`：
+**迭代**上溯（非递归，深度即链长），visited 集防环——首跳
+`parent_id == 自身 worldline_id` 即自环，任何后续跳重复已见 id 即成环，
+均抛 ArtifactIntegrityError。每一步：
+
+1. 父代 worldline.json 必须存在于本 store（父缺失 = 孤儿派生， IntegrityError，
+   报错带 parent_id）；
+2. 父 payload 轻量校验：字节 canonical、content_hash 字段重算相符、payload
+   的 worldline_id 字段与路径 id 一致；
+3. 父 payload 重算哈希必须与子女 `derived_from.content_hash` 记录一致——
+   链上每一环都是内容寻址，换父/改父必然断链；
+4. 取父 spec 的 `derived_from` 继续上溯。
+
+父代的**完整**契约校验（身份/证据/事件）由父代自己被 `read_worldline` 读取时
+保证——本步只做链环对账，不递归 read_worldline（避免重复全量校验与不可控深度）。
+
+### 发布宽松，读取严格
+
+`publish_worldline` 不追父链（发布不做链上校验，与「读是闸」哲学一致）；
+`WorldlineRunner.run` 末尾的 `read_worldline` 会自然拦截孤儿/断链/环——
+派生世界线可以落盘，但读过才算数。
+
+### 与 paired 链的边界
+
+lineage 只活在 `worldlines/` 目录内：不动 trial/run/result 的
+`parent_run_id` 体系，不进 `resolve_evidence`（worldline 证据下钻仍未实装），
+世界线之间不构成 paired 证据——派生是谱系声明，不是统计对照。
