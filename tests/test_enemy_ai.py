@@ -172,6 +172,35 @@ def test_inverse_predicate_matches_static_initial_gate():
     assert interpreter.choose_action().action_id == "a"
 
 
+def test_by_random_chance_reads_chance_field_with_comparevalue_fallback():
+    # 真实语料 109 例全用 Chance 字段（旧代码只读 CompareValue→None 潜伏偏差，
+    # 与编译器 _compile_probability_guards 同口径：Chance 优先、CompareValue 回落）
+    def _fixed(value):
+        return {"IsDynamic": False, "FixedValue": {"Value": value}}
+
+    def _random_axis(node):
+        return {"$type": "RPG.GameCore.CheckPredicateAxis",
+                "Predicate": node, "SuccessScore": {"Value": 0.5}}
+
+    def _choose(node):
+        decision = _decision("Skill01", 2, 3)
+        decision["ConsiderAxisList"] = [_random_axis(node)]
+        engine = _engine({"DecisionList": [decision]}, {"Skill01": "a"})
+        interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+        return interpreter.choose_action()
+
+    assert _choose({"$type": "RPG.GameCore.ByRandomChance",
+                    "Chance": _fixed(1.0)}).action_id == "a"
+    assert _choose({"$type": "RPG.GameCore.ByRandomChance",
+                    "CompareValue": _fixed(1.0)}).action_id == "a"
+    # Chance 优先于 CompareValue（两字段同在时）
+    assert _choose({"$type": "RPG.GameCore.ByRandomChance",
+                    "Chance": _fixed(1.0), "CompareValue": _fixed(0.0)}).action_id == "a"
+    # Chance=0 期望模式永不通过（门控失败→选不出）
+    assert _choose({"$type": "RPG.GameCore.ByRandomChance",
+                    "Chance": _fixed(0.0)}) is None
+
+
 def test_config_ai_initial_values_are_scoped_by_ai_name():
     from hsr_nous.sim_schema.config_ai import has_initial_decision
 

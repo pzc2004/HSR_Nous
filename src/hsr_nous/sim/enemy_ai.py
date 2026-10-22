@@ -282,7 +282,10 @@ class ConfigAIInterpreter:
                 str(node.get("CompareType", "Equal")),
             )
         if node_type == "RPG.GameCore.ByRandomChance":
-            return self.engine.pipeline.mechanic_chance(_fixed_number(node.get("CompareValue")))
+            # 真实语料 109 例全用 Chance 字段（CompareValue 为旧/异写形态）——
+            # 与编译器 enemy_ability._compile_probability_guards 同口径
+            chance_field = node.get("Chance", node.get("CompareValue"))
+            return self.engine.pipeline.mechanic_chance(_fixed_number(chance_field))
         if node_type == "RPG.GameCore.ByCompareMonsterID":
             actual_id = owner.actor.actor_id if target_state is not None else self.actor_id
             actual = actual_id.split("__", 1)[0]
