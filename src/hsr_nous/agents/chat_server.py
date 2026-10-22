@@ -85,6 +85,7 @@ def _page() -> str:
 <div class="meta" id="status">初始化…</div></p>
 <script>
 let sid = null, es = null, pendingText = "", toolNodes = {}, msgNode = null;
+let thoughtDet = null, thoughtCount = 0;
 const stream = document.getElementById("stream");
 const statusEl = document.getElementById("status");
 const textEl = document.getElementById("text");
@@ -108,7 +109,20 @@ function render(update) {
     msgNode.textContent += update.content && update.content.text || "";
     stream.scrollTop = stream.scrollHeight;
   } else if (kind === "agent_thought_chunk") {
-    stream.appendChild(el("thought", update.content && update.content.text || ""));
+    // 思考过程默认折叠成一张卡片（摘要行显示段数），展开才见全文——
+    // 每轮一张，send() 里随 msgNode 一起重置
+    if (!thoughtDet) {
+      thoughtDet = document.createElement("details");
+      thoughtDet.className = "tool";
+      const sum = document.createElement("summary");
+      thoughtDet.appendChild(sum);
+      thoughtDet._sum = sum;
+      thoughtCount = 0;
+      stream.appendChild(thoughtDet);
+    }
+    thoughtCount += 1;
+    thoughtDet._sum.textContent = "💭 思考过程（" + thoughtCount + " 段，点击展开）";
+    thoughtDet.appendChild(el("thought", update.content && update.content.text || ""));
   } else if (kind === "tool_call") {
     const det = document.createElement("details");
     det.className = "tool";
@@ -150,6 +164,7 @@ async function send() {
   textEl.value = "";
   stream.appendChild(el("msg", "你：" + text));
   msgNode = null;
+  thoughtDet = null;
   setInFlight(true);
   const resp = await fetch("/sessions/" + sid + "/prompt", { method: "POST",
     headers: {"Content-Type": "application/json"}, body: JSON.stringify({text}) });
