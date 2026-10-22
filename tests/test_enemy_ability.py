@@ -2671,17 +2671,21 @@ def test_direwolf_compiled_dot_stacks_in_engine(tmp_path):
 
 @_need_ability
 def test_lesser_sting_deathrattle_keeps_unproven_branch_unsupported():
+    """被动通道（#26 后续被动族）：on_kill 亡语钩保留 + 未证明分支仍显式 unsupported
+    （挂载钩 on_battle_start/actor_enter 先行——亡语钩按事件选取，不断言列表位次）。"""
     from hsr_nous.pipeline.enemies.loader import get_enemy_ability_sources, get_enemy_skills
     compiler = AbilityCompiler("8022020", get_enemy_skills("8022020"),
                                get_enemy_ability_sources("8022020"))
     out = compiler.compile_passive("Monster_SW_Minion01_01_Passive01", "802202004")
     assert not out["ok"]
-    damage = out["hooks"][0]["effects"][0]
+    kill_hooks = [hook for hook in out["hooks"] if hook["event"] == "on_kill"]
+    assert kill_hooks, f"亡语钩应保留：{[h['event'] for h in out['hooks']]}"
+    damage = kill_hooks[0]["effects"][0]
     assert damage["scaling_hp"] == pytest.approx(0.6)
     assert damage["toughness_dmg"] == pytest.approx(30.0)
     unsupported = {item["node_type"] for item in out["unsupported"]}
     assert "RPG.GameCore.PredicateTaskList" in unsupported
-    assert all(effect["effect_type"] != "apply_modifier" for effect in out["hooks"][0]["effects"])
+    assert all(effect["effect_type"] != "apply_modifier" for effect in kill_hooks[0]["effects"])
 
 
 @_need_ability
@@ -3039,3 +3043,225 @@ def test_probability_branch_zero_cost_after_bind_engine_level():
     assert single.state.actors["e1"].resources["d"] == pytest.approx(first)
     assert double.state.actors["e1"].resources["d"] == pytest.approx(2 * first)
     assert single.pipeline.rng.getstate() == double.pipeline.rng.getstate()
+
+
+# ---------------------------------------------------------------------------
+# 被动事件族（14_policy.md 被动事件族节）：真实样例结构钉 + 引擎级挂载行为钉
+# ---------------------------------------------------------------------------
+
+def _real_passive(enemy_id: str, ability_name: str, skill_id: str) -> dict:
+    from hsr_nous.pipeline.enemies.loader import get_enemy_ability_sources, get_enemy_skills
+    return AbilityCompiler(enemy_id, get_enemy_skills(enemy_id),
+                           get_enemy_ability_sources(enemy_id), level=80
+                           ).compile_passive(ability_name, skill_id)
+
+
+@_need_ability
+def test_real_kafka_passive_mounts_and_maps_dispel_callback():
+    """真实 Kafka（2004010）Passive01：OnStart 挂载 → on_battle_start + actor_enter
+    双触发钩；OnListenModifierDispel → after_remove_modifier + reason=='dispel' 窄化。"""
+    out = _real_passive("2004010", "Monster_W2_Kafka_00_Passive01",
+                        "2004010_Monster_W2_Kafka_00_Passive01")
+    events = [hook["event"] for hook in out["hooks"]]
+    assert "on_battle_start" in events and "actor_enter" in events
+    mount = next(h for h in out["hooks"] if h["event"] == "on_battle_start")
+    assert any(effect["effect_type"] == "apply_modifier" for effect in mount["effects"])
+    wave = next(h for h in out["hooks"] if h["event"] == "actor_enter")
+    assert wave["condition"] == "$event.actor == $self.actor_id and $event.wave_index >= 1"
+    # 驱散回调内容含未注册谓词（诚实显形）——映射结构由
+    # test_dispel_callback_maps_to_after_remove_modifier 手工样例钉。
+    assert out["unsupported"]
+
+
+@_need_ability
+def test_real_kafka_bgm_level_entity_rejected_explicitly():
+    """LevelEntity 挂载目标未注册——显式拒收不猜（PassiveSkill_BGM 真实样例）。"""
+    out = _real_passive("2004010", "Monster_W2_Kafka_00_PassiveSkill_BGM",
+                        "2004010_Monster_W2_Kafka_00_PassiveSkill_BGM")
+    assert not out["ok"]
+    assert any("LevelEntity" in item["reason"] for item in out["unsupported"])
+
+
+@_need_ability
+def test_real_aml_break_passive_on_break_mapping():
+    """真实 AML 小怪（8012010，Monster_AML_Minion02_00_Passive01）：OnBeingBreak →
+    on_break + $event.target 持有者窄化（Monster_Common_* 共享被动维持 deferred，
+    不收进本断言）。"""
+    from hsr_nous.pipeline.enemies.loader import get_enemy_ability_sources, get_enemy_skills
+    compiler = AbilityCompiler("8012010", get_enemy_skills("8012010"),
+                               get_enemy_ability_sources("8012010"), level=80)
+    result = compiler.compile_enemy()
+    break_hooks = [h for h in result["hooks"] if h.get("event") == "on_break"]
+    assert break_hooks, "OnBeingBreak 应映射出 on_break 钩"
+    conditioned = [h for h in break_hooks
+                   if "$event.target == $self.actor_id" in str(h.get("condition", ""))]
+    assert conditioned, f"击破回调应持有者窄化：{[h.get('condition') for h in break_hooks]}"
+    effects = [e for h in conditioned for e in h.get("effects", [])]
+    assert any(e.get("effect_type") == "remove_modifier" for e in effects), \
+        f"击破回调效果应编译出：{[e.get('effect_type') for e in effects]}"
+
+
+def test_empty_ai_shell_passive_compiles_to_nothing():
+    """空被动（无 OnAdd/OnStart/回调机制内容的 AI 控制壳）——空翻译 ok=True 零钩。"""
+    sources = {
+        "character_config": {"SkillList": [{
+            "Name": "Passive01", "SkillType": "Passive",
+            "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "P",
+        }]},
+        "abilities": {"P": {"Name": "P"}},   # 无 OnAdd/OnStart/Modifiers
+    }
+    skills = [{"skill_id": "s1", "trigger_key": "Passive01", "param_list": []}]
+    out = AbilityCompiler("fake", skills, sources).compile_passive("P", "s1")
+    assert out["ok"] and not out["unsupported"] and not out["hooks"]
+
+
+def test_unmapped_event_rejected_with_reason_and_presentation_ignored():
+    """无载体事件两态钉：机制内容显式拒（理由写清）；纯表现回调安全忽略。"""
+    def passive_with(callback_event, callback_tasks):
+        return {
+            "character_config": {"SkillList": [{
+                "Name": "Passive01", "SkillType": "Passive",
+                "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "P",
+            }]},
+            "abilities": {"P": {"Name": "P", "OnAdd": [{
+                "$type": "RPG.GameCore.AddModifier",
+                "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+                "ModifierName": {"Value": "M"},
+            }]}},
+            "modifiers": {"M": {
+                "BehaviorFlagList": [],
+                "LifeTime": 99, "Stacking": "Refresh",
+                "_CallbackList": [{"Event": callback_event, "CallbackConfig": callback_tasks}],
+            }},
+        }
+
+    skills = [{"skill_id": "s1", "trigger_key": "Passive01", "param_list": []}]
+    sources = passive_with("OnHPChange", [{
+        "$type": "RPG.GameCore.DefineDynamicValue", "DynamicKey": {"Value": "X"},
+        "Value": {"IsDynamic": False, "FixedValue": {"Value": 1}}}])
+    out = AbilityCompiler("fake", skills, sources).compile_passive("P", "s1")
+    assert not out["ok"]
+    assert any("双事件" in item["reason"] for item in out["unsupported"])
+
+    sources = passive_with("OnAllowAction", [{
+        "$type": "RPG.GameCore.MakeCharacterHUDVisible",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "ModifierOwnerEntity"}}])
+    out = AbilityCompiler("fake", skills, sources).compile_passive("P", "s1")
+    assert out["ok"] and not out["unsupported"]
+
+
+def test_wave_mount_condition_disjoint_from_battle_start():
+    """双触发互斥钉：初始阵容 on_battle_start 挂载、波次 actor_enter 补挂——
+    同一 actor 实例两触发集不相交（初始 actor_enter 在订阅前发射收不到）。"""
+    sources = {
+        "character_config": {"SkillList": [{
+            "Name": "Passive01", "SkillType": "Passive",
+            "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "P",
+        }]},
+        "abilities": {"P": {"Name": "P", "OnAdd": [{
+            "$type": "RPG.GameCore.AddModifier",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+            "ModifierName": {"Value": "Buff"},
+        }]}},
+        "modifiers": {"Buff": {"_CallbackList": [{
+            "Event": "OnStack", "CallbackConfig": [{
+                "$type": "RPG.GameCore.StackProperty", "Property": "AttackAddedRatio",
+                "PropertyValue": {"IsDynamic": False, "FixedValue": {"Value": 0.5}}}],
+        }]}},
+    }
+    skills = [{"skill_id": "s1", "trigger_key": "Passive01", "param_list": []}]
+    out = AbilityCompiler("fake", skills, sources).compile_passive("P", "s1")
+    assert out["ok"] and not out["unsupported"]
+    assert [h["event"] for h in out["hooks"]] == ["on_battle_start", "actor_enter"]
+    assert out["hooks"][0]["condition"] == "true"
+    assert "wave_index >= 1" in out["hooks"][1]["condition"]
+
+
+def test_passive_mount_engine_level_applies_modifier_at_battle_start():
+    """引擎级：编译产物挂载钩在 setup() 的 on_battle_start 生效——modifier 进战斗态。"""
+    import types
+    from hsr_nous.sim.engine import CombatEngine
+    from hsr_nous.sim_schema.actor import Actor, StatBlock
+    from hsr_nous.sim_schema.encounter import Encounter, TerminationConfig
+    sources = {
+        "character_config": {"SkillList": [{
+            "Name": "Passive01", "SkillType": "Passive",
+            "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "P",
+        }]},
+        "abilities": {"P": {"Name": "P", "OnAdd": [{
+            "$type": "RPG.GameCore.AddModifier",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+            "ModifierName": {"Value": "Buff"},
+        }, {
+            "$type": "RPG.GameCore.DefineDynamicValue",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+            "DynamicKey": {"Value": "X"},
+            "ResetValue": {"IsDynamic": False, "FixedValue": {"Value": 7}},
+        }]}},
+        "modifiers": {"Buff": {"_CallbackList": [{
+            "Event": "OnStack", "CallbackConfig": [{
+                "$type": "RPG.GameCore.StackProperty", "Property": "AttackAddedRatio",
+                "PropertyValue": {"IsDynamic": False, "FixedValue": {"Value": 0.5}}}],
+        }]}},
+    }
+    skills = [{"skill_id": "s1", "trigger_key": "Passive01", "param_list": []}]
+    out = AbilityCompiler("fake", skills, sources).compile_passive("P", "s1")
+    assert out["ok"] and not out["unsupported"]
+    enemy = Actor(actor_id="e1", name="假人", actor_type="monster", level=80,
+                  stats=StatBlock(hp=1e9, atk=1000, spd=100, max_toughness=9999,
+                                  weakness=["fire"]))
+    hero = Actor(actor_id="hero", name="测试员", level=80,
+                 stats=StatBlock(hp=5000, atk=2000, spd=200, max_energy=100))
+    enc = Encounter(encounter_id="t", name="t", actors=[hero, enemy],
+                    termination=TerminationConfig(mode="fixed_av", max_action_value=50))
+    eng = CombatEngine(enc, actions_by_actor={}, mode="expected",
+                       initial_energy_ratio=0.0)
+    eng._compiled_hooks = [types.SimpleNamespace(
+        event=h["event"],
+        owner_id="e1",
+        condition_expr=(eng._expr.compile(h["condition"], layer="effect")
+                        if h.get("condition") and h["condition"] != "true" else None),
+        effects=tuple(dict(e) for e in h["effects"]),
+    ) for h in out["hooks"]]
+    eng.setup()
+    st = eng.state.actors["e1"]
+    assert "Buff" in st.modifiers, f"on_battle_start 挂载应施加 Buff：{list(st.modifiers)}"
+    assert st.modifiers["Buff"].stat_effects.get("atk_pct") == 0.5
+    from hsr_nous.sim.enemy_ai import config_ai_dynamic_value
+    assert config_ai_dynamic_value(eng, "e1", "X") == 7.0, "DefineDynamicValue 初始化应落地"
+
+
+def test_dispel_callback_maps_to_after_remove_modifier():
+    """OnListenModifierDispel 映射结构钉：after_remove_modifier + reason=='dispel'
+    窄化 + 回调任务编译进钩。"""
+    sources = {
+        "character_config": {"SkillList": [{
+            "Name": "Passive01", "SkillType": "Passive",
+            "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "P",
+        }]},
+        "abilities": {"P": {"Name": "P", "OnAdd": [{
+            "$type": "RPG.GameCore.AddModifier",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+            "ModifierName": {"Value": "Buff"},
+        }]}},
+        "modifiers": {"Buff": {
+            "LifeTime": 99, "Stacking": "Refresh",
+            "_CallbackList": [{
+                "Event": "OnListenModifierDispel",
+                "CallbackConfig": [{
+                    "$type": "RPG.GameCore.SetDynamicValueByAddValue",
+                    "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+                    "Key": {"Value": "DisPelCount"},
+                    "AddValue": {"IsDynamic": False, "FixedValue": {"Value": 1}},
+                }],
+            }],
+        }},
+    }
+    skills = [{"skill_id": "s1", "trigger_key": "Passive01", "param_list": []}]
+    out = AbilityCompiler("fake", skills, sources).compile_passive("P", "s1")
+    assert out["ok"] and not out["unsupported"], out["unsupported"]
+    dispel = [h for h in out["hooks"] if h["event"] == "after_remove_modifier"]
+    assert len(dispel) == 1
+    assert dispel[0]["condition"] == (
+        "$event.target == $self.actor_id and $event.reason == 'dispel'")
+    assert dispel[0]["effects"][0]["effect_type"] == "set_dynamic_value"

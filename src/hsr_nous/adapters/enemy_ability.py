@@ -12,6 +12,12 @@ ByCompareMonsterPhase）与概率分支（ByRandomChance/RandomConfig）编译�
 按节点路径生成稳定键）。PostfixExpr 中被写键的动态哈希经键名反查表回落为
 ``dynamic_of`` 活读。概率分支限主动技能域（事件域可在帧外发射）；战斗级随机
 记忆（RandomUnique/RandomMaskKey/RandomCount）保持显式 unsupported。
+
+被动事件族（14_policy.md 被动事件族节）：SkillList Passive/SkillP 条目走
+``compile_passive`` 挂载通道——OnAdd→OnStart 编译为 on_battle_start 钩 +
+actor_enter（wave_index≥1）补挂；modifier 回调经 ``_PASSIVE_EVENT_MAP``
+（单一事实源）映射到引擎事件总线（持有者窄化）或定义期消费，无载体事件逐条
+显式 unsupported 进 human_queue。
 """
 from __future__ import annotations
 
@@ -151,7 +157,96 @@ EVENT_HANDLERS = {
     "OnListenCharacterDie": "_compile_deathrattle",
 }
 
+#: 被动 modifier 回调事件 → 引擎载体映射（14_policy.md 被动事件族节为文档镜像——改映射
+#: 只改这里；`_compile_modifier_lifecycle` 消费）。值 = (kind, engine_event, condition)：
+#: - kind="hook"：回调任务编译为 engine_event 上的全局钩，condition 为持有者窄化
+#:   （"$self.actor_id" = modifier 持有者 = hook owner；owner 死亡的 alive 闸天然生效）；
+#: - kind="definition"：modifier 定义编译期消费（visit_stack/DoT 既有口径，非常消费任务
+#:   在定义编译里显式拒）；
+#: - kind=None：无载体事件显式 unsupported（condition 位写理由，进 human_queue 不猜测）。
+_PASSIVE_EVENT_MAP = {
+    "OnBeingBreak": ("hook", "on_break", "$event.target == $self.actor_id"),
+    "OnListenBreak": ("hook", "on_break", "true"),
+    "OnEndBreak": ("hook", "toughness_recovered", "$event.target == $self.actor_id"),
+    "OnModifierAdd": ("hook", "after_apply_modifier", "$event.target == $self.actor_id"),
+    "OnModifierRemove": ("hook", "after_remove_modifier", "$event.target == $self.actor_id"),
+    "OnListenModifierRemove": ("hook", "after_remove_modifier",
+                               "$event.target == $self.actor_id"),
+    "OnListenModifierDispel": ("hook", "after_remove_modifier",
+                               "$event.target == $self.actor_id and $event.reason == 'dispel'"),
+    "OnAfterBeingHit": ("hook", "after_being_hit", "$event.target == $self.actor_id"),
+    "OnAfterBeingHitAll": ("hook", "after_being_hit", "$event.target == $self.actor_id"),
+    "OnAfterBeingAttacked": ("hook", "after_being_hit", "$event.target == $self.actor_id"),
+    "OnAfterBeingAttackedEnd": ("hook", "after_being_hit", "$event.target == $self.actor_id"),
+    "OnBeforeBeingHit": ("hook", "before_take_damage", "$event.target == $self.actor_id"),
+    "OnBeforeBeingHitAll": ("hook", "before_take_damage", "$event.target == $self.actor_id"),
+    "OnBeforeBeingAttacked": ("hook", "before_take_damage", "$event.target == $self.actor_id"),
+    "OnEnterBattle": ("hook", "actor_enter", "$event.actor == $self.actor_id"),
+    "OnListenCharacterCreate": ("hook", "actor_enter", "true"),
+    "OnListenTurnBegin": ("hook", "on_turn_start", "true"),
+    "OnListenTurnEnd": ("hook", "on_turn_end", "true"),
+    "OnAfterSkillUse": ("hook", "on_action",
+                        "$event.actor == $self.actor_id and $event.action_type == 'skill'"),
+    "OnListenAfterSkillUse": ("hook", "on_action",
+                              "$event.actor == $self.actor_id and $event.action_type == 'skill'"),
+    "OnLeaveBattle": ("hook", "actor_exit", "$event.actor == $self.actor_id"),
+    "OnLockHPThresholdReached": ("hook", "on_hp_lock", "$event.target == $self.actor_id"),
+    "OnBeforeWaveMonster": ("hook", "on_wave_start", "true"),   # 近似：波开始 vs 怪登场前，待实测
+    "OnWaveMonster": ("hook", "on_wave_start", "true"),
+    "OnStack": ("definition", "", ""),
+    "OnPhase1": ("definition", "", ""),
+    "OnPhase2": ("definition", "", ""),
+    "OnStage": ("definition", "", ""),
+    # —— 无载体事件：显式 unsupported（理由逐条写明） ——
+    "OnHPChange": (None, "", "HP 变化在引擎是 on_hp_decrease/on_hp_increase 双事件，单次回调不可单射（会双跑）"),
+    "OnHPOverflow": (None, "", "HP 溢出无事件发射点"),
+    "OnSPChange": (None, "", "能量变化是 on_gain_energy/after_consume 双通道，单次回调不可单射"),
+    "OnAllowAction": (None, "", "行动许可是 prevent_action 面板检查，引擎无对应发射点"),
+    "OnListenAllowAction": (None, "", "行动许可是 prevent_action 面板检查，引擎无对应发射点"),
+    "OnActionEnd": (None, "", "无 per-action-end 发射点（on_action 是施放广播非结束锚）"),
+    "OnAfterAttack": (None, "", "无攻击者侧事件发射点（after_being_hit 是被击侧）"),
+    "OnListenAfterAttack": (None, "", "无攻击者侧事件发射点"),
+    "OnBeforeAttack": (None, "", "无攻击者侧事件发射点"),
+    "OnBeforeSkillUse": (None, "", "施放前语义无发射点（on_action 是施放后广播）"),
+    "OnListenBeforeSkillUse": (None, "", "施放前语义无发射点"),
+    "OnUltraSkillPrepare": (None, "", "prepare ≠ fire——终结技准备时刻无发射点"),
+    "OnListenUltraSkillPrepare": (None, "", "prepare ≠ fire——终结技准备时刻无发射点"),
+    "OnBeingLimbo": (None, "", "limbo（免死过渡态）语义未收编，无可钉载体"),
+    "OnLimboWaitHeal": (None, "", "limbo 域语义未收编"),
+    "OnBeforeMortallyWonded": (None, "", "濒死保护域语义未收编"),
+    "OnModifierOnStack": (None, "", "叠层时刻无运行时事件（OnStack 的定义期消费不覆盖回调语义）"),
+    "OnListenModifierOnStack": (None, "", "叠层时刻无运行时事件"),
+    "OnCustomEvent": (None, "", "自定义事件仅 DOT_TriggerRatio 已收编，其余 EventType 未注册"),
+    "OnListenCharacterDie": (None, "", "非自身 Deathrattle 的监听目标未证明（既有拒因）"),
+    "OnListenShieldChange": (None, "", "护盾变化含获得/吸收/破裂多源，无单发射点"),
+    "OnShieldChange": (None, "", "护盾变化含获得/吸收/破裂多源，无单发射点"),
+    "OnListenCharacterEscape": (None, "", "逃逸事件未收编"),
+    "OnListenCharacterLimbo": (None, "", "limbo 域语义未收编"),
+    "OnInsertActionStart": (None, "", "插入行动开始无发射点（trigger_action 无 before 锚）"),
+    "OnListenInsertActionStart": (None, "", "插入行动开始无发射点"),
+    "OnStanceReset": (None, "", "韧性条重置族未收编"),
+    "OnBeingStanceCountDown": (None, "", "韧性条族未收编"),
+    "OnListenActionPhaseBegin": (None, "", "行动阶段开始无发射点（on_turn_start 是回合锚）"),
+    "OnActionPhaseBegin": (None, "", "行动阶段开始无发射点"),
+    "OnListenActionEnd": (None, "", "无 per-action-end 发射点"),
+    "OnBeforeAction": (None, "", "无行动前发射点"),
+    "OnAfterAction": (None, "", "无 per-action-end 发射点"),
+    "OnDepartedStart": (None, "", "离场流程内部态未收编"),
+    "OnDepartedEnd": (None, "", "离场流程内部态未收编"),
+    "OnListenDepartedStart": (None, "", "离场流程内部态未收编"),
+    "OnListenDepartedEnd": (None, "", "离场流程内部态未收编"),
+    "OnBeforeEscape": (None, "", "逃逸事件未收编"),
+}
+
 _ELEMENT = {"Thunder": "thunder", "Lightning": "thunder"}
+
+
+def _is_passive_row(skill: Dict[str, Any]) -> bool:
+    """CharacterConfig.SkillList 行是否被动技能——SkillType=Passive 优先（真实数据
+    里行 Name 常是能力名而非 Passive 前缀，如 Kafka `Monster_W2_Kafka_00_Passive01`），
+    Passive/SkillP 名前缀为兼容闸。"""
+    return (str(skill.get("SkillType") or "").lower().startswith("passive")
+            or str(skill.get("Name") or "").startswith(("Passive", "SkillP")))
 
 
 def _is_camera_ability(name: Any) -> bool:
@@ -315,6 +410,7 @@ class _Context:
     unsupported: List[Dict[str, str]] = field(default_factory=list)
     handled: List[str] = field(default_factory=list)
     live_condition: str = "true"
+    passive_owner: bool = False   # 被动挂载通道标记（compile_passive 置位）
 
 
 class AbilityCompiler:
@@ -2138,15 +2234,38 @@ class AbilityCompiler:
         })
         return True
 
+    #: OnStack 回调的 visit_stack 消费集（`_compile_property_modifier`——仅非 DoT 定义）
+    _ONSTACK_CONSUMED_TASKS = {
+        "RPG.GameCore.PredicateTaskList", "RPG.GameCore.SetDynamicValueByModifierValue",
+        "RPG.GameCore.StackProperty", "RPG.GameCore.StackWeakness",
+    }
+    #: OnPhase1 回调的 _compile_dot 消费集（仅 DoT 定义）
+    _ONPHASE1_CONSUMED_TASKS = {
+        "RPG.GameCore.SetDynamicValueByProperty", "RPG.GameCore.SetDynamicValueByModifierValue",
+        "RPG.GameCore.DamageByAttackProperty", "RPG.GameCore.SetDynamicValue",
+        "RPG.GameCore.DefineDynamicValue",
+    }
+
     def _compile_modifier_lifecycle(self, name: str, definition: Dict[str, Any],
                                     modifier: Dict[str, Any], ctx: _Context, path: str) -> None:
-        """创建/摘除写入实例；死亡前编译为全局 hook，避免递归 modifier 定义."""
+        """创建/摘除写入实例；死亡前编译为全局 hook，避免递归 modifier 定义.
+
+        非生命周期回调事件走 `_PASSIVE_EVENT_MAP`（14_policy.md 被动事件族节）：
+        hook 载体编译为全局钩（持有者窄化）；definition 载体由定义编译期消费、
+        非常消费任务显式拒；无载体事件显式 unsupported（纯表现回调安全忽略）。"""
         slots = {"OnCreate": "on_apply", "OnDestroy": "on_remove"}
         events = {"OnCreate": "on_apply", "OnDestroy": "after_remove_modifier",
                   "OnBeforeDying": "before_actor_exit"}
         for index, callback in enumerate(definition.get("_CallbackList") or []):
             event = str(callback.get("Event") or "")
+            callback_path = f"{path}/_CallbackList/{index}/{event}"
             if event not in {*slots, "OnBeforeDying"}:
+                # 非生命周期回调：被动挂载通道（ctx.passive_owner）编译
+                # _PASSIVE_EVENT_MAP（显形 unsupported 也限该通道）；主动技能侧
+                # 维持旧静默跳过口径（遗留病灶挂账，不随本期扩大行为面）。
+                if ctx.passive_owner:
+                    self._compile_mapped_callback(name, definition, callback, event,
+                                                  ctx, callback_path)
                 continue
             if event == "OnBeforeDying" and name in ctx.before_dying_stack:
                 continue  # 同一死亡回调的循环施加由既有全局 hook 覆盖，不递归展开。
@@ -2158,7 +2277,6 @@ class AbilityCompiler:
                 before_dying_stack=(ctx.before_dying_stack + (name,)
                                     if event == "OnBeforeDying" else ctx.before_dying_stack),
             )
-            callback_path = f"{path}/_CallbackList/{index}/{event}"
             self._compile_tasks(callback.get("CallbackConfig") or [], sub, callback_path, ())
             ctx.handled.extend([event, *sub.handled])
             ctx.lifecycle_hooks.extend(sub.lifecycle_hooks)
@@ -2189,6 +2307,69 @@ class AbilityCompiler:
                 effects.append(clean)
             if effects:
                 modifier.setdefault(slots[event], []).extend(effects)
+
+    def _compile_mapped_callback(self, name: str, definition: Dict[str, Any],
+                                 callback: Dict[str, Any], event: str,
+                                 ctx: _Context, callback_path: str) -> None:
+        """`_PASSIVE_EVENT_MAP` 消费：hook 载体编译全局钩 / definition 消费核查 /
+        无载体显式拒。`*_CL` 客户端表现事件与纯表现回调安全忽略。"""
+        tasks = callback.get("CallbackConfig") or []
+        if event.endswith("_CL") or self._presentation_only(tasks):
+            ctx.handled.append(event)
+            return
+        mapped = _PASSIVE_EVENT_MAP.get(event)
+        if mapped is None:
+            self._issue(ctx, callback_path, event or "<missing Event>",
+                        "未注册的 modifier 回调事件（_PASSIVE_EVENT_MAP 无载体）")
+            return
+        kind, engine_event, condition = mapped
+        if kind == "definition":
+            self._check_definition_consumed(name, definition, tasks, event,
+                                            ctx, callback_path)
+            ctx.handled.append(event)
+            return
+        if kind is None:
+            self._issue(ctx, callback_path, event, condition)
+            return
+        sub = _Context(mode="event", skill=ctx.skill, event=engine_event,
+                       current_modifier=name)
+        self._compile_tasks(tasks, sub, callback_path, ())
+        ctx.handled.extend([event, *sub.handled])
+        ctx.lifecycle_hooks.extend(sub.lifecycle_hooks)
+        for issue in sub.unsupported:
+            self._issue(ctx, issue["path"], issue["node_type"], issue["reason"])
+        if (sub.damages or sub.pre_effects or sub.hit_effects or sub.summons
+                or sub.retarget_damage or sub.retarget_damage_records):
+            self._issue(ctx, callback_path, event, "回调伤害/召唤/分段效果尚未注册")
+        ctx.lifecycle_hooks.extend(self._make_hooks(sub, condition, event=engine_event))
+
+    def _check_definition_consumed(self, name: str, definition: Dict[str, Any],
+                                   tasks: List[Dict[str, Any]], event: str,
+                                   ctx: _Context, path: str) -> None:
+        """definition 载体（OnStack/OnPhase1/OnPhase2/OnStage）的消费核查——按真实
+        消费点（visit_stack 只走非 DoT 的 OnStack；_compile_dot 只走 DoT 的 OnPhase1）
+        逐任务核对，没有被消费点的机制任务显式拒，不静默丢。"""
+        flags = set(definition.get("BehaviorFlagList") or [])
+        is_dot = "STAT_DOT" in flags
+        if event == "OnStack":
+            if is_dot:
+                consumable: set = set()
+            else:
+                consumable = set(self._ONSTACK_CONSUMED_TASKS)
+        else:  # OnPhase1/OnPhase2/OnStage：仅 DoT 的 OnPhase1 有消费点
+            consumable = set(self._ONPHASE1_CONSUMED_TASKS) if (is_dot and event == "OnPhase1") \
+                else set()
+        for index, task in enumerate(tasks):
+            node_type = str((task or {}).get("$type") or "")
+            if not node_type or node_type in IGNORED_TASK_TYPES:
+                continue   # 纯表现/动画节点不占消费点
+            if node_type in consumable:
+                continue
+            where = (f"{event} 回调任务未被定义编译消费"
+                     + ("（DoT 定义的 OnStack 无消费点）" if is_dot and event == "OnStack"
+                        else "（非 DoT modifier 的相位回调无消费点）"
+                        if event != "OnStack" else ""))
+            self._issue(ctx, f"{path}/{index}", node_type or "<missing $type>", where)
 
     def _compile_add_modifier(self, task: Dict[str, Any], ctx: _Context,
                               path: str, stack: Tuple[str, ...]) -> None:
@@ -2421,7 +2602,15 @@ class AbilityCompiler:
         has_lifecycle = any(
             callback.get("Event") in {"OnCreate", "OnDestroy", "OnBeforeDying"}
             for callback in callbacks)
-        if (not stats and not has_cleanup and not has_lifecycle and not self._visual_modifier(definition)
+        # 有映射载体的回调（_PASSIVE_EVENT_MAP hook 族，含机制内容）同样是 modifier
+        # 的已收编语义——不再判"未注册 modifier 语义"（映射钩在 _compile_modifier_lifecycle
+        # 编译；限被动挂载通道，主动技能侧维持旧口径）。
+        has_mapped = ctx.passive_owner and any(
+            str(callback.get("Event") or "") in _PASSIVE_EVENT_MAP
+            and not self._presentation_only(callback.get("CallbackConfig") or [])
+            for callback in callbacks)
+        if (not stats and not has_cleanup and not has_lifecycle and not has_mapped
+                and not self._visual_modifier(definition)
                 and "RemoveWhenCasterDead" not in set(definition.get("BehaviorFlagList") or [])):
             self._issue(ctx, path, "Modifier", f"未注册 modifier 语义：{name}")
             return None
@@ -2735,14 +2924,36 @@ class AbilityCompiler:
         self._compile_tasks(callback.get("CallbackConfig") or [], ctx, path, stack)
 
     def compile_passive(self, ability_name: str, skill_id: str) -> Dict[str, Any]:
-        """编译 Ability.Modifiers 中的自身亡语；其他事件显式留给后续事件族."""
+        """编译被动能力（14_policy.md 被动事件族节）：
+
+        挂载通道：OnAdd → OnStart 任务表编译为 `on_battle_start` 挂载钩（初始阵容）+
+        `actor_enter`（wave_index≥1，波次 newcomers）——两触发集按 actor 实例互斥不双挂
+        （初始阵容的 actor_enter 在订阅前发射收不到；波次怪的 on_battle_start 在其布场前
+        发射 owner 尚不存在天然跳过）。挂载任务走 `_compile_tasks` 全机器——modifier 定义
+        与其余回调事件由 `_compile_modifier_lifecycle`/`_PASSIVE_EVENT_MAP` 在施加点消费。
+        死亡链回调（OnDeathrattle/OnListenCharacterDie 带旗标）独立子上下文编译为 on_kill
+        全局钩（既有口径：$event.target == $self.actor_id）。
+        空被动（无 OnAdd/OnStart/回调机制内容——AI 控制壳）空翻译 ok=True。
+        """
         skill = next((s for s in self.skills.values() if str(s.get("skill_id")) == str(skill_id)),
                      {"skill_id": str(skill_id)})
-        ctx = _Context(mode="event", skill=skill, event="on_kill")
+        ctx = _Context(mode="event", skill=skill, event="on_battle_start", passive_owner=True)
         ability = self.abilities.get(ability_name)
+        mount_hooks: List[Dict[str, Any]] = []
+        deathrattle_hooks: List[Dict[str, Any]] = []
+        nothing_to_translate = False
         if ability is None:
             self._issue(ctx, ability_name, "AbilityReference", "被动 Ability 定义缺失")
         else:
+            for key in ("OnAdd", "OnStart"):   # 序=OnAdd 先于 OnStart（约定，待实测）
+                tasks = ability.get(key) or []
+                if tasks:
+                    self._compile_tasks(tasks, ctx, f"{ability_name}/{key}", ())
+            if ctx.effects:
+                mount_hooks.extend(self._make_hooks(ctx, "true", event="on_battle_start"))
+                mount_hooks.extend(self._make_hooks(
+                    ctx, "$event.actor == $self.actor_id and $event.wave_index >= 1",
+                    event="actor_enter"))
             for modifier_name, modifier in (ability.get("Modifiers") or {}).items():
                 for index, callback in enumerate(modifier.get("_CallbackList") or []):
                     event = str(callback.get("Event") or "")
@@ -2754,12 +2965,24 @@ class AbilityCompiler:
                         self._issue(ctx, f"{ability_name}/{modifier_name}/{index}", event,
                                     "非自身 Deathrattle 的监听目标未证明")
                         continue
-                    ctx.handled.append(event)
-                    getattr(self, method_name)(callback, ctx,
+                    sub = _Context(mode="event", skill=skill, event="on_kill")
+                    getattr(self, method_name)(callback, sub,
                                                f"{ability_name}/{modifier_name}/{index}", ())
-        hooks = self._make_hooks(ctx, "$event.target == $self.actor_id") if ctx.effects else []
-        hooks.extend(ctx.lifecycle_hooks)
-        return {"ok": not ctx.unsupported and bool(hooks), "action": None, "hooks": hooks,
+                    for issue in sub.unsupported:
+                        self._issue(ctx, issue["path"], issue["node_type"], issue["reason"])
+                    if sub.effects:
+                        deathrattle_hooks.extend(self._make_hooks(
+                            sub, "$event.target == $self.actor_id", event="on_kill"))
+                    ctx.handled.extend([event, *sub.handled])
+                    ctx.summons.extend(sub.summons)
+                    ctx.lifecycle_hooks.extend(sub.lifecycle_hooks)
+            nothing_to_translate = (not ctx.effects and not mount_hooks
+                                    and not deathrattle_hooks and not ctx.lifecycle_hooks
+                                    and not any((m or {}).get("_CallbackList")
+                                                for m in (ability.get("Modifiers") or {}).values()))
+        hooks = [*mount_hooks, *deathrattle_hooks, *ctx.lifecycle_hooks]
+        return {"ok": not ctx.unsupported and (bool(hooks) or nothing_to_translate),
+                "action": None, "hooks": hooks,
                 "summons": ctx.summons, "unsupported": ctx.unsupported,
                 "handled": sorted(set(ctx.handled))}
 
@@ -2794,7 +3017,7 @@ class AbilityCompiler:
         for config_skill in self.config.get("SkillList") or []:
             if (config_skill.get("EntryAbility") == ability_name
                     and config_skill.get("Name") in self.skills
-                    and str(config_skill.get("Name")).startswith(("Passive", "SkillP"))):
+                    and _is_passive_row(config_skill)):
                 return str(config_skill["Name"])
         floats = ((self.config.get("DynamicValues") or {}).get("Floats") or {})
         triggers = set()
@@ -2849,7 +3072,7 @@ class AbilityCompiler:
                     "reason": "TBGD trigger 在 CharacterConfig 中不存在",
                 })
         for trigger, config_skill in self.config_skills.items():
-            if trigger.startswith(("Passive", "SkillP")):
+            if _is_passive_row(config_skill):
                 continue
             if trigger not in self.skills:
                 unsupported.append({
@@ -2862,8 +3085,7 @@ class AbilityCompiler:
         passive_candidates = {
             str(skill.get("EntryAbility"))
             for skill in self.config.get("SkillList") or []
-            if str(skill.get("Name") or "").startswith(("Passive", "SkillP"))
-            and skill.get("EntryAbility")
+            if _is_passive_row(skill) and skill.get("EntryAbility")
         }
         passive_candidates.update(
             str(name) for name in self.config.get("AbilityList") or []
@@ -2880,16 +3102,22 @@ class AbilityCompiler:
                                     "node_type": "AbilityReference",
                                     "reason": "被动 Ability 定义缺失"})
                 continue
-            if not self._has_supported_event(ability):
-                unsupported.append({"owner": ability_name, "path": ability_name,
-                                    "node_type": "PassiveAbility",
-                                    "reason": "被动 OnStart/OnAdd 或其他事件尚未注册"})
-                continue
+            # 被动事件族已开编译通道（compile_passive 挂载通道 + _PASSIVE_EVENT_MAP）——
+            # 全部 SkillList 绑定的被动进编译，无载体事件在编译内逐条显式拒收。
             trigger = self._passive_trigger(ability_name)
             if trigger is None or trigger not in self.skills:
+                # TBGD 无对应 Passive 技能行的主流形态（570/1087）——SkillList 行直连
+                # 回退：以行 Name 合成 skill 上下文（无 param_list，SkillParam 依赖内容
+                # 按既有未知哈希口径诚实拒；modifier id 按合成 skill_id 确定性生成）。
+                rows = [s for s in self.config.get("SkillList") or []
+                        if s.get("EntryAbility") == ability_name and _is_passive_row(s)]
+                if len(rows) == 1:
+                    absorb(ability_name, self.compile_passive(
+                        ability_name, f"{self.enemy_id}_{rows[0].get('Name')}"))
+                    continue
                 unsupported.append({"owner": ability_name, "path": ability_name,
                                     "node_type": "PassiveBinding",
-                                    "reason": "无法由 EntryAbility/SkillParam 唯一绑定被动技能"})
+                                    "reason": "无法由 EntryAbility/SkillParam/SkillList 行唯一绑定被动技能"})
                 continue
             absorb(ability_name, self.compile_passive(
                 ability_name, str(self.skills[trigger]["skill_id"])))

@@ -156,6 +156,35 @@ policy:
 > 这里的状态机是实现期候选，
 > 不是真实客户端语义定稿；最终仍须由 `designs/BATTLE_CLOSURE.md` 的真实 golden 对拍验收。
 > 已收编被动技经独立 hooks 保留，不依赖主动 policy 是否可执行；阶段转换/形态切换不在此范围。
+> **被动事件族（2026-10-22 收编）**：`SkillList` 的 Passive/SkillP 条目（EntryAbility 指向被动
+> 能力）整体走被动编译通道——语义三问按真实样例数据形态钉死：**何时挂**=战斗开始（能力
+> `OnAdd`/`OnStart` 任务表编译为 `on_battle_start` 挂载钩，序=OnAdd 先于 OnStart，约定待实测；
+> 波次 newcomers 由 `actor_enter`（`$event.wave_index >= 1` 且 actor==自身）补挂——初始阵容的
+> actor_enter 在订阅前发射收不到，两触发集按 actor 实例互斥不双挂；波 0 召唤物被动挂载为已知
+> 缺口）；**挂给谁**=`OnAdd`/`OnStart` 任务内 AddModifier 的 TargetType 决定（Caster=自身，
+> LevelEntity 等未注册目标显式拒）；**活多久**=modifier 定义 LifeTime/Stacking（duration 0=永久，
+> 既有 `_modifier_defaults` 口径）。挂载任务全族走既有 `_compile_tasks` 机器（写后读/概率分支
+> 随 #26 期 2/3 一并可用）。modifier 回调事件映射表（`_PASSIVE_EVENT_MAP` 单一事实源）：
+> OnCreate/OnDestroy/OnBeforeDying 落 modifier 生命周期槽（既有）；OnDeathrattle/
+> OnListenCharacterDie（带 Deathrattle 旗标）走 on_kill 死亡链（既有）；OnBeingBreak→
+> `on_break`、OnListenBreak→`on_break`（不窄化）、OnEndBreak→`toughness_recovered`（waterfall）、
+> OnModifierAdd→`after_apply_modifier`、OnModifierRemove/OnListenModifierRemove→
+> `after_remove_modifier`、OnListenModifierDispel→`after_remove_modifier` + reason=='dispel'、
+> OnAfterBeingHit(All)/OnAfterBeingAttacked(End)→`after_being_hit`、OnBeforeBeingHit(All)/
+> OnBeforeBeingAttacked→`before_take_damage`（waterfall）、OnEnterBattle→`actor_enter`（actor
+> 窄化）、OnListenCharacterCreate→`actor_enter`（不窄化）、OnListenTurnBegin/End→
+> `on_turn_start`/`on_turn_end`（不窄化）、OnAfterSkillUse/OnListenAfterSkillUse/OnBeforeSkillUse→
+> `on_action` + action_type=='skill'（上游 "uses Skill" 仅战技措辞纪律）、OnLeaveBattle→
+> `actor_exit`（actor 窄化）、OnLockHPThresholdReached→`on_hp_lock`（target 窄化）、
+> OnBeforeWaveMonster/OnWaveMonster→`on_wave_start`（近似：波开始 vs 怪登场前，待实测）、
+> OnStack/OnPhase1/OnPhase2/OnStage→modifier 定义编译期消费（visit_stack/DoT 既有口径，
+> 非常消费任务显式拒）。持有者窄化条件一律 `$event.target == $self.actor_id` 或
+> `$event.actor == $self.actor_id`（owner 死亡不触发的 alive 闸天然生效）。无载体事件
+> （OnHPChange/OnSPChange 双事件不可单射、OnAllowAction 族无发射点、OnActionEnd/OnAfterAttack
+> 族无发射点、limbo 域未收编、OnUltraSkillPrepare≠on_ultimate、OnCustomEvent 非 DOT 族等）
+> 显式 unsupported 进 human_queue，逐条写理由；回调内容为纯表现（`_presentation_only`）时
+> 无映射事件也可安全忽略。空被动（无 OnAdd/OnStart/回调机制内容，如 AI 控制壳）空翻译
+> ok=True。`Monster_Common_*` 共享被动维持 deferred 不在本通道。
 > `PhaseList` 只做技能可用性门控，专属 AIPath 被收编也不等于其完整 Boss 机制已验证。
 
 敌人模板的 `policy` 与我方 build.yaml 的 rule-based policy 是两套输入，不复用玩家技能
@@ -276,8 +305,9 @@ hook 级快照条件（事件间确定性语义不变）。`SetDynamicValueByMod
 敌人机制迁移期的首选结构路径是 `adapters/enemy_ability.py`：`CharacterConfig.SkillList`
 以 trigger/`EntryAbility` 对齐 TBGD 技能，编译器递归消费 Ability 任务树与 modifier 定义；
 `PostfixExpr` 的动态哈希必须能由 `DynamicValues.Floats.ReadInfo` 或 modifier 内的显式赋值
-还原。`TASK_HANDLERS`/`EVENT_HANDLERS` 未注册的节点、无法唯一绑定的被动、缺失引用和
-未证明的条件分支都记为 `unsupported`，不得拿部分结果冒充完整收编。写后读/概率分支经
+还原。`TASK_HANDLERS`/`EVENT_HANDLERS` 未注册的节点、缺失引用和
+未证明的条件分支都记为 `unsupported`，不得拿部分结果冒充完整收编；被动事件族已开编译通道
+（上节），其无载体事件按 `_PASSIVE_EVENT_MAP` 逐条显式拒收。写后读/概率分支经
 执行帧改翻后，"同一技能写入后读取动态值会命中旧事件快照"与"运行时 Switch 尚未注册"
 两类旧拒因退役；概率分支限主动技能域（事件域帧外发射暂不注册），战斗级随机记忆
 （`RandomUnique`/`RandomMaskKey`）保持显式 unsupported。完整支持的主动技能
