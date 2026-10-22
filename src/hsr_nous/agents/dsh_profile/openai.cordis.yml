@@ -18,4 +18,6 @@
         models:
           - id: !!js process.env.HSR_NOUS_LLM_AGENTS_MODEL
             name: Configured research model
-            contextWindow: 262144
+            # deepseek-flash 官方上下文 1M（DSH 目录默认即 1,000,000）；
+            # 旧值 262144 是保守默认，声明过小会让用量显示/压缩策略提前误判
+            contextWindow: 1000000
