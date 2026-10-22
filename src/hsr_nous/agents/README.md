@@ -1,6 +1,7 @@
 # agents
 
-外部 Agent harness 适配层。headless 单次调用之外新增交互式原型（DSH web 面）；不包含自研 Agent loop、ACP 或共享 Memory。
+外部 Agent harness 适配层。headless 单次调用之外新增交互式原型（DSH web 面与
+ACP 聊天桥）；不包含自研 Agent loop 或共享 Memory。
 
 ## 准备
 
@@ -38,6 +39,49 @@ hsr-research-chat --port 8080  # 换端口
 启动后打印 `dsh web:` 令牌化 URL——**即访问凭证，注意保密**。远程开发场景（如 VS Code Remote 端口转发）在本地浏览器打开时把 host 换成本地 `localhost`；经反代暴露需要 `--trusted-host` 另配，不在本原型范围。
 
 与 headless 同一信任边界：内置工具全禁、只读沙箱、仅 `mcp__nous__*` 白名单工具可用，人直接在浏览器里驱动多轮研究会话（提案→执行→复核）。会话状态在 DSH 自己的隔离 `dsh-home` 下，研究产物仍归研究根。
+
+stock web 定位自此降级为 **capability matrix 试验台**（AUTORESEARCH_DESIGN §16 要求的"DSH 开始接入前一页 capability matrix"）：DSH 自带 UI 的呈现行为在那里观察，生产聊天路径走下面的 ACP 桥。
+
+## ACP 桥（--serve）
+
+```bash
+hsr-research-chat --serve                # 起桥（默认 8003 端口，仅回环绑定）
+hsr-research-chat --serve --port 8080
+```
+
+架构：
+
+```
+浏览器（vanilla JS 原型页，内嵌于 chat_server）
+  ↔ POST 下发 / SSE 推送（EventSource，sse-starlette）
+  ↔ chat_server（FastAPI，一个 app 持一个 AcpClient）
+  ↔ AcpClient（asyncio，换行分隔 JSON-RPC over stdio，见 acp_client.py）
+  ↔ dsh --profile acp（叠加 research/openai 两补丁，nous MCP 网关挂在内）
+```
+
+人在我们自己的页面聊天，DSH 完全退到幕后；一个 AcpClient = 一个 dsh 子进程
+（内含多会话），POST /sessions 建会话、POST .../prompt 下发（202）、
+GET .../events 推 `session/update` 流、POST .../cancel 取消、GET /sessions 列表。
+
+协议事实（2026-10-22 实测探针，dsh 0.2.1-rc.2，细节见 acp_client.py docstring）：
+
+- `initialize` 协商 ACP v1；dsh 的 `authMethods` 恒为空，无需认证。
+- `session/new` 返回 `configOptions`（model/reasoning_effort 透明选择器）；
+  **默认模型是目录首个路由而非 `agent-default-model` 补丁**——桥在建会话后显式
+  `session/set_config_option` 把 model 钉到 `openai-gateway` 组（.env 端点）。
+- `session/list` 只列已关闭（可恢复）会话；活动会话由本桥本地记账。
+- prompt 的 settlement 等全部 `session/update` 排干——客户端读循环独立成 task，
+  在途期间照常把 update 扇入订阅流（结算后发本地 `prompt_closed` 事件关"在途"态）。
+- nous MCP 工具注册是**异步**的（实测数秒）：首个 prompt 可能早于
+  `mcp__nous__*` 工具就绪，重试即可；测试用 mock 门控轮询规避。
+- 错误形态：JSON-RPC error（-32601/-32602/-32603）映射为中文报错的
+  `AcpProtocolError`；进程退出/管道断映射为 `AcpConnectionError`。
+
+SSE/WS 选型注记（§16 待决项"main agent 与前端之间最终采用 SSE、WebSocket 还是
+其他事件通道"的原型数据点）：update 流是单向、低频率（消息块/工具生命周期/
+上下文用量）、允许断线重连（桥带 200 条环形历史重放），SSE + POST 已够；
+websockets 库未装而 sse-starlette 已在依赖内，不引新依赖。若将来需要客户端
+高频上行或多路复用单连接，再评估 WS 升级。
 
 ## 可信边界
 
