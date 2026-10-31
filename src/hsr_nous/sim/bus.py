@@ -26,6 +26,7 @@ DEFAULT_CONTRACT: Dict[str, str] = {
     "on_cycle_end": "emit",     # 轮次结束（同上）
     "on_extra_turn": "emit",
     "on_action": "emit",
+    "on_action_end": "emit",  # 行动结算完毕（帧提交后）——怪物 OnActionEnd 回调族的挂载点，与 on_action（施放广播）前后两锚
     "before_take_damage": "waterfall",
     "after_being_hit": "emit",
     "on_hp_decrease": "emit",
@@ -81,6 +82,7 @@ DEFAULT_PAYLOAD_FIELDS: Dict[str, frozenset] = {
     "before_drain": frozenset({'action_id', 'amount', 'floor', 'reason', 'source', 'target'}),
     "before_take_damage": frozenset({'action_id', 'action_type', 'amount', 'damage_type', 'is_critical', 'source', 'target'}),
     "on_action": frozenset({'action_id', 'action_type', 'actor', 'actor_type', 'insert', 'sp_consumed', 'tag', 'target', 'target_type'}),
+    "on_action_end": frozenset({'action_id', 'action_type', 'actor', 'actor_type', 'insert'}),
     "aha_instant_end": frozenset({'actors', 'consumed', 'extra'}),
     "aha_instant_start": frozenset({'actors', 'consumed', 'extra'}),
     "before_battle_start": frozenset({'encounter'}),
@@ -105,8 +107,8 @@ DEFAULT_PAYLOAD_FIELDS: Dict[str, frozenset] = {
     "on_skill_point_change": frozenset({'after', 'before', 'consumer', 'reason', 'turn'}),
     "on_state_change": frozenset({'actor', 'from_state', 'to_state'}),
     "on_toughness_damage": frozenset({'amount', 'bar_index', 'source', 'target'}),
-    "on_turn_end": frozenset({'actor'}),
-    "on_turn_start": frozenset({'actor'}),
+    "on_turn_end": frozenset({'actor', 'kind'}),
+    "on_turn_start": frozenset({'actor', 'kind'}),
     "on_ultimate": frozenset({'action', 'source', 'target'}),
     "on_wave_start": frozenset({'wave_index'}),
     "shield_absorbed": frozenset({'amount', 'remaining', 'shield_id', 'source', 'target'}),

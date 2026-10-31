@@ -106,6 +106,7 @@ hooks:
 | `battle_end` | 战斗终止时（结构化日志终局锚点；一次性不重发） | `team` | `reason`（实发值：`all_allies_dead` / `target_killed` / `max_action_value_reached` / `max_cycles` / `max_turns`） | emit | 已登记（2026-09-07） |
 | `on_skill_point_change` | 战技点增减时（结构化日志 SP 槽取数点） | `team` | `before`、`after`、`reason`（变化源——`action:<id>` 行动耗产 / `hook` 钩产点 / `""` 其余；花火"因战技消耗"过滤族，2026-09-12）、`turn`（回合序号 = 已完成行动数+1——「同一回合消耗≥N 点」回合窗族取数锚，2026-10-12）、`consumer`（耗点行动者 actor_id——仅行动耗产路径携带，增益/非行动路径恒 `""`；「任意角色自身同一回合累计耗点」逐角色×回合记账族取数锚，23061/23053 首实例，2026-10-12） | emit | 已登记（2026-09-07） |
 | `on_become_target` | 成为技能目标时（逐目标发射；140804"成为目标获火种/队友给暴伤"族的挂载点） | `self` / `team` | `target`、`source`、`action_id`、`action_type`、`insert`（是否插入行动） | emit | 已登记 |
+| `on_action_end` | 行动结算完毕时（执行帧提交后发射，订阅者读到行动后状态；含插入行动——与 `on_action`（施放广播）为前后两锚，怪物 `OnActionEnd` 回调族的挂载点，如再动配额 `OneMorePerTurn` 族的额度扣减） | `self` / `team` | `actor`（行动者）、`action_id`、`action_type`、`actor_type`、`insert`（是否插入行动） | emit | 已登记（2026-10-31） |
 | `on_immune` | modifier 施加被硬免疫拒绝时（施加前硬拒，与概率抵抗分通道） | `self` / `team` | `modifier_id`、`target` | emit | 已登记 |
 | `on_resist` | debuff/dot/control 效果命中判定被抵抗时 | `self` / `team` | `modifier_id`、`target`、`chance`（本次命中率） | emit | 已登记 |
 

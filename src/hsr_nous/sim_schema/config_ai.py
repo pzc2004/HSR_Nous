@@ -83,6 +83,13 @@ SUPPORTED_CONFIG_AI_TYPES = frozenset({
 
 _UNSUPPORTED_CONFIG_AI_TYPES = frozenset()
 
+#: 运行时供给动态键的核定缺省值（决策卡 #27）——上游数据只读不写、由战斗运行时
+#: 供值的键，编译侧哈希注册与运行侧读值缺省共用此单一事实源。
+#: MaxOneMoreCount = 再动上限（OneMorePerTurn 族）：默认 1 为族结构旁证
+#: （OneMore=单次/More=多次）+ 机制自洽唯一解，官方未写默认值——caveats
+#: 待实测项，真实 golden 对拍时复核（推翻则改卡改值）。
+RUNTIME_DYNAMIC_DEFAULTS = {"MaxOneMoreCount": 1.0}
+
 
 def _signed_int32(value: int) -> int:
     value &= 0xFFFFFFFF

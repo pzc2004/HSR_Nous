@@ -11,9 +11,9 @@ from hsr_nous.sim.pipeline import MODE_ROLL
 from hsr_nous.sim.state import Modifier
 from hsr_nous.sim_schema.action import Action
 from hsr_nous.sim_schema.config_ai import (
-    MONSTER_RANK_VALUES, SPECIAL_TARGET_MONSTER_IDS, config_ai_initial_values,
-    dynamic_value_hash, is_self_target_alias, is_team_count_alias,
-    unsupported_config_nodes,  # noqa: F401  # 静态收编共用入口
+    MONSTER_RANK_VALUES, RUNTIME_DYNAMIC_DEFAULTS, SPECIAL_TARGET_MONSTER_IDS,
+    config_ai_initial_values, dynamic_value_hash, is_self_target_alias,
+    is_team_count_alias, unsupported_config_nodes,  # noqa: F401  # 静态收编共用入口
 )
 
 
@@ -65,6 +65,9 @@ def config_ai_dynamic_value(engine: Any, actor_id: str, key: str) -> float:
             policy.config, actor_id, getattr(engine.encounter, "encounter_id", ""))
         if key in initial_values:
             return float(initial_values[key])
+    # 运行时供给键的核定缺省（决策卡 #27——MaxOneMoreCount 等，单一事实源 sim_schema）。
+    if key in RUNTIME_DYNAMIC_DEFAULTS:
+        return float(RUNTIME_DYNAMIC_DEFAULTS[key])
     # AIFlag/首计数器允许怪物名前缀，均以 1 起步；其他动态键默认 0。
     return 1.0 if key.endswith("AIFlag") or key.endswith(("AICounter", "AICounter_01")) else 0.0
 

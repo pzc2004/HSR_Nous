@@ -219,7 +219,7 @@ _PASSIVE_EVENT_MAP = {
     "OnSPChange": (None, "", "能量变化是 on_gain_energy/after_consume 双通道，单次回调不可单射"),
     "OnAllowAction": (None, "", "行动许可是 prevent_action 面板检查，引擎无对应发射点"),
     "OnListenAllowAction": (None, "", "行动许可是 prevent_action 面板检查，引擎无对应发射点"),
-    "OnActionEnd": (None, "", "无 per-action-end 发射点（on_action 是施放广播非结束锚）"),
+    "OnActionEnd": ("hook", "on_action_end", "$event.actor == $self.actor_id"),
     "OnAfterAttack": (None, "", "无攻击者侧事件发射点（after_being_hit 是被击侧）"),
     "OnListenAfterAttack": (None, "", "无攻击者侧事件发射点"),
     "OnBeforeAttack": (None, "", "无攻击者侧事件发射点"),
@@ -466,10 +466,15 @@ class AbilityCompiler:
         # 已在生成侧排除（scripts/mine_dynamic_key_table.py 口径）；本敌扫描覆盖
         # 全局层（近水楼台），跨层冲突整桶撤回落。
         from hsr_nous.pipeline.enemies.dynamic_key_table import DYNAMIC_KEY_HASH_TABLE
+        from hsr_nous.sim_schema.config_ai import RUNTIME_DYNAMIC_DEFAULTS
         name_symbols: Dict[int, str] = {
             hashed: f"dynamic_of($self.actor_id, '{name}')"
             for hashed, name in DYNAMIC_KEY_HASH_TABLE.items()
         }
+        # 运行时供给键补充注册（决策卡 #27）：全语料只读不写，挖矿表天然漏收——
+        # 缺省值与运行侧读值共用 sim_schema RUNTIME_DYNAMIC_DEFAULTS 单一事实源。
+        for name in RUNTIME_DYNAMIC_DEFAULTS:
+            name_symbols[dynamic_value_hash(name)] = f"dynamic_of($self.actor_id, '{name}')"
         for name in self.dynamic_keys:
             if any(ch in name for ch in "'\"\\"):
                 continue
@@ -2546,6 +2551,40 @@ class AbilityCompiler:
         "RPG.GameCore.DefineDynamicValue",
     }
 
+    def _compile_one_more_family(self, name: str, modifier: Dict[str, Any],
+                                 ctx: _Context) -> None:
+        """OneMorePerTurn 族（boss 多动配额，决策卡 #27）专用收编.
+
+        数据语义：OnCreate/OnListenTurnEnd 额度重置为 MaxOneMoreCount（运行时供给键，
+        默认 1 + caveats 待实测）；OnPhase1 发 OneMore 许可（额度有余才授予额外行动）；
+        OnActionEnd 额度扣 1。发放只在普通回合开始（modifier 相位不走额外回合）；
+        重置监听所有回合结束（含额外回合）——无限续杯由发放侧相位过滤断绝。
+        """
+        max_expr = "dynamic_of($self.actor_id, 'MaxOneMoreCount')"
+        count_expr = "dynamic_of($self.actor_id, 'OneMoreCount')"
+        modifier.setdefault("on_apply", []).append({
+            "effect_type": "set_dynamic_value", "target": "self",
+            "dynamic_key": "OneMoreCount", "amount": max_expr})
+        modifier.setdefault("on_remove", []).append({
+            "effect_type": "set_dynamic_value", "target": "self",
+            "dynamic_key": "OneMoreCount", "amount": 0})
+        ctx.lifecycle_hooks.extend([
+            {"event": "on_turn_start",
+             "condition": f"$event.actor == $self.actor_id and $event.kind == 'normal' and {count_expr} > 0",
+             "effects": [{"effect_type": "grant_extra_turn", "target": "self"}]},
+            {"event": "on_action_end",
+             "condition": "$event.actor == $self.actor_id",
+             "effects": [{"effect_type": "set_dynamic_value", "target": "self",
+                          "dynamic_key": "OneMoreCount",
+                          "amount": f"{count_expr} - 1"}]},
+            {"event": "on_turn_end",
+             "condition": "$event.actor == $self.actor_id",
+             "effects": [{"effect_type": "set_dynamic_value", "target": "self",
+                          "dynamic_key": "OneMoreCount", "amount": max_expr}]},
+        ])
+        ctx.handled.extend(["OnCreate", "OnDestroy", "OnPhase1",
+                            "OnActionEnd", "OnListenTurnEnd"])
+
     def _compile_modifier_lifecycle(self, name: str, definition: Dict[str, Any],
                                     modifier: Dict[str, Any], ctx: _Context, path: str) -> None:
         """创建/摘除写入实例；死亡前编译为全局 hook，避免递归 modifier 定义.
@@ -2553,6 +2592,9 @@ class AbilityCompiler:
         非生命周期回调事件走 `_PASSIVE_EVENT_MAP`（14_policy.md 被动事件族节）：
         hook 载体编译为全局钩（持有者窄化）；definition 载体由定义编译期消费、
         非常消费任务显式拒；无载体事件显式 unsupported（纯表现回调安全忽略）。"""
+        if name.startswith(("OneMorePerTurn", "MoreOneMorePerTurn")):
+            self._compile_one_more_family(name, modifier, ctx)
+            return
         slots = {"OnCreate": "on_apply", "OnDestroy": "on_remove"}
         events = {"OnCreate": "on_apply", "OnDestroy": "after_remove_modifier",
                   "OnBeforeDying": "before_actor_exit"}

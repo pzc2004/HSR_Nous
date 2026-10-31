@@ -1859,6 +1859,12 @@ class CombatEngine:
                 }, self.state)
         self._frame_stack.pop()
         self._commit_frame(frame)
+        # 行动结算完毕锚（帧已提交，订阅者读到行动后状态）——怪物 OnActionEnd 回调族
+        self.bus.emit("on_action_end", {"actor": actor_state.actor.actor_id,
+                                        "action_type": action.action_type,
+                                        "action_id": action.action_id,
+                                        "actor_type": actor_state.actor.actor_type,
+                                        "insert": _insert}, self.state)
 
     def _execute_action_inner(self, actor_state: ActorState, action: Action, *, _insert: bool = False,
                               forced_target: Optional[ActorState] = None) -> None:
@@ -2633,7 +2639,7 @@ class CombatEngine:
 
         # 阶段 1 · 回合开始（A 类结算：DOT 跳伤；倒计时类不广播）
         if not is_countdown:
-            self.bus.emit("on_turn_start", {"actor": actor.actor_id}, self.state)
+            self.bus.emit("on_turn_start", {"actor": actor.actor_id, "kind": kind}, self.state)
         self._tick_modifiers(actor_state, "owner_turn_start")  # 计时锚"回合开始"（阮梅弦外音族）
         self._tick_source_modifiers(actor, "source_turn_start")  # 施加者回合开始锚（长夜月忆灵光环族）
         self._tick_dots(actor_state)
@@ -2700,7 +2706,7 @@ class CombatEngine:
 
         # 阶段 4 · 回合结束（B 类结算：modifier tick；倒计时类不广播）
         if not is_countdown:
-            self.bus.emit("on_turn_end", {"actor": actor.actor_id}, self.state)
+            self.bus.emit("on_turn_end", {"actor": actor.actor_id, "kind": kind}, self.state)
         self._tick_modifiers(actor_state)
         self._tick_source_modifiers(actor)  # source_turn_end 锚（§4.14 tick_on：按施加者回合走字）
         if self._is_enemy(actor):

@@ -178,9 +178,12 @@ policy:
 > `actor_exit`（actor 窄化）、OnLockHPThresholdReached→`on_hp_lock`（target 窄化）、
 > OnBeforeWaveMonster/OnWaveMonster→`on_wave_start`（近似：波开始 vs 怪登场前，待实测）、
 > OnStack/OnPhase1/OnPhase2/OnStage→modifier 定义编译期消费（visit_stack/DoT 既有口径，
-> 非常消费任务显式拒）。持有者窄化条件一律 `$event.target == $self.actor_id` 或
+> 非常消费任务显式拒；`OneMorePerTurn` 族走决策卡 #27 专用收编——boss 多动配额：
+> 发放仅普通回合开始（相位不走额外回合）、`OnActionEnd`→`on_action_end` 扣额度、
+> 重置监听所有回合结束、MaxOneMoreCount 默认 1 待实测）。持有者窄化条件一律
+> `$event.target == $self.actor_id` 或
 > `$event.actor == $self.actor_id`（owner 死亡不触发的 alive 闸天然生效）。无载体事件
-> （OnHPChange/OnSPChange 双事件不可单射、OnAllowAction 族无发射点、OnActionEnd/OnAfterAttack
+> （OnHPChange/OnSPChange 双事件不可单射、OnAllowAction 族无发射点、OnAfterAttack
 > 族无发射点、limbo 域未收编、OnUltraSkillPrepare≠on_ultimate、OnCustomEvent 非 DOT 族等）
 > 显式 unsupported 进 human_queue，逐条写理由；回调内容为纯表现（`_presentation_only`）时
 > 无映射事件也可安全忽略。空被动（无 OnAdd/OnStart/回调机制内容，如 AI 控制壳）空翻译

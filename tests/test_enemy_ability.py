@@ -3614,7 +3614,95 @@ def test_dynamic_key_hash_table_lookup_and_exclusions():
               for h in out["hooks"] for e in h.get("effects", [])}
     assert "dynamic_of($self.actor_id, '_Layer')" in by_key["Sink0"]
     assert "dynamic_of($self.actor_id, 'CurrentSummonIndex')" in by_key["Sink1"]
-    rejected = build([2128130574, 1227332892])   # MDF_PropertyValue / OneMoreCount 读哈希
+    rejected = build([2128130574, 1227332892])   # MDF_PropertyValue / MaxOneMoreCount 读哈希
     unknown = [i["reason"] for i in rejected["unsupported"] if "未知 DynamicHash" in i["reason"]]
     assert any("2128130574" in r for r in unknown), "内联参数族应保持未知（静默 0 比显式未知更坏）"
-    assert any("1227332892" in r for r in unknown), "无名哈希不可反解，保持未知"
+    # 决策卡 #27：MaxOneMoreCount 转为运行时供给键收编（默认 1 + 待实测），不再未知
+    assert not any("1227332892" in r for r in unknown), "MaxOneMoreCount 已注册（决策卡 #27）"
+    resolved = {e.get("dynamic_key"): str(e.get("amount"))
+                for h in rejected["hooks"] for e in h.get("effects", [])}
+    assert any("dynamic_of($self.actor_id, 'MaxOneMoreCount')" in v for v in resolved.values())
+
+
+@_need_ability
+def test_one_more_per_turn_family_extra_turn_quota(tmp_path):
+    """OneMorePerTurn 族运行钉（决策卡 #27）：每回合 1+1 动、额度重置只认普通回合.
+
+    编译产物形态取自本族真实编译输出（modifier on_apply/on_remove + 三条生命周期钩）。
+    计数：普通回合开始 3 次、额外回合开始恰好 3 次（每普通回合一次再动）、
+    普通回合结束 OneMoreCount 重置为 1。若重置误含额外回合则无限续杯——
+    行动数安全阀 >20 直接判负，防挂死。
+    """
+    from hsr_nous.adapters.template_generator import generate_enemy_template
+    from hsr_nous.sim import CombatEngine, MODE_EXPECTED
+    from hsr_nous.sim.compile import compile_encounter
+
+    max_expr = "dynamic_of($self.actor_id, 'MaxOneMoreCount')"
+    count_expr = "dynamic_of($self.actor_id, 'OneMoreCount')"
+    one_more_modifier = {
+        "modifier_id": "OneMorePerTurn", "name": "OneMorePerTurn", "modifier_type": "buff",
+        "duration": 0, "max_stack": 1, "stacks": 1, "stack_mode": "refresh", "dispellable": True,
+        "on_apply": [{"effect_type": "set_dynamic_value", "target": "self",
+                      "dynamic_key": "OneMoreCount", "amount": max_expr}],
+        "on_remove": [{"effect_type": "set_dynamic_value", "target": "self",
+                       "dynamic_key": "OneMoreCount", "amount": 0}],
+    }
+    hooks = [
+        {"event": "on_battle_start", "condition": "true",
+         "effects": [{"effect_type": "apply_modifier", "target": "self",
+                      "modifier": one_more_modifier}]},
+        {"event": "on_turn_start",
+         "condition": f"$event.actor == $self.actor_id and $event.kind == 'normal' and {count_expr} > 0",
+         "effects": [{"effect_type": "grant_extra_turn", "target": "self"}]},
+        {"event": "on_action_end", "condition": "$event.actor == $self.actor_id",
+         "effects": [{"effect_type": "set_dynamic_value", "target": "self",
+                      "dynamic_key": "OneMoreCount", "amount": f"{count_expr} - 1"}]},
+        {"event": "on_turn_end",
+         "condition": "$event.actor == $self.actor_id",
+         "effects": [{"effect_type": "set_dynamic_value", "target": "self",
+                      "dynamic_key": "OneMoreCount", "amount": max_expr}]},
+    ]
+    template = generate_enemy_template("1013020")
+    template.update({
+        "actions": [{"action_id": "bite", "name": "测试咬击", "action_type": "basic",
+                     "target_type": "single", "damage_type": "physical",
+                     "scaling": [{"atk": 0.0}], "toughness_dmg": 0, "energy_gain": 0}],
+        "hooks": hooks,
+        "policy": {"sequence": ["bite"], "cooldown": {}, "initial_cooldown": {}},
+    })
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "1013020.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    build = {"build": {
+        "team": [{
+            "actor_id": "hero", "name": "测试员", "inline": True,
+            "base_stats": {"hp": 100000, "atk": 0, "def": 1000, "spd": 50, "max_energy": 100},
+            "actions": [{"action_id": "hero_basic", "name": "测试普攻", "action_type": "basic",
+                         "target_type": "single", "damage_type": "physical",
+                         "scaling": [{"atk": 0.0}], "toughness_dmg": 0, "energy_gain": 0}],
+        }],
+        "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0}]},
+    }}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": "1013020", "level": 80}],
+        "termination": {"mode": "fixed_av", "max_action_value": 350},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    events = []
+    engine.bus.subscribe("on_turn_start",
+                         lambda et, payload, ctx: events.append((et, (payload.get("kind"), payload.get("actor")))))
+    engine.bus.subscribe("on_action_end",
+                         lambda et, payload, ctx: events.append((et, (None, payload.get("actor")))))
+    engine.setup()
+    engine.run()
+    enemy_normal = sum(1 for et, (k, a) in events if et == "on_turn_start"
+                       and k == "normal" and a == "1013020")
+    extras = sum(1 for et, (k, a) in events if et == "on_turn_start" and k == "normal_extra")
+    actions = [a for et, a in events if et == "on_action_end" and a[1] == "1013020"]
+    assert enemy_normal >= 2, "至少两个普通回合才谈得上周而复始"
+    assert extras in (enemy_normal, enemy_normal - 1), (
+        f"N,E 交替再动（末回合的再动可能未轮到）：{events}")
+    assert len(actions) == enemy_normal + extras, (
+        f"行动数 = 普通回合 + 再动：{len(actions)} vs {enemy_normal}+{extras}")
