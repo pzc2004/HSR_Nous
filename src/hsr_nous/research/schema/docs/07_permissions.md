@@ -38,7 +38,7 @@
 | 仓库源码与测试 | 只读，用于理解和验证 | 经审查的人；通过正常代码评审与测试流程修改 |
 | canonical 模板与数据 | 只读，经统一 loader | 经授权的策展人或既有生成器；research runner 不得写入 |
 | Agent 自有项目目录 | 仅项目根内的文件，realpath 校验 | Agent 本人，且只产生 exploratory 产物；不得写 canonical/raw artifact/claim/report |
-| research_root 的 trial 元数据 | 仅可读取被授权的 trial 元数据 | 可信 runner / ArtifactStore；默认 `Path.home()/HSR_Nous` 或授权 env 根 |
+| research_root 的 trial 元数据 | 仅可读取被授权的 trial 元数据 | 可信 runner / ArtifactStore；默认 `~/.local/share/hsr_nous` 或授权 env 根 |
 | raw artifact（spec/variant/run/result） | 通过 `EvidenceLink` 和只读接口 | 仅可信 runner；store 原子发布、不可覆盖、同字节幂等 |
 | Claim | 只读已验证记录 | 仅可信 ClaimValidator；逻辑 claim_id 与 record ID 分离，不覆盖历史 |
 | Report | 只读已验证 JSON | 仅 ReportComposer，且发布前必须再次 validate |

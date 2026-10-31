@@ -17,7 +17,7 @@ bash scripts/setup_agent_env.sh
 hsr-research-agent /path/to/contract.json --research-root /path/to/research
 ```
 
-研究根默认由 `HSR_NOUS_RESEARCH_ROOT` 决定，缺省为 `~/HSR_Nous`，必须独立于源码仓库。DSH 的 `HOME`、`DSH_HOME` 使用该根下的隔离目录；cwd 是源码仓库以读取项目 `.env`，沙箱工作区和研究产物仍归研究根。
+研究根优先由 `HSR_NOUS_RESEARCH_ROOT` 决定，其次使用 `$XDG_DATA_HOME/hsr_nous`，缺省为 `~/.local/share/hsr_nous`，必须独立于源码仓库。DSH 的 `HOME`、`DSH_HOME` 使用该根下的隔离目录；cwd 是源码仓库以读取项目 `.env`，沙箱工作区和研究产物仍归研究根。
 
 模型配置从仓库根 `.env.example` 复制到 `.env`，填写三项：
 

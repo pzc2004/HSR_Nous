@@ -40,7 +40,8 @@ mechanism variant 编译使用 `(variant_root, *RUNTIME_TEMPLATE_ROOTS)`，覆�
 `common.research_root()` 按以下优先级解析：
 
 1. `HSR_NOUS_RESEARCH_ROOT` 环境变量；
-2. `Path.home() / "HSR_Nous"`。
+2. `$XDG_DATA_HOME/hsr_nous`；
+3. `~/.local/share/hsr_nous`。
 
 默认不会写当前仓库或 CWD。ArtifactStore 使用 `<research_root>/artifacts`；测试始终传 `tmp_path`，不写用户 home 或 `data/library`。
 

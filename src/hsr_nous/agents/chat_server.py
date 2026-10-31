@@ -597,7 +597,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8003)
     parser.add_argument("--host", default="127.0.0.1", help="监听地址（默认回环）")
-    parser.add_argument("--research-root", type=Path, help="研究根（默认 HSR_NOUS_RESEARCH_ROOT 或 ~/HSR_Nous）")
+    parser.add_argument("--research-root", type=Path, help="研究根（HSR_NOUS_RESEARCH_ROOT > XDG_DATA_HOME/hsr_nous > ~/.local/share/hsr_nous）")
     parser.add_argument("--dsh-bin", type=Path, help="DSH 可执行文件（默认 external/dsh 或 PATH）")
     args = parser.parse_args(argv)
 

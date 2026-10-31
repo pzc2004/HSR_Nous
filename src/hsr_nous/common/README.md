@@ -18,7 +18,7 @@
 
 | 文件 | 内容 |
 |---|---|
-| `paths.py` | `repo_root()` / `repo_data_dir()` / `data_root()` / `research_root()` 及对应 env 名——路径唯一事实源；研究根默认 `Path.home()/HSR_Nous`，绝不默认写仓库或 CWD |
+| `paths.py` | `repo_root()` / `repo_data_dir()` / `data_root()` / `research_root()` 及对应 env 名——路径唯一事实源；研究根默认 `$XDG_DATA_HOME/hsr_nous`，未设置时为 `~/.local/share/hsr_nous`，绝不默认写仓库或 CWD |
 | `env.py` | `parse_env_file()`（纯函数）/ `load_dotenv()`（setdefault 写入）/ `load_repo_env()`——手写 `.env` 解析 |
 | `__init__.py` | 公开 API 汇总 |
 

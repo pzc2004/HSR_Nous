@@ -16,7 +16,7 @@
 ```
 src/hsr_nous/
 ├── common/        # 公共基座：路径 / 环境变量 / .env / IO 基元（零项目依赖，所有模块可 import）
-│   ├── paths.py   # 路径唯一事实源（repo/data/research 三类根；data 默认仓库 ./data，research 默认 ~/HSR_Nous，均可 env 覆盖）
+│   ├── paths.py   # 路径唯一事实源（repo/data/research 三类根；data 默认仓库 ./data，research 默认 ~/.local/share/hsr_nous，均可 env 覆盖）
 │   ├── env.py     # .env 手写解析 + load_repo_env（不覆盖已有环境变量）
 │   └── README.md  # 准入规则与 API 清单
 ├── pipeline/      # 数据访问层：下载 + 加载 + 查询 StarRailRes/Fandom 数据 — 独立，不 import 业务模块

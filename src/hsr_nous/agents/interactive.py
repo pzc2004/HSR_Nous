@@ -73,7 +73,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="走 ACP 桥独立模式（chat_server 直起；日常聊天主入口是 hsr-research-web）",
     )
     parser.add_argument("--port", type=int, default=None, help="监听端口（缺省 8002；--serve 时 8003）")
-    parser.add_argument("--research-root", type=Path, help="研究根（默认 HSR_NOUS_RESEARCH_ROOT 或 ~/HSR_Nous）")
+    parser.add_argument("--research-root", type=Path, help="研究根（HSR_NOUS_RESEARCH_ROOT > XDG_DATA_HOME/hsr_nous > ~/.local/share/hsr_nous）")
     parser.add_argument("--dsh-bin", type=Path, help="DSH 可执行文件（默认 external/dsh 或 PATH）")
     args = parser.parse_args(argv)
     if args.serve:

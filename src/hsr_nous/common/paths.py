@@ -4,8 +4,8 @@
 1. ``HSR_NOUS_DATA_DIR`` 环境变量（CI/多份数据并存/自定义位置）；
 2. 仓库 ``./data``（开发兜底）。
 
-研究产物根独立解析：``HSR_NOUS_RESEARCH_ROOT`` > ``Path.home()/HSR_Nous``；
-绝不默认写仓库或 CWD。
+研究产物根独立解析：``HSR_NOUS_RESEARCH_ROOT`` > ``XDG_DATA_HOME/hsr_nous``
+> ``~/.local/share/hsr_nous``；绝不默认写仓库或 CWD。
 
 两类数据命运不同：
 - **缓存级**（starrailres/stages/fandom/tbgd/sim_templates/提取产物……gitignored，
@@ -46,6 +46,11 @@ def data_root() -> Path:
 
 
 def research_root() -> Path:
-    """研究产物根：``HSR_NOUS_RESEARCH_ROOT`` > 用户 home 下的 ``HSR_Nous``."""
+    """研究产物根：专用环境变量 > XDG 数据目录下的 ``hsr_nous``."""
     env = os.environ.get(RESEARCH_ROOT_ENV)
-    return Path(env) if env else Path.home() / "HSR_Nous"
+    if env:
+        return Path(env)
+    xdg_data_home = os.environ.get("XDG_DATA_HOME")
+    if xdg_data_home:
+        return Path(xdg_data_home) / "hsr_nous"
+    return Path.home() / ".local" / "share" / "hsr_nous"

@@ -25,7 +25,16 @@ def test_research_root_prefers_environment(tmp_path, monkeypatch):
 
     expected = tmp_path / "research-output"
     monkeypatch.setenv(RESEARCH_ROOT_ENV, str(expected))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
     assert research_root() == expected
+
+
+def test_research_root_uses_xdg_data_home(tmp_path, monkeypatch):
+    from hsr_nous.common import RESEARCH_ROOT_ENV, research_root
+
+    monkeypatch.delenv(RESEARCH_ROOT_ENV, raising=False)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
+    assert research_root() == tmp_path / "xdg" / "hsr_nous"
 
 
 def test_research_root_defaults_to_user_home_not_repository(tmp_path, monkeypatch):
@@ -34,6 +43,8 @@ def test_research_root_defaults_to_user_home_not_repository(tmp_path, monkeypatc
     from hsr_nous.common import RESEARCH_ROOT_ENV, research_root
 
     monkeypatch.delenv(RESEARCH_ROOT_ENV, raising=False)
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    assert research_root() == Path.home() / "HSR_Nous"
-    assert research_root() != tmp_path / "HSR_Nous"
+    expected = Path.home() / ".local" / "share" / "hsr_nous"
+    assert research_root() == expected
+    assert research_root() != tmp_path / ".local" / "share" / "hsr_nous"
