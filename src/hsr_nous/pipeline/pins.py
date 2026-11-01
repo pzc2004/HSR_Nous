@@ -7,7 +7,7 @@ tag 语义 = data-full-<日期>（全量快照）。
 
 #: 全量数据快照镜像（首个为 2026-10-16 手工 bootstrap；之后 CD 每两周生产）
 SNAPSHOT_REPO = "pzc2004/HSR_Nous"
-SNAPSHOT_TAG = "data-full-20261016"
+SNAPSHOT_TAG = "data-full-20261101"
 SNAPSHOT_ASSET = "data-snapshot.tar.gz"
 
 
