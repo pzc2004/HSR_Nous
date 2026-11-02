@@ -160,7 +160,7 @@ actions:
       - trigger: "on_cast"               # 04_modifier.md §4.8 modifier 生命周期触发器（非 §23.4 hook 契约事件）
         effect_type: "summon"            # 已实现（2026-09-06 收编——`05_effects.md` §5.2）
         summon_id: "hyacine_memosprite"
-        position: "after_owner"        # 召唤位置：after_owner | before_owner | fixed_position
+        position: "after_owner"        # 召唤位置：after_owner | before_owner | first | last（敌方 SummonMonster LocationType=First/Last 队首/队尾，2026-11-02 落地）| fixed_position
 ```
 
 #### 离场/解散

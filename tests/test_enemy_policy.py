@@ -10649,7 +10649,9 @@ def test_normal_free_drinks_full_chain_and_roster(tmp_path):
         template = generate_enemy_template(enemy_id)
         assert [action["action_id"] for action in template["actions"]] == [
             "300302001", "300302002", "300302003", "300302004"]
-        assert template["policy"]["config"] and len(template["summons"]) == 2
+        # 站位谓词收编后双分支（站位选槽成功/失败）均编译——声明槽位 = 双技能×双分支 = 4，
+        # 运行时每次施放仍只走一支（下面按实际召唤断言，不按声明槽位）
+        assert template["policy"]["config"] and len(template["summons"]) == 4
         unlimited = template["actions"][1]
         assert unlimited["scaling"] == [{"atk": 3.6}] and unlimited["instances"] == 4
 
@@ -10680,8 +10682,8 @@ def test_normal_free_drinks_full_chain_and_roster(tmp_path):
 
     assert seen == ["300302004", "300302002", "300302003"]
     assert hits == ["300302002"] * 4
-    for spec in template["summons"]:
-        assert engine.state.actors[f"{spec['summon_id']}__enemy"].alive
+    summoned = [st for st in engine.state.actors.values() if st.actor.summoner_id == "enemy"]
+    assert len(summoned) == 2 and all(st.alive for st in summoned), "实际召唤两只且存活"
 
 
 def test_soulglad_party_summons_two_bubble_hounds(tmp_path):

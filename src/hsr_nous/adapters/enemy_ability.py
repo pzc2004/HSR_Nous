@@ -1230,6 +1230,36 @@ class AbilityCompiler:
         if node_type == "RPG.GameCore.ByNot":
             child = self._predicate_expr(predicate.get("Predicate") or {}, ctx, f"{path}/Predicate")
             return self._negate_condition(child) if child is not None else None
+        if node_type == "RPG.GameCore.ByIsTeamLocationIndexType":
+            # 站位索引谓词（决策卡 #28）：站位 = 同侧存活列表序（与 blast 相邻同口径）。
+            # Left=最左 / Right=最右 / Medium=非端点 / PosN=第 N 位；Max/缺省与 Right
+            # 的关系数据证不出——保持显式拒，待实测。
+            if target is None:
+                self._issue(ctx, path, node_type, f"站位谓词目标未注册：{alias}")
+                return None
+            team = str(predicate.get("TeamType") or "")
+            if team not in ("TeamDark", "TeamLight"):
+                self._issue(ctx, path, node_type, f"站位阵营未注册：{team}")
+                return None
+            team_arg = "dark" if team == "TeamDark" else "light"
+            pos = f"position_of({target}, '{team_arg}')"
+            size = f"side_size({target}, '{team_arg}')"
+            ptype = predicate.get("Type")
+            if ptype == "Left":
+                expr = f"{pos} == 1"
+            elif ptype == "Right":
+                expr = f"{pos} == {size}"
+            elif ptype == "Medium":
+                expr = f"{pos} > 1 and {pos} < {size}"
+            elif isinstance(ptype, str) and ptype.startswith("Pos") and ptype[3:].isdigit():
+                expr = f"{pos} == {int(ptype[3:])}"
+            else:
+                self._issue(ctx, path, node_type,
+                            f"站位类型 {ptype or '缺省'} 语义待实测（Max/缺省与 Right 关系未钉）")
+                return None
+            if predicate.get("Inverse"):
+                expr = f"not ({expr})"
+            return f"({expr})"
         translated = self._translate_longtail_predicate(predicate, ctx, path, node_type,
                                                         alias, target)
         if translated is not None:
@@ -1243,7 +1273,6 @@ class AbilityCompiler:
         "RPG.GameCore.ByCheckModifierCallBackName": "modifier 回调名内省谓词无引擎载体",
         "RPG.GameCore.ByCheckModifierCallBackBehaviorFlag": "modifier 回调旗标内省谓词无引擎载体",
         "RPG.GameCore.ByTargetTeam": "队伍侧判定（TeamDark/Light）与 actor_type 词表映射待实测钉",
-        "RPG.GameCore.ByIsTeamLocationIndexType": "站位索引体系（左/右位）未收编",
         "RPG.GameCore.ByCompareStageType": "关卡类型语境运行时无载体（编译器不知关卡）",
         "RPG.GameCore.ByCompareStageID": "关卡 ID 语境运行时无载体",
         "RPG.GameCore.ByCompareBattleEventID": "战斗事件体系未收编",
@@ -2242,7 +2271,28 @@ class AbilityCompiler:
                 "summon_id": summon_id, "enemy_template": str(int(monster_id)),
                 "level": self.level,
             })
-            self._add_effect(ctx, {"effect_type": "summon", "summon_id": summon_id})
+            # LocationType（First/Last = 该侧队首/队尾）为布场方向唯一事实源；
+            # RefreshTeamLocation=true（重排站位）未收编显式拒；其余值待实测。
+            location = str(row.get("LocationType") or "")
+            refresh = row.get("RefreshTeamLocation")
+            if refresh:
+                self._issue(ctx, f"{path}/{index}", "SummonMonster",
+                            "RefreshTeamLocation=true（召唤后重排站位）未收编")
+                continue
+            # 词表实证：First=队首 / Last=队尾 / BeforeCaster/AfterCaster=召唤者前后 /
+            # AroundCasterOnEdge=环绕召唤者边缘（紧邻同义，按 after_owner 右邻实现；
+            # 多单位的左右交替分配待实测）。
+            location_map = {"First": "first", "Last": "last",
+                            "BeforeCaster": "before_owner", "AfterCaster": "after_owner",
+                            "AroundCasterOnEdge": "after_owner"}
+            if location and location not in location_map:
+                self._issue(ctx, f"{path}/{index}", "SummonMonster",
+                            f"召唤布场 LocationType={location} 语义待实测")
+                continue
+            effect = {"effect_type": "summon", "summon_id": summon_id}
+            if location:
+                effect["position"] = location_map[location]
+            self._add_effect(ctx, effect)
 
     def _ability_adds_modifier(self, ability_name: str, modifier_name: str,
                                seen: Optional[set] = None) -> bool:

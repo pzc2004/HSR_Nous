@@ -3555,7 +3555,7 @@ def test_predicate_unregistered_reasons_specific():
           "CallBackName": "OnBeingBreak"}, "内省"),
         ({"$type": "RPG.GameCore.ByIsTeamLocationIndexType",
           "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
-          "TeamType": "TeamDark", "Type": "Left"}, "站位索引"),
+          "TeamType": "TeamDark", "Type": "Max"}, "待实测"),
     ):
         expr = _pred_expr(pred)
         assert expr is None
@@ -3706,3 +3706,61 @@ def test_one_more_per_turn_family_extra_turn_quota(tmp_path):
         f"N,E 交替再动（末回合的再动可能未轮到）：{events}")
     assert len(actions) == enemy_normal + extras, (
         f"行动数 = 普通回合 + 再动：{len(actions)} vs {enemy_normal}+{extras}")
+
+
+def test_team_location_predicate_compile_forms():
+    """站位谓词编译形态（决策卡 #28）：Left/Right/Medium/PosN/Inverse 全收，
+    Max/缺省语义未钉保持显式拒。"""
+    def _compile(ptype, inverse=False):
+        skills, sources = _predicate_skill({
+            "$type": "RPG.GameCore.ByIsTeamLocationIndexType",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "ParamEntity"},
+            "TeamType": "TeamDark", **({"Type": ptype} if ptype else {}),
+            **({"Inverse": True} if inverse else {}),
+        })
+        return AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+
+    out = _compile("Left")
+    assert out["ok"] and "position_of($it, 'dark') == 1" in out["hooks"][0]["condition"]
+    out = _compile("Right")
+    assert out["ok"] and "position_of($it, 'dark') == side_size($it, 'dark')" in out["hooks"][0]["condition"]
+    out = _compile("Medium")
+    cond = out["hooks"][0]["condition"]
+    assert out["ok"] and "position_of($it, 'dark') > 1" in cond and "position_of($it, 'dark') < side_size($it, 'dark')" in cond
+    out = _compile("Pos2")
+    assert out["ok"] and "position_of($it, 'dark') == 2" in out["hooks"][0]["condition"]
+    out = _compile("Left", inverse=True)
+    assert out["ok"] and "not (position_of($it, 'dark') == 1)" in out["hooks"][0]["condition"]
+    for unproven in ("Max", None):
+        out = _compile(unproven)
+        assert not out["ok"] and any("待实测" in i["reason"] for i in out["unsupported"])
+
+
+def test_position_of_and_side_size_runtime():
+    """站位运行时语义：同侧存活列表序（与 blast 相邻同口径）+ 死亡重排 + 跨侧归零。"""
+    from tests._builders import engine_vs_dummy, make_actor, make_dummy
+    eng = engine_vs_dummy(allies=[make_actor("ally")],
+                          enemies=[make_dummy("e1"), make_dummy("e2"), make_dummy("e3")])
+    eng.setup()
+    st = eng.state.actors["e1"]
+
+    def ok(cond):
+        expr = eng._expr.compile(cond)
+        return bool(eng._expr.evaluate(expr, eng._hooks._hook_ctx(st, {}),
+                                       functions=eng._hooks._hook_functions(st, _roll_readonly=True)))
+
+    assert ok("position_of('e1', 'dark') == 1")
+    assert ok("position_of('e2', 'dark') == 2")
+    assert ok("position_of('e3', 'dark') == 3")
+    assert ok("side_size('e1', 'dark') == 3")
+    assert ok("side_size('e1', 'light') == 2")   # hero + ally
+    assert ok("position_of('hero', 'light') == 1")
+    assert ok("position_of('ally', 'light') == 2")
+    assert ok("position_of('hero', 'dark') == 0"), "跨侧归零"
+    # 右端点 = 存活数；Medium = 非端点；死亡后存活序重排
+    assert ok("position_of('e3', 'dark') == side_size('e3', 'dark')")
+    assert ok("position_of('e2', 'dark') > 1 and position_of('e2', 'dark') < side_size('e2', 'dark')")
+    eng.state.actors["e2"].alive = False
+    assert ok("position_of('e3', 'dark') == 2"), "e2 阵亡后 e3 前移"
+    assert ok("side_size('e1', 'dark') == 2")
+    assert ok("position_of('e2', 'dark') == 0"), "阵亡者不占位"

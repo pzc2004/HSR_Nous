@@ -671,6 +671,29 @@ class HookRuntime:
             st2 = _lookup(target)
             return 0.0 if st2 is None else float(st2.toughness)
 
+        def _side_alive(st2: ActorState, team: str) -> list:
+            want_enemy = str(team) == "dark"
+            return [s for s in self._engine.state.actors.values()
+                    if s.alive and self._engine._is_enemy(s.actor) == want_enemy]
+
+        def position_of(target: Any, team: Any = "dark") -> float:
+            # 站位索引（同侧存活列表序，1 起）——与 blast 相邻判定同口径（存活列表 ±1）。
+            # team='dark' 敌方 / 'light' 我方；目标不在该侧/查无返回 0（false-y 安全缺省）。
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
+            for i, s in enumerate(_side_alive(st2, str(team))):
+                if s.actor.actor_id == st2.actor.actor_id:
+                    return float(i + 1)
+            return 0.0
+
+        def side_size(target: Any, team: Any = "dark") -> float:
+            # 该侧存活单位数（position_of 的右端点参照；目标解析同通道）。
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
+            return float(len(_side_alive(st2, str(team))))
+
         def resource_of(target: Any, resource_id: Any) -> float:
             # 目标自定义资源当前值（跨 actor 资源读取唯一通道——长夜月 1413 忆灵技读忆师
             # Memoria 族（§22.4"首个真实实例到达时再收"收编）；目标解析与 hp_of 同通道，
@@ -829,6 +852,7 @@ class HookRuntime:
                 "mechanic_chance": mechanic_chance, "roll": roll,
                 "actor_type_of": actor_type_of,
                 "hp_of": hp_of, "max_hp_of": max_hp_of, "toughness_of": toughness_of,
+                "position_of": position_of, "side_size": side_size,
                 "resource_of": resource_of,
                 "dynamic_of": dynamic_of, "count_team": count_team,
                 "stat_of": stat_of, "base_stat_of": base_stat_of, "controlled": controlled,
@@ -1229,7 +1253,7 @@ class HookRuntime:
                 self._chain_last["actual_amount"] = healed_total   # $last/$prev 前序快照
         elif t == "summon":
             # 召唤物入场（12_summon）：布场/继承/上行动条/actor_enter 全在引擎单漏斗
-            self._engine.summon_actor(st, str(eff["summon_id"]))
+            self._engine.summon_actor(st, str(eff["summon_id"]), position=str(eff.get("position", "after_owner")))
         elif t == "dismiss_summon":
             # 召唤物离场（12_summon；未登记/未在场由引擎按 no-op/报错口径处理）
             self._engine.dismiss_summon_actor(str(eff["summon_id"]))

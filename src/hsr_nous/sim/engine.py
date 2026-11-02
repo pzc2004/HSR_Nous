@@ -644,7 +644,8 @@ class CombatEngine:
                 setattr(stats, f, copy.deepcopy(v))
         return stats
 
-    def summon_actor(self, owner_state: ActorState, summon_id: str) -> ActorState:
+    def summon_actor(self, owner_state: ActorState, summon_id: str,
+                     position: str = "after_owner") -> ActorState:
         """召唤物入场：按 SummonDef 布场（继承召唤者 Layer-1 面板 → 上行动条 → actor_enter）.
 
         继承的是召唤者**编译期面板**（含光锥/遗器归并），不是战斗内 effective（12_summon §12.5）。
@@ -696,7 +697,7 @@ class CombatEngine:
         stats.max_energy = 0.0
         actor = replace(sdef.actor, stats=stats)
         st = self._spawn_actor(actor)
-        self._place_after_owner(actor.actor_id, owner_state.actor.actor_id)
+        self._place_relative_owner(actor.actor_id, owner_state.actor.actor_id, position)
         # 召唤物 custom_resources 初始化（12_summon v1.2：模板 summons 块值块——
         # 风堇 tally 由小伊卡记账族；布场时按 decl.current 初始化，与 setup 的角色通道同口径）
         for rid, decl in (self._resource_decls.get(actor.actor_id) or {}).items():
@@ -713,9 +714,11 @@ class CombatEngine:
             f"AV{self.state.clock:.1f}: {owner_state.actor.name} 召唤 {actor.name} 入场")
         return st
 
-    def _place_after_owner(self, summon_id: str, owner_id: str) -> None:
-        """布场站位（12_summon position=after_owner）：召唤物紧邻忆师右侧，忆师已有
-        忆灵簇时排簇尾。state.actors 插入序即站位（blast 相邻/前端卡序/受击范围同源）；
+    def _place_relative_owner(self, summon_id: str, owner_id: str,
+                              position: str = "after_owner") -> None:
+        """布场站位（12_summon position）：after_owner=紧邻召唤者右侧（忆灵簇尾）；
+        before_owner=紧邻召唤者左侧（召唤者右移——布洛妮娅幻象左右炮族）。
+        state.actors 插入序即站位（blast 相邻/前端卡序/受击范围同源）；
         离场不离字典，重召天然回原位。
         """
         actors = self.state.actors
@@ -723,11 +726,23 @@ class CombatEngine:
             return
         st = actors.pop(summon_id)
         items = list(actors.items())
+        if position in ("first", "last"):
+            # First/Last（敌方 SummonMonster LocationType）：插入该侧队首/队尾
+            owner_enemy = self._is_enemy(st.actor)
+            side = [i for i, (_, s2) in enumerate(items)
+                    if self._is_enemy(s2.actor) == owner_enemy]
+            at = side[0] if position == "first" else side[-1] + 1
+            items.insert(at, (summon_id, st))
+            self.state.actors = dict(items)
+            return
         idx = next(i for i, (aid, _) in enumerate(items) if aid == owner_id)
-        end = idx + 1
-        while end < len(items) and items[end][1].actor.summoner_id == owner_id:
-            end += 1
-        items.insert(end, (summon_id, st))
+        if position == "before_owner":
+            items.insert(idx, (summon_id, st))
+        else:
+            end = idx + 1
+            while end < len(items) and items[end][1].actor.summoner_id == owner_id:
+                end += 1
+            items.insert(end, (summon_id, st))
         self.state.actors = dict(items)
 
     def _remove_source_exit_modifiers(self, actor_id: str, *, reason: str) -> None:
