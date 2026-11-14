@@ -921,6 +921,19 @@ class AbilityCompiler:
         return {"Equal": "==", "NotEqual": "!=", "Greater": ">",
                 "GreaterEqual": ">=", "Less": "<", "LessEqual": "<="}.get(str(raw or "Equal"))
 
+    def _simple_compare(self, predicate: Dict[str, Any], ctx: _Context,
+                        path: str, node_type: str, value_expr: str,
+                        *, field: str = "CompareValue", allow_inverse: bool = True) -> Optional[str]:
+        """通用比较谓词骨架（压缩公共件）：取值表达式 + CompareType + 比较值 → 表达式。
+        各比较型谓词只负责给出 value_expr 与目标解析，比较/求值/Inverse 统一走这里。"""
+        compare = self._number(predicate.get(field), ctx, f"{path}/{field}")
+        operator = self._compare_operator(predicate.get("CompareType"))
+        if compare is None or operator is None:
+            self._issue(ctx, path, node_type, "比较值/比较符未注册")
+            return None
+        expr = f"{value_expr} {operator} {compare}"
+        return self._negate_condition(expr) if allow_inverse and predicate.get("Inverse") else expr
+
     @staticmethod
     def _predicate_target(alias: str) -> Optional[str]:
         return {"ParamEntity": "$it", "AbilityTargetEntity": "$event.target",
@@ -975,12 +988,15 @@ class AbilityCompiler:
         alias = self._alias(predicate)
         target = self._predicate_target(alias)
         if node_type == "RPG.GameCore.ByCompareDynamicValue":
+            if alias in {"CasterSummoner", "ModifierOwnerSummoner"}:
+                target = "summoner_of($self.actor_id)"   # 召唤者目标（HP 谓词同通道）
             if target is None:
                 self._issue(ctx, path, node_type, f"动态值谓词目标未注册：{alias}")
                 return None
             raw_key = predicate.get("DynamicKey") or {}
             key = raw_key.get("Value") if isinstance(raw_key, dict) else raw_key
-            compare = self._number(predicate.get("CompareValue"), ctx, f"{path}/CompareValue")
+            # 比较值允许动态表达式（与另一动态值/表达式比较），不再限静态数字
+            compare = self._value(predicate.get("CompareValue"), ctx, f"{path}/CompareValue")
             operator = self._compare_operator(predicate.get("CompareType"))
             if not key or compare is None or operator is None:
                 self._issue(ctx, path, node_type, "动态值键/比较值/比较符未注册")
@@ -1012,13 +1028,8 @@ class AbilityCompiler:
             if target is None:
                 self._issue(ctx, path, node_type, f"怪物等级谓词目标未注册：{alias}")
                 return None
-            compare = self._number(predicate.get("CompareValue"), ctx, f"{path}/CompareValue")
-            operator = self._compare_operator(predicate.get("CompareType"))
-            if compare is None or operator is None:
-                self._issue(ctx, path, node_type, "怪物等级比较值/比较符未注册")
-                return None
-            expr = f"monster_rank({target}) {operator} {compare}"
-            return self._negate_condition(expr) if predicate.get("Inverse") else expr
+            return self._simple_compare(predicate, ctx, path, node_type,
+                                        f"monster_rank({target})")
         if node_type == "RPG.GameCore.ByCompareCharacterID":
             if target is None:
                 self._issue(ctx, path, node_type, f"角色 ID 谓词目标未注册：{alias}")
@@ -1179,22 +1190,15 @@ class AbilityCompiler:
             if target is None:
                 self._issue(ctx, path, node_type, f"HP 谓词目标未注册：{alias}")
                 return None
-            compare = self._number(predicate.get("CompareValue"), ctx, f"{path}/CompareValue")
-            operator = self._compare_operator(predicate.get("CompareType"))
-            if compare is None or operator is None:
-                self._issue(ctx, path, node_type, "HP 比较值/比较符未注册")
-                return None
-            return f"hp_of({target}) {operator} {compare}"
+            return self._simple_compare(predicate, ctx, path, node_type,
+                                        f"hp_of({target})", allow_inverse=False)
+                                        
         if node_type == "RPG.GameCore.ByCompareHPRatio":
             if target is None:
                 self._issue(ctx, path, node_type, f"HP 比例谓词目标未注册：{alias}")
                 return None
-            compare = self._number(predicate.get("CompareValue"), ctx, f"{path}/CompareValue")
-            operator = self._compare_operator(predicate.get("CompareType"))
-            if compare is None or operator is None:
-                self._issue(ctx, path, node_type, "HP 比例比较值/比较符未注册")
-                return None
-            return f"({target}.hp / {target}.max_hp) {operator} {compare}"
+            return self._simple_compare(predicate, ctx, path, node_type,
+                                        f"({target}.hp / {target}.max_hp)", allow_inverse=False)
         if node_type in {"RPG.GameCore.ByCompareCharacterNumber", "RPG.GameCore.ByCompareTargetCount"}:
             if node_type == "RPG.GameCore.ByCompareTargetCount" and not predicate.get("AliveOnly"):
                 self._issue(ctx, path, node_type, "只支持 AliveOnly=true 的存活人数谓词")
