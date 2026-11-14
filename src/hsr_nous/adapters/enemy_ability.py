@@ -31,7 +31,14 @@ from hsr_nous.sim_schema.config_ai import dynamic_value_hash
 IGNORED_TASK_TYPES = frozenset({
     "RPG.GameCore.AddChallengeBossInfoPanelState",
     "RPG.GameCore.AnimSetParameter",
+    "RPG.GameCore.AudioSetRTPCValue",      # 音频参数（纯表现）
     "RPG.GameCore.AudioSetRTPCValueByRatio",
+    "RPG.GameCore.TriggerSoundInAnim",     # 动画音效（纯表现）
+    "RPG.GameCore.TriggerEffectList",      # 特效路径列表（纯表现）
+    "RPG.GameCore.SetComfortZoneWidthOverride",  # 镜头舒适区（纯表现）
+    "RPG.GameCore.OverrideSelectDarkTeamEntityCamera",  # 镜头选目标权重（纯表现）
+    "RPG.GameCore.SwitchBossHeadEffType",     # boss 头部特效切换（纯表现）
+    "RPG.GameCore.DisableHeadLookAtOverride",  # 头部看向动画开关（纯表现）
     "RPG.GameCore.ChangeTargetModifierEffectState",
     "RPG.GameCore.CharacterChangePhase",
     "RPG.GameCore.CharacterReactionAnimConfig",
