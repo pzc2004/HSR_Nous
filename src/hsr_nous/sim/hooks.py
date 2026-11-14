@@ -693,6 +693,33 @@ class HookRuntime:
                     return float(i + 1)
             return 0.0
 
+        def neighbor_of(reference: Any, offset: Any) -> str:
+            """参照单位在同侧存活序中偏移 offset 的邻居 actor_id（左邻=-1/右邻=+1）。
+            CasterLeft/RightEntity 等谓词目标别名的直译通道；无此邻返回 ""（安全缺省）。"""
+            st_r = _resolve(reference)
+            if st_r is None:
+                return ""
+            team = "dark" if self._engine._is_enemy(st_r.actor) else "light"
+            pos = position_of(st_r, team)
+            if pos <= 0:
+                return ""
+            want = int(pos + int(offset))
+            for s2 in self._engine.state.actors.values():
+                if s2.alive and self._engine._is_enemy(s2.actor) == self._engine._is_enemy(st_r.actor)                         and position_of(s2, team) == want:
+                    return s2.actor.actor_id
+            return ""
+
+        def position_delta(target: Any, reference: Any) -> float:
+            """目标与参照的同侧站位差（存活列表序差）——CasterLeft/RightEntity 等
+            左右邻谓词的直译通道；不同侧/查无返回 0（false-y 安全缺省）。"""
+            st_t, st_r = _resolve(target), _resolve(reference)
+            if st_t is None or st_r is None:
+                return 0.0
+            if self._engine._is_enemy(st_t.actor) != self._engine._is_enemy(st_r.actor):
+                return 0.0
+            team = "dark" if self._engine._is_enemy(st_r.actor) else "light"
+            return position_of(st_t, team) - position_of(st_r, team)
+
         def side_size(target: Any, team: Any = "dark") -> float:
             # 该侧存活单位数（position_of 的右端点参照；目标解析同通道）。
             st2 = _resolve(target)
@@ -865,6 +892,7 @@ class HookRuntime:
                 "actor_type_of": actor_type_of,
                 "hp_of": hp_of, "max_hp_of": max_hp_of, "toughness_of": toughness_of,
                 "position_of": position_of, "side_size": side_size,
+                "position_delta": position_delta, "neighbor_of": neighbor_of,
                 "resource_of": resource_of,
                 "dynamic_of": dynamic_of, "count_team": count_team,
                 "stat_of": stat_of, "base_stat_of": base_stat_of, "controlled": controlled,

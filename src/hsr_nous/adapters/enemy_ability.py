@@ -938,7 +938,11 @@ class AbilityCompiler:
     def _predicate_target(alias: str) -> Optional[str]:
         return {"ParamEntity": "$it", "AbilityTargetEntity": "$event.target",
                 "Caster": "$self.actor_id", "ModifierOwnerEntity": "$self.actor_id",
-                "LevelEntity": "$level", "": "$self.actor_id"}.get(alias)
+                "LevelEntity": "$level",
+            "CasterLeftEntity": {"pool": "enemies",
+                                 "where": "position_delta($it, $self.actor_id) == -1"},
+            "CasterRightEntity": {"pool": "enemies",
+                                  "where": "position_delta($it, $self.actor_id) == 1"}, "": "$self.actor_id"}.get(alias)
 
     def _static_monster_predicate(self, predicate: Dict[str, Any]) -> Optional[bool]:
         """仅供属性编译期选支：怪物 ID 及其布尔组合可在生成期唯一求值."""
@@ -1117,6 +1121,8 @@ class AbilityCompiler:
                 expr = f"action_disabled({target})"
             elif flag == "Taunt":
                 expr = f"controlled({target}, 'taunt')"
+            elif flag == "STAT_CTRL_Frozen":
+                expr = f"controlled({target}, 'freeze')"
             else:
                 self._issue(ctx, path, node_type, f"未注册 BehaviorFlag：{flag}")
                 return None
@@ -2445,6 +2451,10 @@ class AbilityCompiler:
             "AllLightTeam.RemoveServant": {
                 "pool": "allies", "where": "not $it.summoner_id"},
             "LevelEntity": "$level",
+            "CasterLeftEntity": {"pool": "enemies",
+                                 "where": "position_delta($it, $self.actor_id) == -1"},
+            "CasterRightEntity": {"pool": "enemies",
+                                  "where": "position_delta($it, $self.actor_id) == 1"},
             "CasterSummonedMinions": {
                 "pool": "enemies", "where": "$it.summoner_id == $self.actor_id"},
             "AbilityTargetAdjoinEntity": {

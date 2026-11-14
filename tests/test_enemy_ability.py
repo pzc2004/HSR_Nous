@@ -3896,3 +3896,48 @@ def test_after_apply_modifier_fires_on_every_apply():
     eng._apply_modifier(st, mod)
     eng._apply_modifier(st, mod)   # refresh 叠层同发
     assert seen == ["Buff", "Buff"], seen
+
+
+def test_neighbor_predicates_and_position_delta():
+    """左右邻目标别名 + position_delta/neighbor_of（决策卡 #35）：多族谓词的共同载体."""
+    # 编译：ByIsContainModifier 的 CasterLeft/RightEntity 目标
+    for alias, offset in (("CasterLeftEntity", -1), ("CasterRightEntity", 1)):
+        skills, sources = _predicate_skill({
+            "$type": "RPG.GameCore.ByIsContainModifier",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": alias},
+            "ModifierName": {"Value": "Buff"},
+        })
+        out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+        assert out["ok"], out["unsupported"]
+        assert f"position_delta($it, $self.actor_id) == {offset}" in out["hooks"][0]["condition"]
+
+    # 运行时：e1/e2/e3 三怪,e2 的左邻=e1、右邻=e3;position_delta 同侧站位差
+    from tests._builders import engine_vs_dummy, make_dummy
+    eng = engine_vs_dummy(enemies=[make_dummy("e1"), make_dummy("e2"), make_dummy("e3")])
+    eng.setup()
+    st = eng.state.actors["e2"]
+
+    def ev(cond):
+        expr = eng._expr.compile(cond)
+        return eng._expr.evaluate(expr, eng._hooks._hook_ctx(st, {}),
+                                  functions=eng._hooks._hook_functions(st, _roll_readonly=True))
+    assert ev("neighbor_of('e2', -1) == 'e1'")
+    assert ev("neighbor_of('e2', 1) == 'e3'")
+    assert ev("neighbor_of('e1', -1) == ''"), "最左无左邻"
+    assert ev("position_delta('e3', 'e2') == 1")
+    assert ev("position_delta('e1', 'e2') == -1")
+    assert ev("position_delta('hero', 'e2') == 0"), "跨侧归零"
+    # 死亡后邻居重排:e1 阵亡,e2 左邻变""
+    eng.state.actors["e1"].alive = False
+    assert ev("neighbor_of('e2', -1) == ''")
+
+
+def test_frozen_behavior_flag_predicate():
+    """STAT_CTRL_Frozen 旗标谓词 → controlled(target, 'freeze')（决策卡 #35）."""
+    skills, sources = _predicate_skill({
+        "$type": "RPG.GameCore.ByContainBehaviorFlag",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "ParamEntity"},
+        "Flag": "STAT_CTRL_Frozen",
+    })
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and "controlled($it, 'freeze')" in out["hooks"][0]["condition"]
