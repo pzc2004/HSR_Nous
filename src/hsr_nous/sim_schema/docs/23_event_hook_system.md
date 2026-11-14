@@ -81,7 +81,7 @@ hooks:
 | `on_state_change` | actor_state 切换时（现态：引擎原生发射；**数据宏落地后降格为宏**——展开为 `after_apply_modifier` / `after_remove_modifier` + `singleton_group: actor_state` 过滤，模板写法不变） | `self` / `team` | `actor`、`to_state`（进入时）/ `from_state`（退出时）（实发集——进入/退出分两包；`source` / `target` 未发射） | emit | 已登记 |
 | `on_resource_threshold` | 某资源达到阈值时 | `self` / `team` | `resource_id`、`threshold`、`direction`、`target` | emit | **未登记**（写了编译期炸） |
 | `on_stat_threshold` | 面板属性穿越阈值时（资源阈值的面板版；如欢愉度首达 40%/80%） | `self` / `team` | `stat`、`threshold`、`direction`、`target` | emit | **未登记**（写了编译期炸） |
-| `after_apply_modifier` | modifier 施加完成后 | `self` / `team` | `modifier_id`、`modifier_type`、`stat`、`target`、`source` | emit | 已登记 |
+| `after_apply_modifier` | modifier 施加/刷新完成后（含叠层——怪物 `OnStack` 回调族中叠层触发型行为的挂载点，决策卡 #32 合并口径：每次施加即叠层，层数不变也发） | `self` / `team` | `modifier_id`、`modifier_type`、`stat`、`target`、`source` | emit | 已登记 |
 | `after_remove_modifier` | modifier 移除完成后 | `self` / `team` | `modifier_id`、`reason`（`expire` / `dispel` / `purify` / `replace` / `shield_broken` / `cleanse` / `state_exit` / `source_death` 等——开放词表）、`target`、`source`（被摘件原施加者——`$modifier.source` 寻址，昔涟"标记消耗回源"族；2026-09-06 起实发） | emit | 已登记 |
 | `actor_enter` | actor 入场（波次敌人登场 / `summon`）时 | — | `actor`、`actor_type`、`wave_index`（实发集——回场包另带 `reason: "unbanish"`、召唤包另带 `reason: "summon"`；`position` **未发射**） | emit | 已登记 |
 | `actor_exit` | actor 离场（死亡 / 放逐 / 召唤物解散）时（death 路径：`alive=False` + `remove_on_source_death` 来源件摘除**之后**发射——死后清理监听者读到摘除后终态，`04_modifier.md` §4.15） | — | `actor`、`reason`（实发值：`death` / `banish` / `dismiss`——含召唤者死亡联动解散）（实发集；`actor_type` **未发射**） | emit | 已登记 |

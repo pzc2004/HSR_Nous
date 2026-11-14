@@ -3837,3 +3837,57 @@ def test_level_entity_blackboard():
                                                   "name": "天气一阶段", "modifier_type": "buff",
                                                   "duration": 0, "max_stack": 1}}, {})
     assert evaluate("has_modifier($level, 'WeatherPhase01Flag')"), "关卡级 modifier 可挂可查"
+
+
+def test_on_stack_behavior_compiles_runtime_hook():
+    """OnStack 行为任务（决策卡 #32）：叠层触发型行为编译为 on_stack 运行时钩."""
+    sources = {
+        "character_config": {"SkillList": [{
+            "Name": "Skill01", "SkillType": "Skill",
+            "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "A",
+        }]},
+        "abilities": {"A": {"Name": "A", "OnStart": [{
+            "$type": "RPG.GameCore.AddModifier",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+            "ModifierName": {"Value": "Buff"},
+        }]}},
+        "modifiers": {
+            "Buff": {"_CallbackList": [{
+                "Event": "OnStack", "CallbackConfig": [{
+                    "$type": "RPG.GameCore.StackProperty", "Property": "AttackAddedRatio",
+                    "PropertyValue": {"IsDynamic": False, "FixedValue": {"Value": 0.2}},
+                }, {
+                    "$type": "RPG.GameCore.SetDynamicValue",
+                    "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+                    "DynamicKey": {"Value": "StackCounter"},
+                    "Value": {"IsDynamic": False, "FixedValue": {"Value": 1}},
+                }],
+            }]},
+        },
+    }
+    skills = [{"skill_id": "s1", "trigger_key": "Skill01", "param_list": []}]
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"], out["unsupported"]
+    hooks = [h for h in out["hooks"] if h["event"] == "after_apply_modifier"]
+    assert hooks, "叠层行为应编译出 after_apply_modifier 钩"
+    assert "$event.modifier_id" in hooks[0]["condition"]
+    effects = [e for h in hooks for e in h["effects"]]
+    assert any(e["effect_type"] == "set_dynamic_value"
+               and e.get("dynamic_key") == "StackCounter" for e in effects), effects
+
+
+def test_after_apply_modifier_fires_on_every_apply():
+    """after_apply_modifier 运行时钉（叠层行为合并载体）：首挂与刷新各发一次."""
+    from hsr_nous.sim.state import Modifier
+    from tests._builders import engine_vs_dummy
+    eng = engine_vs_dummy()
+    eng.setup()
+    st = eng.state.actors["e1"]
+    seen = []
+    eng.bus.subscribe("after_apply_modifier",
+                      lambda et, p, c: seen.append(p["modifier_id"]))
+    mod = Modifier(modifier_id="Buff", name="Buff", modifier_type="buff",
+                   duration=3, max_stack=3, stacks=1)
+    eng._apply_modifier(st, mod)
+    eng._apply_modifier(st, mod)   # refresh 叠层同发
+    assert seen == ["Buff", "Buff"], seen

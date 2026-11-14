@@ -2752,7 +2752,8 @@ class AbilityCompiler:
             if is_dot:
                 consumable: set = set()
             else:
-                consumable = set(self._ONSTACK_CONSUMED_TASKS)
+                # 属性定义（visit_stack）+ 任务注册表（on_stack 运行时钩）双通道消费
+                consumable = set(self._ONSTACK_CONSUMED_TASKS) | set(TASK_HANDLERS)
         else:  # OnPhase1/OnPhase2/OnStage：仅 DoT 的 OnPhase1 有消费点
             consumable = set(self._ONPHASE1_CONSUMED_TASKS) if (is_dot and event == "OnPhase1") \
                 else set()
@@ -2936,6 +2937,8 @@ class AbilityCompiler:
         previous_condition = ctx.condition
         ctx.current_modifier = name
 
+        runtime_stack_tasks: List[Dict[str, Any]] = []
+
         def visit_stack(tasks: Iterable[Dict[str, Any]]) -> None:
             nonlocal toughness_lock
             for item in tasks:
@@ -2978,6 +2981,9 @@ class AbilityCompiler:
                         self._issue(ctx, path, node_type, "只支持全七属性 WeakList 的 Protected 韧性锁")
                         continue
                     toughness_lock = True
+                elif node_type in TASK_HANDLERS:
+                    # 叠层触发型行为（AddModifier/LockHP 等）——编译为 after_apply_modifier 运行时钩
+                    runtime_stack_tasks.append(item)
 
         for callback in callbacks:
             event = callback.get("Event")
@@ -2994,6 +3000,19 @@ class AbilityCompiler:
                 continue
             if event == "OnStack":
                 visit_stack(callback.get("CallbackConfig") or [])
+                if runtime_stack_tasks:
+                    skill_id = str(ctx.skill.get("skill_id") or self.enemy_id)
+                    modifier_id = self._modifier_id(name, definition, skill_id)
+                    sub = _Context(mode="event", skill=ctx.skill, event="after_apply_modifier",
+                                   current_modifier=name)
+                    self._compile_tasks(runtime_stack_tasks, sub, f"{path}/OnStack", ())
+                    ctx.handled.extend(sub.handled)
+                    ctx.lifecycle_hooks.extend(sub.lifecycle_hooks)
+                    for issue in sub.unsupported:
+                        self._issue(ctx, issue["path"], issue["node_type"], issue["reason"])
+                    condition = (f"$event.modifier_id == '{modifier_id}' "
+                                 f"and $event.target == $self.actor_id")
+                    ctx.lifecycle_hooks.extend(self._make_hooks(sub, condition, event="after_apply_modifier"))
         ctx.current_modifier = previous_modifier
         # 生命周期声明保留部分结果；纯表现与否由 _visual_modifier 独立判定。
         has_lifecycle = any(
