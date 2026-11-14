@@ -1688,6 +1688,12 @@ def _owner_pid() -> Optional[int]:
             break
         ppid_s, _, cmd = out.partition(" ")
         if not _is_wrapper_cmd(cmd):
+            # 会话级 init（systemd --user 等）不是真属主：孤儿进程被它统一收养
+            # （不代表"有人收尸"）——继续上攀，父级即 PID 1 → 按孤儿处理。
+            # 实证：本机孤儿化后 reparent 到 systemd --user，看护误认其为活属主而失效。
+            if "systemd" in cmd or cmd.startswith(("/sbin/init", "/usr/lib/systemd")):
+                cur = 1
+                continue
             return cur
         try:
             cur = int(ppid_s)
