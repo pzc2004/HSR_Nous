@@ -1298,8 +1298,12 @@ def test_abort_behavior_flag_prevents_conditional_damage_dedup():
     skills = [{"skill_id": "s1", "trigger_key": "Skill01", "damage_type": "Fire",
                "sp_hit_base": 10, "param_list": [2.0]}]
     out = AbilityCompiler("1", skills, sources).compile_skill("Skill01")
-    assert not out["ok"]
-    assert any(item["node_type"] == "ConditionalDamage" for item in out["unsupported"])
+    # 决策卡 #33：条件主伤收编——双分支同伤编译为条件 deal_damage，不再拒
+    assert out["ok"], out["unsupported"]
+    conditional = [h for h in out["hooks"]
+                   if any(e["effect_type"] == "deal_damage" for e in h["effects"])]
+    assert len(conditional) == 2, "双分支应各出一条带条件的 deal_damage 钩"
+    assert "1 == 1" in conditional[0]["condition"] and "not (1 == 1)" in conditional[1]["condition"]
 
 
 def test_skill_param_switch_selects_static_case():
@@ -2213,8 +2217,9 @@ def test_different_conditional_damage_stays_unsupported():
     out = AbilityCompiler(
         "3024020", get_enemy_skills("3024020"), get_enemy_ability_sources("3024020"),
     ).compile_skill("Skill02")
-    assert not out["ok"]
-    assert any(item["node_type"] == "ConditionalDamage" for item in out["unsupported"])
+    # 决策卡 #33：条件主伤收编——ConditionalDamage 拒因清零
+    assert not any(item["node_type"] == "ConditionalDamage" for item in out["unsupported"]), (
+        f"条件主伤拒因应清零：{[i['reason'] for i in out['unsupported']]}")
 
 
 @_need_ability

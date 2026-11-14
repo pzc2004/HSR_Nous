@@ -1439,12 +1439,8 @@ class AbilityCompiler:
         before = len(ctx.damages)
         self._compile_tasks(tasks, ctx, path, stack)
         if len(ctx.damages) != before:
-            if before == 0:
-                self._issue(ctx, path, "ConditionalDamage",
-                            "条件主伤或后续主伤重排尚未由 Action/Hook 时序表达")
-                del ctx.damages[before:]
-                ctx.live_condition = previous
-                return
+            # 条件主伤同样转条件 deal_damage（决策卡 #33）——行动无无条件主伤时
+            # 由条件效果承载伤害，不再拒。
             added = list(ctx.damages[before:])
             del ctx.damages[before:]
             for record in added:
@@ -1526,11 +1522,6 @@ class AbilityCompiler:
             before = len(ctx.damages)
             self._compile_tasks(tasks, ctx, f"{path}/{branch}", stack)
             if len(ctx.damages) != before:
-                if before == 0:
-                    self._issue(ctx, f"{path}/{branch}", "ConditionalDamage",
-                                "条件主伤或后续主伤重排尚未由 Action/Hook 时序表达")
-                    del ctx.damages[before:]
-                    continue
                 added = list(ctx.damages[before:])
                 del ctx.damages[before:]
                 for record in added:
