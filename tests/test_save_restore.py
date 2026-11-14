@@ -483,3 +483,23 @@ class TestGuards:
         _steps(ctrl, 5)
         assert restored.state.snapshot() == ctrl.state.snapshot(), (
             "seed 被忽略后世界线仍须与原线一致（RNG 流位置走存档）")
+
+
+def test_level_blackboard_roundtrip():
+    """关卡黑板（决策卡 #31）随存档往返：动态值与关卡 modifier 不丢."""
+    compiled = compile_encounter(_elation_build(), _elation_stage(),
+                                 template_roots=TEST_TEMPLATE_ROOTS)
+    eng = CombatEngine.from_compiled(compiled, mode=MODE_ROLL, seed=42)
+    _steps(eng, 10)
+    st = next(iter(eng.state.actors.values()))
+    eng._hooks._run_hook_effect(st, {"effect_type": "set_dynamic_value", "target": "$level",
+                                     "dynamic_key": "SoldierCount01", "amount": 3}, {})
+    eng._hooks._run_hook_effect(st, {"effect_type": "apply_modifier", "target": "$level",
+                                     "modifier": {"modifier_id": "WeatherPhase01Flag",
+                                                  "name": "天气一阶段", "modifier_type": "buff",
+                                                  "duration": 0, "max_stack": 1}}, {})
+    save = json.loads(json.dumps(eng.save_state()))
+    restored = CombatEngine.load_state(compiled, save)
+    assert restored._level_state_obj is not None
+    assert restored._enemy_policy_state["$level"]["dynamic_values"]["SoldierCount01"] == 3
+    assert "WeatherPhase01Flag" in restored._level_state_obj.modifiers

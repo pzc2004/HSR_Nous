@@ -266,6 +266,8 @@ class HookRuntime:
             # 对无该键的普通事件不炸（cancel 仅 waterfall 链上前序 hook 改写后出现）
             "event": types.SimpleNamespace(**{"insert": False, "cancel": False, **payload}),
             "self": _HookSelfNS(self._engine, st),
+            # $level 关卡黑板（决策卡 #31）——伪 ActorState，不占站位/目标池
+            "level": self._engine._level_state,
             # $team 跨 actor 聚合（§22.4——max($team.atk) / sum($team.broken) 族）
             "team": self._engine.team_namespace(),
             **self._engine._res_ns(st),
@@ -309,6 +311,8 @@ class HookRuntime:
         # 反查——两通道对 ActorState 直传已对齐（2026-09-24 潜伏差消除，实测无现网直传路径，
         # 统一口径防未来模板踩静默落空））
         def _resolve(target: Any) -> Optional[ActorState]:
+            if str(target) == "$level" or getattr(target, "actor_id", None) == "$level":
+                return self._engine._level_state   # 关卡黑板（决策卡 #31）
             aid = getattr(target, "actor_id", None)
             if isinstance(target, ActorState):
                 return target
@@ -319,6 +323,8 @@ class HookRuntime:
             return self._engine.state.actors.get(str(target))
 
         def _lookup(target: Any) -> Optional[ActorState]:
+            if str(target) == "$level" or getattr(target, "actor_id", None) == "$level":
+                return self._engine._level_state   # 关卡黑板（决策卡 #31）
             if isinstance(target, ActorState):
                 return target
             aid = getattr(target, "actor_id", None) or str(target)
@@ -792,6 +798,12 @@ class HookRuntime:
             """怪物实例 ID 的模板段，与 character_id 共用同一归一化."""
             return character_id(target)
 
+        def monster_unique_id(target: Any) -> float:
+            """怪物 UniqueID = 模板 ID // 10（决策卡 #30——UniqueID 值域 ×10 反推模板
+            全存在的映射实证）；实例 __ 后缀归一化与 monster_id 同通道，查无/非数值返回 0。"""
+            raw = character_id(target)
+            return float(int(raw) // 10) if raw.isdigit() else 0.0
+
         def monster_rank(target: Any) -> float:
             """怪物等级数值，与 ConfigAI 使用同一 policy 与 MONSTER_RANK_VALUES."""
             st2 = _lookup(target)
@@ -860,6 +872,7 @@ class HookRuntime:
                 "path_of": path_of, "has_summon": has_summon, "in_group": in_group,
                 "who_has": who_has, "count_modifier": count_modifier,
                 "character_id": character_id, "monster_id": monster_id,
+                "monster_unique_id": monster_unique_id,
                 "monster_rank": monster_rank,
                 "element_of": element_of, "elation_of": elation_of,
                 "broken_of": broken_of,
@@ -913,6 +926,8 @@ class HookRuntime:
         from hsr_nous.sim.target_algebra import (
             _HOOK_SELECTOR_ALIASES, eval_algebra, resolve_pool,
         )
+        if str(sel) == "$level":
+            return [self._engine._level_state]   # 关卡黑板（决策卡 #31）
         event_ns = types.SimpleNamespace(**{"insert": False, "cancel": False, **payload})
         # $self 注入=hook 持有者（"装备者的忆灵"寻址族——$it.summoner_id == $self.actor_id，
         # 与 hook condition/cond 光环域同口径；policy 通道无持有者语义不注）
@@ -1119,7 +1134,7 @@ class HookRuntime:
             for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
                 runtime = self._engine._enemy_policy_state.get(t2.actor.actor_id)
                 if runtime is None:
-                    if not self._engine._is_enemy(t2.actor):
+                    if not self._engine._is_enemy(t2.actor) and t2.actor.actor_id != "$level":
                         raise ValueError(
                             f"set_dynamic_value 目标 {t2.actor.actor_id!r} 无敌方动态值运行态")
                     # 动态值是怪物独立状态，有序列/ConfigAI policy 与否都可读写。

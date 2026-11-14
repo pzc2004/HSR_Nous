@@ -918,7 +918,7 @@ class AbilityCompiler:
     def _predicate_target(alias: str) -> Optional[str]:
         return {"ParamEntity": "$it", "AbilityTargetEntity": "$event.target",
                 "Caster": "$self.actor_id", "ModifierOwnerEntity": "$self.actor_id",
-                "": "$self.actor_id"}.get(alias)
+                "LevelEntity": "$level", "": "$self.actor_id"}.get(alias)
 
     def _static_monster_predicate(self, predicate: Dict[str, Any]) -> Optional[bool]:
         """仅供属性编译期选支：怪物 ID 及其布尔组合可在生成期唯一求值."""
@@ -1360,17 +1360,21 @@ class AbilityCompiler:
                 return ""
             return f"has_weakness({target}, '{element}')"
         if node_type == "RPG.GameCore.ByCompareMonsterUniqueID":
-            # 自身静态支：ModifierOwnerEntity/Caster 的 UniqueID 是本敌编译期知识
-            # （同 ByCompareMonsterID 静态求值先例）；跨实例/波次后缀交互待钉，拒。
-            if alias not in {"", "Caster", "ModifierOwnerEntity"}:
-                self._issue(ctx, path, node_type, f"UniqueID 谓词目标未注册：{alias}")
-                return ""
+            # UniqueID = 模板 ID // 10（决策卡 #30，映射经全词表实证）。
+            # 自身静态支按同规则编译期求值；ParamEntity 等运行时目标走
+            # monster_unique_id($it) 逐候选判定（实例 __ 后缀由函数归一化）。
             value = _fixed(predicate.get("TargetMonsterUniqueID"))
             if not _is_number(value):
                 self._issue(ctx, path, node_type, "UniqueID 比较值必须是静态数值")
                 return ""
-            hit = str(self.enemy_id) == str(int(value))
-            return "1 == 1" if hit else "1 == 0"
+            if target is None:
+                self._issue(ctx, path, node_type, f"UniqueID 谓词目标未注册：{alias}")
+                return ""
+            if alias in {"", "Caster", "ModifierOwnerEntity"}:
+                hit = self.enemy_id.isdigit() and int(self.enemy_id) // 10 == int(value)
+                return "1 == 1" if hit else "1 == 0"
+            expr = f"monster_unique_id({target}) == {int(value)}"
+            return self._negate_condition(expr) if predicate.get("Inverse") else expr
         if node_type == "RPG.GameCore.ByIsTurnOwnerEntity":
             if ctx.event not in {"on_turn_start", "on_turn_end", "on_action"}:
                 self._issue(ctx, path, node_type,
@@ -2438,6 +2442,7 @@ class AbilityCompiler:
                 "pool": "allies", "where": "actor_type_of($it) != 'summon'"},
             "AllLightTeam.RemoveServant": {
                 "pool": "allies", "where": "not $it.summoner_id"},
+            "LevelEntity": "$level",
             "CasterSummonedMinions": {
                 "pool": "enemies", "where": "$it.summoner_id == $self.actor_id"},
             "AbilityTargetAdjoinEntity": {

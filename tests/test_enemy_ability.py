@@ -2684,7 +2684,10 @@ def test_lesser_sting_deathrattle_keeps_unproven_branch_unsupported():
     assert damage["scaling_hp"] == pytest.approx(0.6)
     assert damage["toughness_dmg"] == pytest.approx(30.0)
     unsupported = {item["node_type"] for item in out["unsupported"]}
-    assert "RPG.GameCore.PredicateTaskList" in unsupported
+    # UniqueID/站位谓词收编（决策卡 #28/#30）后 PredicateTaskList 已可编译；
+    # 未证明分支的拒因由 DispelStatus/ExitBreakState 等真未收编节点承担
+    assert "RPG.GameCore.PredicateTaskList" not in unsupported
+    assert "RPG.GameCore.DispelStatus" in unsupported or "RPG.GameCore.ExitBreakState" in unsupported
     assert all(effect["effect_type"] != "apply_modifier" for effect in kill_hooks[0]["effects"])
 
 
@@ -3074,12 +3077,12 @@ def test_real_kafka_passive_mounts_and_maps_dispel_callback():
 
 
 @_need_ability
-def test_real_kafka_bgm_level_entity_rejected_explicitly():
-    """LevelEntity 挂载目标未注册——显式拒收不猜（PassiveSkill_BGM 真实样例）。"""
+def test_real_kafka_bgm_level_entity_blackboard_supported():
+    """LevelEntity 已收编（决策卡 #31 关卡黑板）——Kafka BGM 被动不再因关卡目标被拒."""
     out = _real_passive("2004010", "Monster_W2_Kafka_00_PassiveSkill_BGM",
                         "2004010_Monster_W2_Kafka_00_PassiveSkill_BGM")
-    assert not out["ok"]
-    assert any("LevelEntity" in item["reason"] for item in out["unsupported"])
+    assert not any("LevelEntity" in item["reason"] for item in out["unsupported"]), (
+        f"LevelEntity 相关拒因应清零：{[i['reason'] for i in out['unsupported']]}")
 
 
 @_need_ability
@@ -3764,3 +3767,73 @@ def test_position_of_and_side_size_runtime():
     assert ok("position_of('e3', 'dark') == 2"), "e2 阵亡后 e3 前移"
     assert ok("side_size('e1', 'dark') == 2")
     assert ok("position_of('e2', 'dark') == 0"), "阵亡者不占位"
+
+
+def test_monster_unique_id_predicate_compile_and_runtime():
+    """UniqueID 谓词（决策卡 #30）：ParamEntity 逐候选 + 自身静态支按 id//10 求值."""
+    skills, sources = _predicate_skill({
+        "$type": "RPG.GameCore.ByCompareMonsterUniqueID",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "ParamEntity"},
+        "TargetMonsterUniqueID": {"IsDynamic": False, "FixedValue": {"Value": 401402}},
+    })
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and "monster_unique_id($it) == 401402" in out["hooks"][0]["condition"]
+
+    # 自身静态支：编译器 enemy_id=4014010，UniqueID=401401 应命中（旧实现直比全 id 恒假）
+    skills2, sources2 = _predicate_skill({
+        "$type": "RPG.GameCore.ByCompareMonsterUniqueID",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+        "TargetMonsterUniqueID": {"IsDynamic": False, "FixedValue": {"Value": 401401}},
+    })
+    out2 = AbilityCompiler("4014010", skills2, sources2).compile_skill("Skill01")
+    assert out2["ok"] and "1 == 1" in out2["hooks"][0]["condition"]
+
+    # 运行时：怪物 UniqueID = 模板 id // 10，跨实例后缀归一化
+    from tests._builders import engine_vs_dummy, make_dummy
+    eng = engine_vs_dummy(enemies=[make_dummy("4014010"), make_dummy("4014020")])
+    eng.setup()
+    st = eng.state.actors["4014010"]
+
+    def uid_of(aid):
+        expr = eng._expr.compile(f"monster_unique_id('{aid}')")
+        return eng._expr.evaluate(expr, eng._hooks._hook_ctx(st, {}),
+                                  functions=eng._hooks._hook_functions(st, _roll_readonly=True))
+    assert uid_of("4014010") == 401401
+    assert uid_of("4014020") == 401402
+    assert uid_of("hero") == 0.0, "非数值 id 安全缺省"
+
+
+def test_level_entity_blackboard():
+    """关卡黑板（决策卡 #31）：LevelEntity 动态值读写 + modifier 判定 + 不占站位."""
+    skills, sources = _predicate_skill({
+        "$type": "RPG.GameCore.ByCompareDynamicValue",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "LevelEntity"},
+        "DynamicKey": {"Value": "SoldierCount01"},
+        "CompareType": "GreaterEqual",
+        "CompareValue": {"IsDynamic": False, "FixedValue": {"Value": 2}},
+    })
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"], out["unsupported"]
+    assert "dynamic_of($level, 'SoldierCount01') >= 2" in out["hooks"][0]["condition"]
+
+    from tests._builders import engine_vs_dummy, make_dummy
+    eng = engine_vs_dummy(enemies=[make_dummy("e1"), make_dummy("e2")])
+    eng.setup()
+    st = eng.state.actors["e1"]
+
+    def evaluate(cond):
+        expr = eng._expr.compile(cond)
+        return eng._expr.evaluate(expr, eng._hooks._hook_ctx(st, {}),
+                                  functions=eng._hooks._hook_functions(st, _roll_readonly=True))
+    assert evaluate("dynamic_of($level, 'SoldierCount01') == 0")
+    eng._hooks._run_hook_effect(st, {"effect_type": "set_dynamic_value", "target": "$level",
+                                     "dynamic_key": "SoldierCount01", "amount": 2}, {})
+    assert evaluate("dynamic_of($level, 'SoldierCount01') == 2"), "关卡黑板写入后读得出"
+    assert "$level" not in eng.state.actors, "关卡黑板不占 actors/站位"
+    assert evaluate("side_size($level, 'dark') == 2"), "关卡黑板不影响人数统计"
+    assert not evaluate("has_modifier($level, '某标记')")
+    eng._hooks._run_hook_effect(st, {"effect_type": "apply_modifier", "target": "$level",
+                                     "modifier": {"modifier_id": "WeatherPhase01Flag",
+                                                  "name": "天气一阶段", "modifier_type": "buff",
+                                                  "duration": 0, "max_stack": 1}}, {})
+    assert evaluate("has_modifier($level, 'WeatherPhase01Flag')"), "关卡级 modifier 可挂可查"

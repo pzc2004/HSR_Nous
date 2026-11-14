@@ -137,6 +137,7 @@ class CombatEngine:
             }
             for actor_id, policy in self._enemy_policies.items()
         }
+        self._level_state_obj = None
         # 召唤物定义注册件（模板 summons 块的编译产物 SummonDef；from_compiled 注入——
         # summon effect 按 summon_id 查表布场，见 12_summon）
         self.summon_defs: Dict[str, Any] = summon_defs or {}
@@ -997,6 +998,18 @@ class CombatEngine:
     # ------------------------------------------------------------------
     # 终止判定
     # ------------------------------------------------------------------
+
+    @property
+    def _level_state(self) -> ActorState:
+        """关卡级共享黑板（决策卡 #31）：LevelEntity 的运行时载体——伪 ActorState，
+        不进 state.actors（不占站位/目标池）；动态值走 _enemy_policy_state['$level']，
+        modifier 池挂伪 state（天气阶段/士兵计数/limbo 标记等跨怪协调状态的住所）。
+        """
+        if self._level_state_obj is None:
+            self._level_state_obj = ActorState(actor=Actor(
+                actor_id="$level", name="关卡", actor_type="level",
+                stats=StatBlock(hp=1, spd=100, max_energy=0)), current_hp=1.0)
+        return self._level_state_obj
 
     def _is_enemy(self, actor: Actor) -> bool:
         """**敌方单位**判定（机制按敌我分，不按物种分）.

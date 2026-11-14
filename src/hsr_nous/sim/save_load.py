@@ -239,6 +239,7 @@ _ENGINE_RUNTIME_FIELDS = (
     "_resource_provenance",
     "_cond_aura_present",
     "_battle_end_emitted",
+    "_level_state_obj",  # 关卡黑板（决策卡 #31）：伪 ActorState（modifier 池）进存档
 )
 
 
@@ -418,6 +419,9 @@ def _save_engine_fields(engine: Any) -> Dict[str, Any]:
         elif fname == "_battle_end_emitted":
             # 惰性字段（首次 _emit_battle_end 才落实例）——getattr 缺省 False
             out[fname] = bool(getattr(engine, "_battle_end_emitted", False))
+        elif fname == "_level_state_obj":
+            st = engine._level_state_obj
+            out[fname] = None if st is None else _encode(ActorState, st)
         else:
             out[fname] = copy.deepcopy(getattr(engine, fname))
     return out
@@ -428,6 +432,10 @@ def _restore_engine_fields(engine: Any, d: Dict[str, Any]) -> None:
         if fname == "_resource_provenance":
             engine._resource_provenance = {(aid, rid): set(srcs)
                                            for aid, rid, srcs in d[fname]}
+        elif fname == "_level_state_obj":
+            saved = d[fname]
+            engine._level_state_obj = (None if saved is None
+                                       else _decode(ActorState, saved, engine._expr))
         else:
             setattr(engine, fname, copy.deepcopy(d[fname]))
 
