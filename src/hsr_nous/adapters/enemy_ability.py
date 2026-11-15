@@ -2002,7 +2002,13 @@ class AbilityCompiler:
             # 上游省略 TargetType 的 SetDynamicValue 由施放者持有；ConfigAI 也从自身读取该键。
             alias = "Caster"
         target = self._hook_target(alias, ctx)
-        if not key or value is None or target != "self":
+        # 动态值是怪物专属概念：只允许写敌方侧（自身/关卡/召唤者/召唤物）——
+        # 写我方角色（ParamEntity/PartEntity/TargetSequence 可能指到我方）保持显式拒。
+        allowed = {"self", "$level", "summoner_of($self.actor_id)", "summoner_of($it)",
+                   "summoner_of($self.actor_id)"}
+        minion_pool = {"pool": "enemies", "where": "$it.summoner_id == $self.actor_id"}
+        target_ok = (isinstance(target, str) and target in allowed) or target == minion_pool
+        if not key or value is None or not target_ok:
             self._issue(ctx, path, str(task.get("$type")), "动态键/值/自指目标未注册")
             return
         ctx.dynamic_writes.add(str(key))
