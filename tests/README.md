@@ -66,15 +66,12 @@ pytest tests/test_doc_lint.py -v
 
 ## 修改记录
 
-<<<<<<< HEAD
 - 任务节点/谓词长尾族收编：`test_enemy_ability` 扩长尾钉——DamageStance→reduce_toughness（含引擎级削韧落地）/弱点植入+韧性锁+清除配对/SetResilience 回韧/PerformDelayExecute 两态/表现类 IGNORED 零成本钉/逐型拒因钉；谓词族语境门控钉（当前技能名/类型/伤害属性/弱点持有/UniqueID 静态支）
 - 被动事件族收编：`test_enemy_ability` 扩被动通道钉——真实样例（Kafka Passive01 双触发挂载/BGM LevelEntity 显式拒、AML Minion02 击破回调 on_break 映射、Lesser Sting 亡语钩按事件选取）+ 手工样例（OnHPChange 无载体显式拒/纯表现忽略、双触发互斥、OnListenModifierDispel 映射结构、引擎级 on_battle_start 挂载生效钉）；`_is_passive_row`（SkillType=Passive）修正顺带消除"主动技能不存在"假拒因
 - 执行帧期 2/3（编译器翻译）：`test_enemy_ability` 扩真实样例钉——SW_Boss_00 概率分支 bind_roll 结构/写后读 effect 级守卫、Cocolia IF_02 Switch 活读守卫与 AddValue 钳制表达式、RandomConfig 加权翻译/表现跳过/战斗级记忆拒收、Copying 自指翻译、事件域概率拒收、引擎级 roll/expected 两模式行为钉；三个"旧事件快照拒收"测试改写为活读翻译语义钉
 - 新增横向族 `test_execution_frame_v26`（执行帧 #26 语义钉，见「测试组织」）
 
-=======
 - 公共基座 `common/` 落地：路径根（`repo_root`/`data_root`/`repo_data_dir`）与 `.env` 解析统一收口——`pipeline/paths.py`、`sim_schema/templates.py` 的重复数据根解析、`llm`/`account` 的重复 `.env` 解析全部消除；`test_env_parity` 对拍闸退役，doc_lint 闸18 由「数据根镜像闸」改为「公共基建单一来源闸」（全库扫描盯防重复实现回潮 + 钉 `common/` 零项目依赖）
->>>>>>> origin/main
 - 补登记闸 19（生产写保护闸，1a7ef51 引入；编号无闸 18——按测试文件实际编号）：tests/ 调 `write_*_template` 必须显式 `out_dir=`，缺省写生产 `data/sim_templates/`（标注层团灭事故见测试文件头注）
 - 首行结构描述勘正：目录实为扁平布局（版本线 + 横向族，见「测试组织」），非与 `src/hsr_nous/` 对应
 - 新增闸 17（遗器词条镜像闸）：`rulebook.yaml` relic_affixes ↔ pipeline 重算 ↔ 编译器 `_AFFIX_FIELD` 词表三向互锁
