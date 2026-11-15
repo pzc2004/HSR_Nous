@@ -150,6 +150,7 @@ TASK_HANDLERS = {
     "RPG.GameCore.EscapeFromBattle": "_compile_escape_from_battle",
     "RPG.GameCore.RemoveShield": "_compile_remove_shield",
     "RPG.GameCore.LoopExecuteTaskListWithInterval": "_compile_loop_execute",
+    "RPG.GameCore.LoopTargetList": "_compile_loop_target_list",
     "RPG.GameCore.AddEntityToTeamFormation": "_compile_add_to_formation",
     "RPG.GameCore.SetDynamicEntityParam": "_compile_set_entity_param",
     "RPG.GameCore.DefineDynamicValue": "_compile_define_dynamic",
@@ -2898,6 +2899,12 @@ class AbilityCompiler:
                                "dynamic_key": key,
                                "target": "self" if target_alias in {"Caster", "ModifierOwnerEntity"}
                                else "summoner_of($self.actor_id)"})
+
+    def _compile_loop_target_list(self, task: Dict[str, Any], ctx: _Context,
+                                   path: str, stack: Tuple[str, ...]) -> None:
+        """LoopTargetList（目标列表遍历）：对每个技能目标逐个执行 TaskList——
+        效果本就按目标池逐个应用，直接内联（决策卡 #42）。"""
+        self._compile_tasks(task.get("TaskList") or [], ctx, f"{path}/TaskList", stack)
 
     def _compile_add_modifier(self, task: Dict[str, Any], ctx: _Context,
                               path: str, stack: Tuple[str, ...]) -> None:
