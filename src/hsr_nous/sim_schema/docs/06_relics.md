@@ -36,6 +36,30 @@ relic_sub_stats:
 的 `relic_affixes` 段（上表数据的镜像，逐值一致由 doc_lint 遗器词条镜像闸重算保证）；
 不在表的词条（错拼/编造/用错主副位置）编译期报错。
 
+### 6.1 真实词条值覆盖（账号导入）
+
+账号导入等场景需要保留当前等级下的真实词条值，而不是按满级主词条和高档副词条重算。`build.yaml` 的每个 relic 槽位可选补充：
+
+```yaml
+relics:
+  head:
+    set_id: "127"
+    main: "hp"
+    main_value: 705.6
+    subs:
+      hp_pct: 2
+      spd: 1
+    sub_values:
+      hp_pct: 0.094
+      spd: 2.6
+```
+
+- `main_value`：当前等级下主词条的实际值；`main` 存在时必须有对应 `main_value`。
+- `sub_values`：每个有效副词条的**实际累计值**（含初始值和强化值），比例统一用小数。`subs` 的整数次数保留作审计和旧路径回退。
+- 有 `main_value` / `sub_values` 时优先使用实际值；旧手写 build 没有这些字段时，继续走原有满级主词条、roll 数 × 高档副词条路径。词条 ID、主/副位置校验和 modifier 聚合方式不变。
+- 账号导入采用每件全量实际值约束：主词条缺 `main_value` 或有效副词条缺 `sub_values` 时记为数据缺失，不得在同一件遗器内静默混用真实值与高档近似。
+- `set_id` 仍按原方式决定 2/4 件套激活，与是否使用实际词条值无关。
+
 **adapter 职责**：根据遗器配置计算最终属性，合并到 `base_stats` 中。
 
 **未来扩展**：部分 4 件套效果会触发“层数型资源”，可复用 `custom_resources`，`owner: "relic"`。当前 23 角色盘点未出现需建模的遗器层数资源，保持 forward-compatibility。详见 `16_custom_resources.md` §16.2。

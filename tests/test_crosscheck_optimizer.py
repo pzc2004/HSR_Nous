@@ -25,29 +25,28 @@ from hsr_nous.sim.state import ActorState, Modifier
 from hsr_nous.sim_schema.action import Action
 from hsr_nous.sim_schema.actor import Actor, StatBlock
 
-ROOT = Path(__file__).resolve().parents[1]
-DRIVER_SRC = ROOT / "scripts" / "crosscheck" / "crosscheck.mts"
-DRIVER_DIST = ROOT / "scripts" / "crosscheck" / "dist" / "crosscheck.mjs"
-ROLLDOWN = ROOT / "external" / "hsr-optimizer" / "node_modules" / ".bin" / "rolldown"
-ROLLDOWN_CONFIG = ROOT / "scripts" / "crosscheck" / "rolldown.config.mjs"
-
 REL_TOL = 1e-4
+
+
+def _require_optimizer_driver() -> Path:
+    """确保驱动 bundle 存在（源码更新则重打）；仅缺环境才 skip，构建失败上抛.
+
+    单一来源：构建逻辑=oracle_report.ensure_driver（Windows 可执行入口解析在
+    其 rolldown_cmd——.bin 无扩展名 shim 是 POSIX 脚本，Windows 直 exec 即
+    OSError，2026-10-17 全量回归 660 errors 根因）。
+    """
+    from hsr_nous.ops.annotator.oracle_report import ensure_driver
+    if shutil.which("node") is None:
+        pytest.skip("node 不可用，跳过 optimizer 对拍")
+    driver = ensure_driver()
+    if driver is None:
+        pytest.skip("external/hsr-optimizer 依赖未安装（无 rolldown），跳过对拍")
+    return driver
 
 
 @pytest.fixture(scope="session")
 def optimizer_driver() -> Path:
-    """确保驱动 bundle 存在（源码更新则重打）；缺环境则整模块 skip."""
-    if shutil.which("node") is None:
-        pytest.skip("node 不可用，跳过 optimizer 对拍")
-    if not ROLLDOWN.exists():
-        pytest.skip("external/hsr-optimizer 依赖未安装（无 rolldown），跳过对拍")
-    if (not DRIVER_DIST.exists()
-            or DRIVER_DIST.stat().st_mtime < DRIVER_SRC.stat().st_mtime):
-        subprocess.run(
-            [str(ROLLDOWN), "-c", str(ROLLDOWN_CONFIG)],
-            cwd=ROOT, check=True, capture_output=True, text=True,
-        )
-    return DRIVER_DIST
+    return _require_optimizer_driver()
 
 
 def run_optimizer(driver: Path, scenario: Dict[str, Any]) -> Dict[str, Any]:
@@ -55,6 +54,7 @@ def run_optimizer(driver: Path, scenario: Dict[str, Any]) -> Dict[str, Any]:
     proc = subprocess.run(
         ["node", str(driver)],
         input=json.dumps(scenario), capture_output=True, text=True, check=True,
+        encoding="utf-8", errors="replace",
     )
     return json.loads(proc.stdout)
 

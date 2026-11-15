@@ -29,8 +29,8 @@
    env 变量名与解析结果一致（含两类数据分命：library 不随 env、sim_templates 随移）
 19. **import 有效闸**：全库 hsr_nous import ↔ 磁盘推导合法模块集（删/搬模块后
    指向旧路径的 import 当场炸，含 .agents/skills 面）
-20. **optimizer pin 镜像闸**：workflow checkout ref ↔ oracle_report 头注 commit
-   一致（两处承载同一钉版，改一处忘另一处当场炸）
+20. **optimizer pin 镜像闸**：scripts/setup_test_env.sh 的 OPTIMIZER_COMMIT ↔
+   oracle_report 头注 commit 一致（两处承载同一钉版，改一处忘另一处当场炸）
 """
 
 import re
@@ -936,19 +936,34 @@ def test_readme_indexes_match_disk():
     assert not bad, "\n".join(bad)
 
 
+def test_docs_readme_markdown_links_exist():
+    """docs/README 中以行内代码列出的 Markdown 文件必须真实存在，防断链。"""
+    text = (ROOT / "docs" / "README.md").read_text(encoding="utf-8")
+    search_roots = [ROOT, ROOT / "docs", ROOT / "src" / "hsr_nous" / "sim_schema" / "docs"]
+    missing = []
+    for match in re.finditer(r"`([^`]+\.md)`", text):
+        rel = match.group(1)
+        if any(ch in rel for ch in "*<>"):
+            continue
+        if not any((base / rel).is_file() for base in search_roots):
+            missing.append(rel)
+    assert not missing, "docs/README.md 引用不存在的文件：" + ", ".join(missing)
+
+
 # ===========================================================================
 # 闸11 · 模块边界：AGENTS.md 边界表 ↔ 闸门配置 ↔ 实际 import（三向）
 # ===========================================================================
 
 # 与 AGENTS.md「模块边界」表的"允许 import"列一致，改表需同步本配置
 BOUNDARY_ALLOWED = {
-    "pipeline": set(),
-    "sim_schema": set(),
-    "adapters": {"pipeline", "sim_schema", "account", "llm"},
-    "sim": {"sim_schema"},
-    "ops": {"llm", "adapters", "sim", "pipeline", "sim_schema"},
-    "account": set(),
-    "llm": set(),
+    "common": set(),
+    "pipeline": {"common"},
+    "sim_schema": {"common"},
+    "adapters": {"pipeline", "sim_schema", "account", "llm", "common"},
+    "sim": {"sim_schema", "common"},
+    "ops": {"llm", "adapters", "sim", "pipeline", "sim_schema", "common"},
+    "account": {"common"},
+    "llm": {"common"},
 }
 
 _IMPORT_RE = re.compile(r"^\s*(?:from|import)\s+hsr_nous\.([a-z_]+)", re.M)
@@ -1202,37 +1217,49 @@ def test_no_template_writes_to_production():
 
 
 # ---------------------------------------------------------------------------
-# 闸18 · 数据根解析镜像：pipeline/paths ↔ sim_schema/templates 同构
+# 闸18 · 公共基建单一来源：路径根 / .env 解析只许住在 common/
 # ---------------------------------------------------------------------------
 
-def test_data_root_mirror_gate(monkeypatch, tmp_path):
-    """数据根解析两处自持（sim/sim_schema 岛边界不许 import pipeline，未开公共层）：
-    pipeline/paths.data_root() 与 sim_schema/templates.data_root() 的环境变量名与
-    解析结果必须处处一致——本闸焊死这对镜像（改一处忘另一处当场炸）。含两类数据
-    分命钉：library 仓库内容不随 env 移动，sim_templates 缓存级跟随。"""
-    import importlib
+#: 只许在 src/hsr_nous/common/ 下出现的自持定义（重复实现回潮即红）
+_SINGLE_SOURCE_PATTERNS = (
+    re.compile(
+        r"^\s*def\s+(?:repo_root|repo_data_dir|data_root|load_dotenv|load_repo_env|parse_env_file)\s*\("),
+    re.compile(r"^\s*_REPO_ROOT\s*="),
+    re.compile(r"^\s*_REPO_DATA\s*="),
+    re.compile(r"Path\(__file__\)[^\n]*parents\[3\]"),
+)
 
-    from hsr_nous.pipeline import paths
-    import hsr_nous.sim_schema.templates as templates
 
-    # ① env 变量名镜像（文本层——变量名是两处共享的契约）
-    src = Path(templates.__file__).read_text(encoding="utf-8")
-    assert paths.DATA_DIR_ENV in src, "templates.py 未持同名 env 变量"
+def test_common_single_source_gate():
+    """公共基建单一来源闸（替代历史 data_root 镜像闸 + .env 对拍闸）.
 
-    # ② 解析结果镜像（行为层——自定义根下两处同值 + 两类数据分命）
-    custom = str(tmp_path / "custom_data")
-    monkeypatch.setenv(paths.DATA_DIR_ENV, custom)
-    importlib.reload(templates)
-    try:
-        assert paths.data_root() == templates.data_root() == Path(custom)
-        specs = dict((label, path) for label, path in templates.RUNTIME_TEMPLATE_ROOT_SPECS)
-        assert specs["data/sim_templates"] == str(Path(custom) / "sim_templates"), (
-            "缓存级根随 env 移动")
-        assert specs["data/library"] == str(paths.library_dir()), (
-            "仓库内容根不随 env 移动（两处同指仓库 data/library）")
-    finally:
-        monkeypatch.undo()
-        importlib.reload(templates)
+    历史：pipeline/paths 与 sim_schema/templates 曾各自自持数据根解析、llm/account
+    各持 `.env` 解析（模块边界导致的双副本，靠镜像/对拍闸防漂移）。公共层 `common/`
+    收口后副本消失——本闸反向盯防：
+
+    - 除 `src/hsr_nous/common/` 外，不得重新定义
+      repo_root/repo_data_dir/data_root/load_dotenv/load_repo_env/parse_env_file；
+    - 不得自持 `_REPO_ROOT`/`_REPO_DATA` 或 `parents[3]` 路径字面量；
+    - `common/` 自身零项目依赖（只允许 intra-common import，保持叶子层）。
+    """
+    common_dir = ROOT / "src" / "hsr_nous" / "common"
+    hsr_import = re.compile(r"^\s*(?:from|import)\s+hsr_nous\.([a-z_]+)")
+    bad = []
+    for py in (ROOT / "src" / "hsr_nous").rglob("*.py"):
+        if "__pycache__" in py.parts:
+            continue
+        rel = py.relative_to(ROOT).as_posix()
+        inside_common = common_dir in py.parents
+        for lineno, line in enumerate(py.read_text(encoding="utf-8").splitlines(), 1):
+            if inside_common:
+                m = hsr_import.search(line)
+                if m and m.group(1) != "common":
+                    bad.append(f"{rel}:{lineno}: common/ 不允许 import 项目模块：{line.strip()}")
+                continue
+            if any(pat.search(line) for pat in _SINGLE_SOURCE_PATTERNS):
+                bad.append(f"{rel}:{lineno}: 公共基建重复实现（应 import hsr_nous.common）："
+                           f"{line.strip()}")
+    assert not bad, "公共基建必须单一来源（common/）：\n" + "\n".join(bad)
 
 
 # ---------------------------------------------------------------------------
@@ -1304,31 +1331,34 @@ def test_import_gate_self_check():
 
 
 # ---------------------------------------------------------------------------
-# 闸21 · optimizer pin 镜像：workflow ref ↔ oracle_report 头注 commit 一致
+# 闸21 · optimizer pin 镜像：setup_test_env.sh pin ↔ oracle_report 头注 commit 一致
 # ---------------------------------------------------------------------------
 
-_WORKFLOW_REF_RE = re.compile(r"^\s+ref:\s+([0-9a-f]{40})\s*$", re.M)
+_SETUP_PIN_RE = re.compile(r'^OPTIMIZER_COMMIT="([0-9a-f]{40})"$', re.M)
 _ORACLE_PIN_RE = re.compile(r"钉\s+([0-9a-f]{8,40})")
 
 
+def _setup_optimizer_pin() -> str:
+    script = (ROOT / "scripts" / "setup_test_env.sh").read_text(encoding="utf-8")
+    match = _SETUP_PIN_RE.search(script)
+    assert match, "setup_test_env.sh 未找到 OPTIMIZER_COMMIT（40 位 SHA）"
+    return match.group(1)
+
+
 def test_optimizer_pin_mirror_gate():
-    """optimizer 钉版两处承载（.github/workflows/test.yml 的 checkout ref 与
-    oracle_report.py 模块头注）必须指向同一 commit——改一处忘另一处当场炸
-    （与数据根镜像闸同模式：重复不可避免就焊死）。"""
-    wf = (ROOT / ".github" / "workflows" / "test.yml").read_text(encoding="utf-8")
-    ref = _WORKFLOW_REF_RE.search(wf)
-    assert ref, "workflow 未找到 optimizer checkout ref（40 位 SHA）"
+    """optimizer 钉版两处承载（scripts/setup_test_env.sh 与 oracle_report.py
+    模块头注）必须指向同一 commit——改一处忘另一处当场炸。"""
+    ref = _setup_optimizer_pin()
     oracle = (ROOT / "src" / "hsr_nous" / "ops" / "annotator" / "oracle_report.py") \
         .read_text(encoding="utf-8")
     pin = _ORACLE_PIN_RE.search(oracle)
     assert pin, "oracle_report.py 头注未找到钉版 commit"
-    assert ref.group(1).startswith(pin.group(1)), (
-        f"optimizer pin 不一致：workflow ref={ref.group(1)[:12]} ↔ "
+    assert ref.startswith(pin.group(1)), (
+        f"optimizer pin 不一致：setup_test_env.sh={ref[:12]} ↔ "
         f"oracle_report 头注={pin.group(1)}")
 
 
 def test_optimizer_pin_mirror_self_check():
     """闸21 自证：当前两处 pin 一致且为合法 SHA 形态."""
-    wf = (ROOT / ".github" / "workflows" / "test.yml").read_text(encoding="utf-8")
-    ref = _WORKFLOW_REF_RE.search(wf).group(1)
+    ref = _setup_optimizer_pin()
     assert len(ref) == 40 and all(c in "0123456789abcdef" for c in ref)

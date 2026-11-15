@@ -8,21 +8,20 @@ adapters 生成/校验侧（template_generator 写出、template_verifier 回读
 `adapters → sim_schema`，但禁止 `adapters → sim`——定义若留在 build_compiler，
 校验器/生成器够不到，只能复制字面量（A1 审计的事故起点）。
 
-路径解析（2026-10-14 数据路径统一）：sim/sim_schema 岛不允许 import pipeline，
-本模块自持与 `pipeline/paths.data_root()` 同构的三行解析（环境变量名由
-tests/test_doc_lint.py 镜像闸强制一致）——值从 CWD 相对字符串升级为
-**env 感知绝对路径**：`HSR_NOUS_DATA_DIR` 覆盖时缓存级根（sim_templates）跟随，
-仓库内容根（library/battles）恒为仓库相对。解析在 import 期完成——进程内改
-环境变量不生效（部署语义：env 先于进程启动设置，与 pipeline/paths 调用期解析
-的差异在闸的覆盖语义上对齐为同一启动约定）。
+路径解析（公共层收口）：`repo_data_dir()` / `data_root()` 单一定义在
+`hsr_nous/common/paths.py`（sim/sim_schema 岛不再自持副本，旧镜像闸已退役为
+单一来源闸）——值从 CWD 相对字符串升级为 **env 感知绝对路径**：
+`HSR_NOUS_DATA_DIR` 覆盖时缓存级根（sim_templates）跟随，仓库内容根
+（library/battles）恒为仓库相对。解析在 import 期完成——进程内改环境变量不生效
+（部署语义：env 先于进程启动设置，与 pipeline/paths 调用期解析的差异在闸的
+覆盖语义上对齐为同一启动约定）。
 
 稳定标签（SPECS 的首元素）：指纹/日志等**机器无关**场景用——绝对路径随机器变，
 标签恒为仓库相对逻辑名（montecarlo fixtures_hash 键）。
 """
 from __future__ import annotations
 
-import os
-from pathlib import Path
+from hsr_nous.common.paths import data_root, repo_data_dir
 
 __all__ = [
     "DEFAULT_TEMPLATE_ROOTS",
@@ -32,26 +31,13 @@ __all__ = [
     "repo_data_dir",
 ]
 
-_REPO_DATA = Path(__file__).resolve().parents[3] / "data"
-
-
-def repo_data_dir() -> Path:
-    """仓库 data/ 目录（仓库内容根的父目录——library/battles 恒挂其下，不随 env 移动）."""
-    return _REPO_DATA
-
-
-def data_root() -> Path:
-    """数据根：`HSR_NOUS_DATA_DIR` > 仓库 ./data（与 pipeline/paths.data_root() 同构镜像）."""
-    env = os.environ.get("HSR_NOUS_DATA_DIR")
-    return Path(env) if env else _REPO_DATA
-
 
 #: (稳定标签, 绝对路径) 有序对——运行时读根链（先命中根生效）：机制库正典根
 #:（data/library——手写全机制模板 + 命途系统模块，git 追踪，仓库内容恒仓库相对）
 #: 优先于 data/sim_templates 生成根（骨架兜底未覆盖实体，gitignored 纯生成物，
 #: 缓存级随 HSR_NOUS_DATA_DIR 移动）。标签供机器无关指纹/日志（见模块 docstring）。
 RUNTIME_TEMPLATE_ROOT_SPECS: tuple[tuple[str, str], ...] = (
-    ("data/library", str(_REPO_DATA / "library")),
+    ("data/library", str(repo_data_dir() / "library")),
     ("data/sim_templates", str(data_root() / "sim_templates")),
 )
 

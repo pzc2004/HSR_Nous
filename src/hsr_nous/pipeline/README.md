@@ -1,13 +1,13 @@
 # Pipeline 数据管道
 
-从社区维护的数据源加载《崩坏：星穹铁道》游戏数据。`pipeline/` **不 import 任何其他模块**（sim_schema、sim、agents、api），通过 `adapters/` 桥接。
+从社区维护的数据源加载《崩坏：星穹铁道》游戏数据。`pipeline/` **不 import 任何业务模块**（sim_schema、sim、agents、api；仅可 import 公共基座 `common`），通过 `adapters/` 桥接。
 
 ## 模块结构
 
 ```
 pipeline/
 ├── __init__.py                # 暴露核心加载接口
-├── paths.py                   # 数据根路径解析唯一事实源（HSR_NOUS_DATA_DIR > 仓库 ./data）
+├── paths.py                   # 数据域路径（公共根由 common/paths 转出；HSR_NOUS_DATA_DIR > 仓库 ./data）
 ├── build/                     # ① 配装域（角色/光锥/遗器——build.yaml 输入数据）
 │   ├── loader.py                # StarRailRes JSON 加载 + 查询 + 计算辅助（表驱动 load_entity）
 │   ├── update.py                # StarRailRes 下载（hsr-data-update 默认/--lang 真身）
@@ -38,8 +38,10 @@ pipeline/
 
 ## 数据目录
 
-全项目数据路径唯一事实源 = `pipeline/paths.py`：缺省 = 仓库 `./data`；环境变量
-`HSR_NOUS_DATA_DIR` 可整体指向别处（CI/多份数据并存/自定义位置）。注意两类数据命运不同：
+全项目路径唯一事实源 = `common/paths.py`（缺省 = 仓库 `./data`；环境变量
+`HSR_NOUS_DATA_DIR` 可整体指向别处——CI/多份数据并存/自定义位置）。本模块
+`paths.py` 转出公共根（`repo_root`/`data_root`/`repo_data_dir`）并保留数据域专有路径
+（starrailres/stages/... 与 library/battles 内容根）。注意两类数据命运不同：
 `data/library`、`data/battles` 是 git 追踪的仓库内容，**不随** `HSR_NOUS_DATA_DIR` 移动；
 其余 gitignored 下载物/生成物才会跟随。调用方一律调 `paths.*()` 函数，不写路径常量。
 

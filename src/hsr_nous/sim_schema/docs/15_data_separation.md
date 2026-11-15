@@ -57,7 +57,9 @@ data/sim_templates/      # 生成兜底根（adapters 生成器纯产出，gitig
 ```
 
 文件命名约定（生成器产出，`adapters/template_generator.py`）：
-- 全部实体：`{id}_{显示名}.yaml`（显示名中 `•`/`·`/`/`/空格转 `_`；敌人模板为英文显示名）
+- 全部实体：`{id}_{显示名}.yaml`（显示名经 `adapters/template_generator.safe_template_filename`
+  清洗：Windows 非法字符 `< > : " / \ | ? *`、控制字符与空白统一转 `_`，尾点剥除；
+  查找走 `{id}_*` glob，清洗不可逆亦不影响加载；敌人模板为英文显示名）
 - 例外：人工全机制模板用 romanized 名（如 `1408_phainon.yaml`——真身在 `data/library/characters/`，编译查找经根序优先命中，见文件头注）
 
 模板**编译期按引用按需 glob 加载**（`sim/compile/build_compiler.py` `_load_template`，根由调用方注入——生产缺省 RUNTIME_TEMPLATE_ROOTS = `data/library` 正典根优先 + `data/sim_templates` 生成根兜底，测试经 TEST_TEMPLATE_ROOTS 注入同构双根），不存在启动全量扫描建索引；按序查 `{root}/<kind>/{ref}_*.yaml`、**第一个有命中的根生效**（跨根同 ID 不炸——人工版压生成器副本靠根序）；**根内同 ID 多文件 = 撞名即炸**（报全部文件名——同根内排序选边是静默歧义，删到只剩一个再编译）。
@@ -164,6 +166,19 @@ build:
         action: "basic"
         priority: 0
 ```
+
+### 15.8.1 光锥白值覆盖（账号导入）
+
+`light_cone.base_stats` 是可选的光锥白值覆盖块，用于保留账号中光锥当前等级的实际白值：
+
+```yaml
+light_cone:
+  level: 70
+  superimposition: 1
+  base_stats: {hp: 1000.0, atk: 500.0, def_: 300.0}
+```
+
+有 `base_stats` 时优先于模板 `base_stats`；缺省仍使用模板白值。`superimposition`、hooks、lookup table 和其他机制通道不变。仅写 `level` 不会触发重算，实际值必须由 adapter 根据当前等级/晋阶计算或直接提供。
 
 ### 15.9 `stage.yaml` 示例
 

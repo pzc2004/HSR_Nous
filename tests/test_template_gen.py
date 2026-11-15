@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import pytest
 import yaml
@@ -362,3 +363,16 @@ class TestPropMapConsumerAnchor:
         tpl = generate_character_template("1501", level=80, lang="cn")
         assert math.isclose(tpl["base_stats"].get("elation", 0.0), 0.28, rel_tol=1e-9)
         assert "elation" not in (tpl["base_stats"].get("dmg_bonus") or {})
+
+
+def test_write_character_template_cleans_legacy_filename(tmp_path, monkeypatch):
+    """命名规则升级后，同实体旧文件名必须被清理，不允许同 ID 撞名。"""
+    from hsr_nous.adapters import template_generator as tg
+
+    monkeypatch.setattr(tg, "DEFAULT_TEMPLATE_ROOTS", [str(tmp_path)])
+    legacy = tmp_path / "1001_March 7th.yaml"
+    legacy.write_text("legacy\n", encoding="utf-8")
+    path = Path(tg.write_character_template("1001", out_dir=str(tmp_path), lang="en"))
+    assert path == tmp_path / "1001_March_7th.yaml"
+    assert path.is_file()
+    assert not legacy.exists()

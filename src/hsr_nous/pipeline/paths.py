@@ -1,9 +1,4 @@
-"""数据根路径解析——全项目唯一事实源.
-
-解析优先级（逐层覆盖）：
-1. ``HSR_NOUS_DATA_DIR`` 环境变量（CI/多份数据并存/自定义位置）；
-2. 仓库 ``./data``（开发兜底——clone 即跑；XDG 用户目录为后续"数据搬家"期的默认，
-   届时在此插入第三层，调用方零改动）。
+"""数据域路径（pipeline 专用）——路径解析公共底盘在 ``hsr_nous/common/paths.py``.
 
 两类数据命运不同：
 - **缓存级**（starrailres/stages/fandom/tbgd/sim_templates/提取产物……gitignored，
@@ -11,31 +6,17 @@
 - **仓库内容**（``data/library`` 手写正典 / ``data/battles`` 策展对局——git 追踪，
   是项目内容的一部分）——永远仓库相对，不随 ``data_root()`` 移动。
 
-约定：本模块只出**函数**（调用时才解析），不出 import 期冻结的路径常量——
-否则环境变量覆盖会被 import 顺序架空。调用方已有的 ``data_dir`` 注入参数全部保留，
-缺省值统一改从本模块出。
+本模块只保留**数据域专有**路径（starrailres/stages/... 与 library/battles 内容根）；
+`repo_root()` / `repo_data_dir()` / `data_root()` / `DATA_DIR_ENV` 一律由
+``hsr_nous.common.paths`` 转出（兼容壳：旧调用方 import 路径不变）。
+约定：只出**函数**（调用时才解析），不出 import 期冻结的路径常量——否则环境变量
+覆盖会被 import 顺序架空。调用方已有的 ``data_dir`` 注入参数全部保留。
 """
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
-#: 仓库根（src/hsr_nous/pipeline/paths.py → 上三级）
-_REPO_ROOT = Path(__file__).resolve().parents[3]
-
-#: 环境变量名（sim_schema 侧模板根解析如需同名变量，由 doc_lint 镜像闸强制一致）
-DATA_DIR_ENV = "HSR_NOUS_DATA_DIR"
-
-
-def repo_root() -> Path:
-    """仓库根目录."""
-    return _REPO_ROOT
-
-
-def data_root() -> Path:
-    """数据根目录：``HSR_NOUS_DATA_DIR`` 环境变量 > 仓库 ./data."""
-    env = os.environ.get(DATA_DIR_ENV)
-    return Path(env) if env else _REPO_ROOT / "data"
+from hsr_nous.common.paths import DATA_DIR_ENV, data_root, repo_data_dir, repo_root
 
 
 # ---------------------------------------------------------------------------
@@ -130,9 +111,9 @@ def annotator_runs_dir() -> Path:
 
 def library_dir() -> Path:
     """机制正典库（手写/机标全机制 DSL 模板——git 追踪，仓库内容）."""
-    return _REPO_ROOT / "data" / "library"
+    return repo_data_dir() / "library"
 
 
 def battles_dir() -> Path:
     """策展对局配置库（git 追踪，仓库内容）."""
-    return _REPO_ROOT / "data" / "battles"
+    return repo_data_dir() / "battles"

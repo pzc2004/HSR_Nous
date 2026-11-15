@@ -46,12 +46,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Union
 
+from hsr_nous.common.paths import repo_root
 from hsr_nous.sim.engine import _ALLY_EXCLUDE_FLAGS, CombatEngine
 from hsr_nous.sim.state import BattleState
 from hsr_nous.sim_schema import rulebook as _rulebook_mod
 from hsr_nous.sim_schema.templates import RUNTIME_TEMPLATE_ROOT_SPECS, data_root
-
-_REPO_ROOT = Path(__file__).resolve().parents[3]  # src/hsr_nous/sim/montecarlo.py → 仓库根
 
 #: CSV 开关环境变量（run 的 csv_path 参数优先；值为输出文件路径）
 _CSV_ENV_VAR = "HSR_NOUS_MC_CSV"
@@ -258,7 +257,7 @@ def classify_outcome(
 def _git_commit() -> Optional[str]:
     """git rev-parse HEAD（subprocess 现算；非 git 环境/无 git 二进制/超时 → None 容错）."""
     try:
-        r = subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(_REPO_ROOT),
+        r = subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(repo_root()),
                            capture_output=True, text=True, timeout=10)
         if r.returncode == 0:
             return r.stdout.strip() or None

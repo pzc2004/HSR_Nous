@@ -10,6 +10,7 @@ node/optimizer 依赖走 test_crosscheck_optimizer 的 optimizer_driver fixture
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -120,6 +121,54 @@ def test_env_no_node_passthrough(tmp_path, monkeypatch):
     s = generate_report("1013", HERTA_TPL, _HERTA_OFFICIAL, tmp_path)
     assert s["status"] == "env_no_node" and s["anomalies"] == 0
     assert (tmp_path / "oracle_report.json").is_file(), "降级也落报告（留痕）"
+
+
+def test_ensure_driver_build_failure_raises(tmp_path, monkeypatch):
+    """构建失败必须上抛，不能伪装成缺环境。"""
+    from hsr_nous.ops.annotator import oracle_report
+
+    src = tmp_path / "driver.ts"
+    src.write_text("export {}\n", encoding="utf-8")
+    monkeypatch.setattr(oracle_report, "DRIVER_SRC", src)
+    monkeypatch.setattr(oracle_report, "DRIVER_DIST", tmp_path / "missing.js")
+    monkeypatch.setattr(oracle_report.shutil, "which", lambda _: "/usr/bin/node")
+    monkeypatch.setattr(oracle_report, "rolldown_cmd", lambda: ["rolldown"])
+
+    def _fail(*args, **kwargs):
+        raise subprocess.CalledProcessError(1, args[0], stderr="compile failed")
+
+    monkeypatch.setattr(oracle_report.subprocess, "run", _fail)
+    with pytest.raises(subprocess.CalledProcessError):
+        oracle_report.ensure_driver()
+
+
+def test_optimizer_fixture_does_not_skip_build_failure(monkeypatch):
+    """对拍 fixture 只许缺环境 skip，构建异常必须让测试失败。"""
+    from hsr_nous.ops.annotator import oracle_report
+    from tests.test_crosscheck_optimizer import _require_optimizer_driver
+
+    def _raise():
+        raise subprocess.CalledProcessError(1, "rolldown", stderr="compile failed")
+
+    monkeypatch.setattr(oracle_report, "ensure_driver", _raise)
+    with pytest.raises(subprocess.CalledProcessError):
+        _require_optimizer_driver()
+
+
+def test_rolldown_cmd_windows_uses_cmd_and_never_falls_back(tmp_path, monkeypatch):
+    """Windows 只认 .cmd；不得用 POSIX shim 的存在性/回退掩盖缺失。"""
+    from hsr_nous.ops.annotator import oracle_report
+
+    shim = tmp_path / "rolldown"
+    shim.write_text("", encoding="utf-8")
+    cmd = tmp_path / "rolldown.cmd"
+    cmd.write_text("", encoding="utf-8")
+    monkeypatch.setattr(oracle_report, "ROLLDOWN", shim)
+    monkeypatch.setattr(oracle_report.sys, "platform", "win32")
+    assert oracle_report.rolldown_cmd() == [str(cmd)]
+
+    cmd.unlink()
+    assert oracle_report.rolldown_cmd() is None
 
 
 # ---------------------------------------------------------------------------
