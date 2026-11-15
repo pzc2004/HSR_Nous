@@ -174,6 +174,7 @@ variable_bindings:
 | `toughness_of(target)` | 目标的**当前韧性**（`ActorState.toughness` 直读——敌方 Ability `CurrentStance` 直译通道；目标解析与 `hp_of` 同通道，查无返回 `0.0`） | **已实现**（hook 表达式函数白名单） |
 | `$level`（命名空间） | **关卡级共享黑板**（决策卡 #31——伪 ActorState，不占站位/目标池；`dynamic_of($level, key)` 读写关卡动态值、`has_modifier($level, ...)` 关卡级 modifier） | **已实现**（2026-11-14） |
 | `monster_unique_id(target)` | 怪物 **UniqueID**（= 模板 ID // 10，决策卡 #30 词表实证；实例 __ 后缀归一化与 `monster_id` 同通道，非数值 id 返回 `0.0`）——敌方 `ByCompareMonsterUniqueID` 谓词直译通道 | **已实现**（2026-11-14，hook 表达式函数白名单） |
+| `battle_event_exists(event_id)` | EventID 是否已注册（`ByCompareBattleEventID` 直译通道——战斗事件注册表查询，决策卡 #44） | **已实现**（2026-11-16，hook 表达式函数白名单） |
 | `has_pending_one_more(target)` | 目标是否有**挂起的额外回合**（`ByTurnOwnerHasPendingOneMore` 直译通道——scheduler 额外回合队列查询） | **已实现**（2026-11-15，hook 表达式函数白名单） |
 | `turn_owner_of()` | **当前回合归属者** actor_id（`ByIsTurnOwnerEntity` 的全语境直译通道——不再限回合/行动事件，引擎逐回合跟踪） | **已实现**（2026-11-15，hook 表达式函数白名单） |
 | `position_delta(target, reference)` / `neighbor_of(reference, offset)` | 目标与参照的**同侧站位差** / 参照的**邻居 actor_id**（offset=-1 左邻/+1 右邻）——CasterLeft/RightEntity 等左右邻目标别名的直译通道；不同侧/查无/无邻返回 0/""（决策卡 #35） | **已实现**（2026-11-15，hook 表达式函数白名单） |

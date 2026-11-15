@@ -150,6 +150,7 @@ TASK_HANDLERS = {
     "RPG.GameCore.EscapeFromBattle": "_compile_escape_from_battle",
     "RPG.GameCore.RemoveShield": "_compile_remove_shield",
     "RPG.GameCore.LockHP": "_compile_lock_hp",
+    "RPG.GameCore.CreateBattleEvent": "_compile_create_battle_event",
     "RPG.GameCore.SetModifierDynamicValue": "_compile_set_modifier_dynamic_value",
     "RPG.GameCore.LoopExecuteTaskListWithInterval": "_compile_loop_execute",
     "RPG.GameCore.LoopTargetList": "_compile_loop_target_list",
@@ -1226,6 +1227,12 @@ class AbilityCompiler:
                 self._issue(ctx, path, node_type, f"再动挂起谓词目标未注册：{alias}")
                 return None
             return f"has_pending_one_more({target})"
+        if node_type == "RPG.GameCore.ByCompareBattleEventID":
+            event_id = self._number(predicate.get("EventID"), ctx, f"{path}/EventID")
+            if event_id is None or int(event_id) != event_id:
+                self._issue(ctx, path, node_type, "EventID 需静态整数")
+                return None
+            return f"battle_event_exists({int(event_id)})"
         if node_type == "RPG.GameCore.ByCharacterDamageType":
             if target is None:
                 self._issue(ctx, path, node_type, f"伤害属性谓词目标未注册：{alias}")
@@ -2936,6 +2943,20 @@ class AbilityCompiler:
             return
         self._add_effect(ctx, {"effect_type": "set_dynamic_value", "target": target,
                                "dynamic_key": key, "amount": value})
+
+    def _compile_create_battle_event(self, task: Dict[str, Any], ctx: _Context,
+                                     path: str, stack: Tuple[str, ...]) -> None:
+        """CreateBattleEvent（战斗事件创建）：执行 OnBattleEventCreate 创建效果
+        + 注册 EventID（供 ByCompareBattleEventID 判定；决策卡 #44）。"""
+        event_id = self._number(task.get("EventID"), ctx, f"{path}/EventID")
+        if event_id is None or int(event_id) != event_id:
+            self._issue(ctx, path, "CreateBattleEvent", "EventID 需静态整数")
+            return
+        self._add_effect(ctx, {"effect_type": "create_battle_event",
+                               "event_id": int(event_id),
+                               "team": str(task.get("Team") or "")})
+        self._compile_tasks(task.get("OnBattleEventCreate") or [], ctx,
+                            f"{path}/OnBattleEventCreate", stack)
 
     def _compile_add_modifier(self, task: Dict[str, Any], ctx: _Context,
                               path: str, stack: Tuple[str, ...]) -> None:

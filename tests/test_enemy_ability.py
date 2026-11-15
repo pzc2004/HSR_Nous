@@ -3456,13 +3456,16 @@ def test_unregistered_task_reasons_specific_not_generic():
     '未注册任务节点'。"""
     lockhp = {"$type": "RPG.GameCore.LockHP",
               "Threshold": {"IsDynamic": False, "FixedValue": {"Value": 0.01}}}
-    out = _task_skill(lockhp)
-    assert any("比例阈值锁血" in i["reason"] for i in out["unsupported"])
     create = {"$type": "RPG.GameCore.CreateBattleEvent",
               "EventID": {"IsDynamic": False, "FixedValue": {"Value": 20001}},
               "PropertyFromTarget": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"}}
     out = _task_skill(create)
-    assert any("战斗事件体系" in i["reason"] for i in out["unsupported"])
+    assert out["ok"], out["unsupported"]
+    assert any(e["effect_type"] == "create_battle_event" and e.get("event_id") == 20001
+               for h in out["hooks"] for e in h["effects"])
+    # LockHP 已收编（决策卡 #43）——锁血 modifier 编译通过
+    out = _task_skill(lockhp)
+    assert out["ok"], out["unsupported"]
 
 
 def test_presentation_bulk_ignored_task_nodes():
