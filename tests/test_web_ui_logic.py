@@ -289,8 +289,9 @@ const cSingleOther = card('e1', {...bare, name:'炎华'}, 'enemy');
 eq(!cSingleOther.includes('reticle'), '单体非候选不带圈');
 aiming = null;
 // L4 弱点元素图标：悬上缘小圆图标（元素首字+色板；词表外回落原文首字）
-const wk = weakIconsHtml(['fire', 'ice', 'physical']);
-eq(wk.includes('elem-ic') && wk.includes('>火<') && wk.includes('>冰<') && wk.includes('>物<'), 'weak elem icons');
+const wk = weakIconsHtml(['fire', 'ice', 'physical', 'thunder']);
+eq(wk.includes('elem-ic') && wk.includes('🔥') && wk.includes('❄️') && wk.includes('💥')
+   && wk.includes('⚡') && wk.includes('雷弱点'), 'weak elem icons');
 eq(weakIconsHtml(['xelian']).includes('>x<'), 'weak icon unknown fallback raw char');
 eq(weakIconsHtml([]) === '' && weakIconsHtml(null) === '', 'weak icons empty');
 // L4 敌卡：弱点图标行悬上缘（weak-row），buff 图标行复用（L5）

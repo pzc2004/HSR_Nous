@@ -195,7 +195,8 @@ formula:
     expression: "elation_level_multiplier * ability_multiplier * orig_elation_dmg_multi * elation_dmg_boost_multi * crit_expected_multi * elation_multi * punchline_multi * merrymake_multi * def_multi * res_multi * vuln_multi * dmg_red_multi * base_universal_multi * final_dmg_multi"
 
   # 治疗（heal_bonus = 施放者治疗加成，incoming_heal = 受治疗者受治疗量变化——加成为正、降低为负，如敌方萨姆领域；
-  # 命中域条件件 hit_condition 的 heal_bonus 结算时现场并入 heal_bonus 槽——04_modifier §hit_condition 治疗命中域）
+  # 命中域条件件 hit_condition 的 heal_bonus 结算时现场并入 heal_bonus 槽——04_modifier §hit_condition 治疗命中域；
+  # 实际入账另受 effective_max_hp 与噬命可回复上限的较小者钳制，当前 HP 已高于上限时不压血，见 11_special_mechanics.md §11.9）
   heal:
     expression: "(atk_scaling * atk + hp_scaling * hp + flat_heal) * (1 + heal_bonus + incoming_heal)"
 

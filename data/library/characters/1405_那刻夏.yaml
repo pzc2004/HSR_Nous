@@ -222,7 +222,7 @@ actions:
         duration: 1
         tick_anchor: "owner_turn_start"
         dispellable: False
-        weakness_add: ["physical", "fire", "ice", "lightning", "wind", "quantum", "imaginary"]
+        weakness_add: ["physical", "fire", "ice", "thunder", "wind", "quantum", "imaginary"]
       # 【质性揭露】近似授予：升华 7 弱点 ≥ 天赋阈值 #3=5 种——弱点计数通道缺时的合规
       # 近似（天赋逐 hit 植入本体待收；弱点通道登记后应改按敌方弱点数判定授予）。
       # 持续与升华同寿命（当前近似下 7 弱点在揭露即在）

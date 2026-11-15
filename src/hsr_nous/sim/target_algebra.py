@@ -9,7 +9,7 @@
 - `where`：cerces 表达式（`$it` 绑定候选 + legacy 平铺键 target_hp/target_hp_pct/target_broken）；
   None = 恒真
 - `order_by`：cerces 表达式（`$it`），`-` 前缀 = 降序；**全序纪律**：sorted 稳定排序，
-  同值按池序（站位序）决胜
+  同值按池序（站位序）决胜；特殊键 `formation` / `-formation` = 池序原样 / 反转编队序
 - `take`：`"all"` | 整数（取前 N；"first" = take:1 降糖）
 - `mode`：`deterministic`（按序取）| `random`（random 仅 zagreus 供种子——roll 抽 N；
   expected 确定化口径 = 按序取前 N，与期望模式不掷骰纪律一致）
@@ -44,6 +44,7 @@ def _it_namespace(engine: Any, s: Any) -> Dict[str, Any]:
     ns = {k: v for k, v in eff.items() if k not in ("dmg_bonus", "hp")}
     ns.update(
         actor_id=s.actor.actor_id,
+        name=s.actor.name,
         hp=s.current_hp,
         energy=s.current_energy,
         max_hp=float(eff["hp"]),
@@ -71,11 +72,11 @@ def resolve_pool(spec: Any, *, engine: Any, st: Any, payload: Dict[str, Any]) ->
         return [s for s in engine._allies_alive()
                 if s.actor.summon_flags.get("ally_targetable", True)]
     if spec == "enemies":
-        return engine._enemies_alive()
+        return engine._hostile_target_pool(st.actor)
     if spec == "all":
         return ([s for s in engine._allies_alive()
                  if s.actor.summon_flags.get("ally_targetable", True)]
-                + engine._enemies_alive())
+                + engine._hostile_target_pool(st.actor))
     if isinstance(spec, str) and spec.startswith("$event."):
         if spec in ("$event.targets", "$event.hit_targets"):
             return [s for s in (engine.state.actors.get(str(i))
@@ -114,26 +115,49 @@ def eval_algebra(
             ctx["self"] = self_ns
         return ctx
 
+    def _functions(s: Any) -> Dict[str, Any]:
+        functions = dict(engine._hooks._hook_functions(s))
+        owner = getattr(self_ns, "_st", None) or s
+        functions["count_selected"] = (
+            lambda pool, where="true": engine._hooks._count_selected_with_self(
+                pool, where, self_ns, owner, event_ns))
+        return functions
+
     where_src = spec.get("where")
-    if where_src:
+    if where_src and str(where_src).strip() not in {"true", "True"}:
         wex = expr.compile(str(where_src), layer="effect")
-        pool = [s for s in pool
-                if expr.evaluate(wex, _ctx(s),
-                                 functions=engine._hooks._hook_functions(s))]
+        pool = [s for s in pool if expr.evaluate(wex, _ctx(s), functions=_functions(s))]
     order_src = spec.get("order_by")
     if order_src:
         order_src = str(order_src)
-        desc = order_src.startswith("-")
-        oex = expr.compile(order_src[1:] if desc else order_src, layer="effect")
-        # sorted 稳定 = 同值按池序（站位序）决胜（全序纪律）
-        pool = sorted(
-            pool,
-            key=lambda s: float(expr.evaluate(
-                oex, _ctx(s),
-                functions=engine._hooks._hook_functions(s))),
-            reverse=desc,
-        )
+        if order_src in {"formation", "-formation"}:
+            # 编队序（非表达式键）：池序即编队序，负号仅反转，供左右横扫族复用。
+            if order_src == "-formation":
+                pool = list(reversed(pool))
+            order_src = ""
+        else:
+            desc = order_src.startswith("-")
+            oex = expr.compile(order_src[1:] if desc else order_src, layer="effect")
+            # sorted 稳定 = 同值按池序（站位序）决胜（全序纪律）
+            pool = sorted(
+                pool,
+                key=lambda s: float(expr.evaluate(oex, _ctx(s), functions=_functions(s))),
+                reverse=desc,
+            )
     take = spec.get("take", "all")
+    if isinstance(take, str) and take != "all":
+        owner = getattr(self_ns, "_st", None) or (pool[0] if pool else None)
+        functions = engine._hooks._hook_functions(owner) if owner is not None else {}
+        take_ctx = {}
+        if event_ns is not None:
+            take_ctx["event"] = event_ns
+        if self_ns is not None:
+            take_ctx["self"] = self_ns
+        value = expr.evaluate(expr.compile(take, layer="effect"), take_ctx, functions=functions)
+        if not isinstance(value, (int, float)) or isinstance(value, bool) \
+                or value < 0 or int(value) != value:
+            raise ValueError(f"take 表达式须返回非负整数，得到 {value!r}")
+        take = int(value)
     n = len(pool) if take == "all" else max(0, min(int(take), len(pool)))
     if spec.get("mode", "deterministic") == "random":
         rng = engine.pipeline.rng
@@ -231,12 +255,17 @@ def validate_algebra(spec: Dict[str, Any], *, where: str, expr: Any,
                 f"{where} 非法 pool {p!r}（合法：{sorted(TARGET_ALGEBRA_POOLS)} + '$event.<字段>'）")
     take = spec.get("take", "all")
     if take != "all" and not (isinstance(take, int) and take >= 1):
-        raise ValueError(f"{where} take 非法值 {take!r}（合法：'all' 或 ≥1 整数）")
+        if isinstance(take, str):
+            if "$it." in take:
+                raise ValueError(f"{where} take 不能引用 `$it`（动态截取无候选命名空间）")
+            expr.compile(take, layer="effect")
+        else:
+            raise ValueError(f"{where} take 非法值 {take!r}（合法：'all'、≥1 整数或表达式）")
     mode = spec.get("mode", "deterministic")
     if mode not in TARGET_ALGEBRA_MODES:
         raise ValueError(
             f"{where} 非法 mode {mode!r}（合法：{sorted(TARGET_ALGEBRA_MODES)}）")
     for slot in ("where", "order_by"):
         src = spec.get(slot)
-        if src:
+        if src and (slot != "order_by" or str(src) not in {"formation", "-formation"}):
             expr.compile(str(src).lstrip("-"), layer="effect")   # 非法表达式编译期炸（B8 同口径）

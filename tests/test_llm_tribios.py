@@ -134,6 +134,36 @@ class TestClient:
         with pytest.raises(LLMError, match="越界"):
             client.chat([{"role": "user", "content": "x"}], key_index=5)
 
+    def test_direct_chat_per_key_cap(self):
+        """非 POOL 直连：每个 key 各自 cap=1，双 key 可并行但同 key 不重叠."""
+        cfg = _cfg(api_keys=("k1", "k2"), concurrency=1)
+        active = {0: 0, 1: 0}
+        max_seen = {0: 0, 1: 0}
+        used = set()
+        lock = threading.Lock()
+
+        def transport(url, payload, headers):
+            key = 0 if headers["Authorization"] == "Bearer k1" else 1
+            with lock:
+                active[key] += 1
+                max_seen[key] = max(max_seen[key], active[key])
+                used.add(key)
+            time.sleep(0.02)
+            with lock:
+                active[key] -= 1
+            return _Resp()
+
+        client = LLMClient(cfg, transport=transport)
+        threads = [threading.Thread(
+            target=lambda: client.chat([{"role": "user", "content": "x"}])) for _ in range(6)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=5)
+        assert not any(thread.is_alive() for thread in threads), "直连调用应全部结束"
+        assert all(value <= 1 for value in max_seen.values()), f"同 key 超帽：{max_seen}"
+        assert used == {0, 1}, "两个 key 都应被用到"
+
     def test_transport_retry_then_success(self, monkeypatch):
         monkeypatch.setattr("hsr_nous.llm.client.time.sleep", lambda s: None)
         calls = []
@@ -230,22 +260,28 @@ class TestScheduler:
         client = LLMClient(_cfg(api_keys=("k1", "k2"), concurrency=1))
         sch = Scheduler(client, per_key_concurrency=1)
         marks = {}
+        c_completed = threading.Event()
 
         def timed(name, dur):
             def task():
                 time.sleep(dur)
                 marks[name] = time.monotonic()
+                if name == "C_fast":
+                    c_completed.set()
                 return name
             return task
 
-        t0 = time.monotonic()
-        marks["A_start"] = t0
-        sch.submit(timed("A_slow", 0.20), label="A")   # key#1 慢任务
+        def slow():
+            # 正确补位时由 C 释放；若调度器分批等待，则超时后 A 先完成，断言失败。
+            c_completed.wait(timeout=2.0)
+            marks["A_slow"] = time.monotonic()
+            return "A_slow"
+
+        sch.submit(slow, label="A")                     # key#1 等待 C 的慢任务
         sch.submit(timed("B_fast", 0.02), label="B")   # key#2 快任务
         sch.submit(timed("C_fast", 0.02), label="C")   # 排队——B 完成即补到 key#2
         sch.run()
-        assert marks["C_fast"] < marks["A_slow"], (
-            "C 应在 B 完成后立刻补位（≈0.04s），不等 A（≈0.20s）——若成立则非分批等待")
+        assert marks["C_fast"] < marks["A_slow"], "C 应在 B 完成后补位，不等 A 结束"
 
     def test_retry_then_success(self):
         client = LLMClient(_cfg())
@@ -466,6 +502,16 @@ class TestSchedulerLive:
         assert not runner.is_alive()
         assert [f.result() for f in futs] == list(range(12))
 
+    def test_executor_capacity_matches_per_key_and_resizes(self, tmp_path):
+        """自持线程池容量 = per_key × key_count，热更时按新额度重建."""
+        cfg = _cfg(api_keys=("k1", "k2"), concurrency=3)
+        live = LiveConfig.materialize(tmp_path / "live.json", cfg)
+        sch = Scheduler(LLMClient(cfg), live=live, live_poll_interval=0.02)
+        assert sch._executor._max_workers == 6, "初始容量 3×2=6"
+        _write_live(live.path, concurrency=4)
+        sch._poll_live()
+        assert sch._executor._max_workers == 8, "热更 3→4 后容量 4×2=8"
+
     def test_concurrency_shrink_does_not_kill_inflight(self, tmp_path):
         cfg = _cfg(concurrency=3)
         live = LiveConfig.materialize(tmp_path / "live.json", cfg)
@@ -599,6 +645,90 @@ class TestPool:
         calls.clear()
         assert c.chat([{"role": "user", "content": "hi2"}]) == "备胎 content"
         assert [u for u, _ in calls] == ["http://b.co/chat/completions"], "死槽标记出池不再分配"
+
+    def test_failover_on_transport_death(self, monkeypatch):
+        """首槽连接拒绝（传输死——端点消失族）→ 判死出池，落次槽重发成功."""
+        from hsr_nous.llm import LLMEndpointProfile
+        monkeypatch.setattr("hsr_nous.llm.client.time.sleep", lambda s: None)
+        calls = []
+
+        def fake_transport(url, payload, headers):
+            calls.append(url)
+            if "a.co" in url:
+                raise httpx.ConnectError("connection refused")
+            return _Resp("备胎 content")
+
+        cfg = _cfg(pool=(
+            LLMEndpointProfile(api_base="http://a.co", model="ma", api_keys=("ka",)),
+            LLMEndpointProfile(api_base="http://b.co", model="mb", api_keys=("kb",)),
+        ))
+        c = LLMClient(config=cfg, transport=fake_transport)
+        assert c.chat([{"role": "user", "content": "hi"}]) == "备胎 content"
+        assert calls == ["http://a.co/chat/completions"] * 5 + ["http://b.co/chat/completions"], \
+            "首槽重试 4 次耗尽后判死,落次槽"
+        calls.clear()
+        assert c.chat([{"role": "user", "content": "hi2"}]) == "备胎 content"
+        assert calls == ["http://b.co/chat/completions"], "传输死槽标记出池不再分配"
+
+    def test_failover_fast_on_connection_refused(self, monkeypatch):
+        """连接被拒（空号=端点确定死）走快通道——一次快确认即判死落槽，不吃退避税."""
+        from hsr_nous.llm import LLMEndpointProfile
+        monkeypatch.setattr("hsr_nous.llm.client.time.sleep", lambda s: None)
+        calls = []
+
+        def fake_transport(url, payload, headers):
+            calls.append(url)
+            if "a.co" in url:
+                try:
+                    raise ConnectionRefusedError(111, "Connection refused")
+                except ConnectionRefusedError as e:
+                    raise httpx.ConnectError("connect error") from e
+            return _Resp("备胎 content")
+
+        cfg = _cfg(pool=(
+            LLMEndpointProfile(api_base="http://a.co", model="ma", api_keys=("ka",)),
+            LLMEndpointProfile(api_base="http://b.co", model="mb", api_keys=("kb",)),
+        ))
+        c = LLMClient(config=cfg, transport=fake_transport)
+        assert c.chat([{"role": "user", "content": "hi"}]) == "备胎 content"
+        assert calls == ["http://a.co/chat/completions"] * 2 + ["http://b.co/chat/completions"], \
+            "连接被拒只吃一次快确认(首试+快确认),不吃完整退避表"
+
+    def test_failover_on_5xx_exhausted(self, monkeypatch):
+        """首槽 503 持续(重试耗尽)→ 判死出池落次槽."""
+        from hsr_nous.llm import LLMEndpointProfile
+        monkeypatch.setattr("hsr_nous.llm.client.time.sleep", lambda s: None)
+        calls = []
+
+        def fake_transport(url, payload, headers):
+            calls.append(url)
+            if "a.co" in url:
+                return _Resp(status=503, text="upstream boom")
+            return _Resp("备胎 content")
+
+        cfg = _cfg(pool=(
+            LLMEndpointProfile(api_base="http://a.co", model="ma", api_keys=("ka",)),
+            LLMEndpointProfile(api_base="http://b.co", model="mb", api_keys=("kb",)),
+        ))
+        c = LLMClient(config=cfg, transport=fake_transport)
+        assert c.chat([{"role": "user", "content": "hi"}]) == "备胎 content"
+        assert calls == ["http://a.co/chat/completions"] * 5 + ["http://b.co/chat/completions"]
+
+    def test_all_slots_transport_dead_raises(self, monkeypatch):
+        """两槽都连不上 → 各自重试耗尽判死,最终报活槽全灭."""
+        from hsr_nous.llm import LLMEndpointProfile
+        monkeypatch.setattr("hsr_nous.llm.client.time.sleep", lambda s: None)
+
+        def fake_transport(url, payload, headers):
+            raise httpx.ConnectError("connection refused")
+
+        cfg = _cfg(pool=(
+            LLMEndpointProfile(api_base="http://a.co", model="ma", api_keys=("ka",)),
+            LLMEndpointProfile(api_base="http://b.co", model="mb", api_keys=("kb",)),
+        ))
+        c = LLMClient(config=cfg, transport=fake_transport)
+        with pytest.raises(LLMError, match="活槽全灭"):
+            c.chat([{"role": "user", "content": "hi"}])
 
     def test_no_failover_on_deterministic_error(self, monkeypatch):
         """400/空 content 等确定性错误不换槽（错误与端点无关——重发同错）。"""

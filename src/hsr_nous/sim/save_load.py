@@ -86,6 +86,8 @@ FIELD_CODECS: Dict[type, Dict[str, str]] = {
         "source_kind": _CODEC_PLAIN,
         "source_ref": _CODEC_PLAIN,
         "remove_on_source_death": _CODEC_PLAIN,
+        "remove_on_source_exit": _CODEC_PLAIN,
+        "on_remove": _CODEC_PLAIN,
         "shield_spec": _CODEC_PLAIN,
         "stat_effects": _CODEC_PLAIN,
         "scaling_effects": _CODEC_TUPLE2_DICT,
@@ -106,9 +108,14 @@ FIELD_CODECS: Dict[type, Dict[str, str]] = {
         "tick_anchor": _CODEC_PLAIN,
         "effect_scope": _CODEC_PLAIN,
         "hp_lock": _CODEC_PLAIN,
+        "block_damage": _CODEC_PLAIN,
+        "fixed_hp_bars": _CODEC_PLAIN,
         "revive_percent": _CODEC_PLAIN,
         "moon_cocoon": _CODEC_PLAIN,
         "forced_taunt": _CODEC_PLAIN,
+        "toughness_lock": _CODEC_PLAIN,
+        "lock_on": _CODEC_PLAIN,
+        "prevent_action": _CODEC_PLAIN,
         "target_resource": _CODEC_PLAIN,
         "max_override": _CODEC_PLAIN,
     },
@@ -210,6 +217,7 @@ FIELD_CODECS: Dict[type, Dict[str, str]] = {
         "damage_by_actor": _CODEC_PLAIN,
         "log": _CODEC_PLAIN,
         "moon_cocoon_used": _CODEC_PLAIN,
+        "once_latches": _CODEC_FROZENSET,
     },
 }
 
@@ -217,6 +225,7 @@ FIELD_CODECS: Dict[type, Dict[str, str]] = {
 #: 由 from_compiled 重带；完备性闸在 tests/test_save_restore.py 与结构豁免单同钉）
 _ENGINE_RUNTIME_FIELDS = (
     "current_wave",
+    "_enemy_policy_state",
     "_last_target_id",
     "_last_target_by_actor",
     "_last_sp_consumed",
@@ -230,6 +239,8 @@ _ENGINE_RUNTIME_FIELDS = (
     "_resource_provenance",
     "_cond_aura_present",
     "_battle_end_emitted",
+    "_current_turn_actor_id",  # 当前回合归属者（turn_owner_of 直译通道）
+    "_level_state_obj",  # 关卡黑板（决策卡 #31）：伪 ActorState（modifier 池）进存档
 )
 
 
@@ -409,8 +420,12 @@ def _save_engine_fields(engine: Any) -> Dict[str, Any]:
         elif fname == "_battle_end_emitted":
             # 惰性字段（首次 _emit_battle_end 才落实例）——getattr 缺省 False
             out[fname] = bool(getattr(engine, "_battle_end_emitted", False))
+        elif fname == "_level_state_obj":
+            st = engine._level_state_obj
+            out[fname] = None if st is None else _encode(ActorState, st)
         else:
-            out[fname] = copy.deepcopy(getattr(engine, fname))
+            out[fname] = copy.deepcopy(getattr(engine, fname, "") if fname == "_current_turn_actor_id"
+                                       else getattr(engine, fname))
     return out
 
 
@@ -419,6 +434,10 @@ def _restore_engine_fields(engine: Any, d: Dict[str, Any]) -> None:
         if fname == "_resource_provenance":
             engine._resource_provenance = {(aid, rid): set(srcs)
                                            for aid, rid, srcs in d[fname]}
+        elif fname == "_level_state_obj":
+            saved = d[fname]
+            engine._level_state_obj = (None if saved is None
+                                       else _decode(ActorState, saved, engine._expr))
         else:
             setattr(engine, fname, copy.deepcopy(d[fname]))
 

@@ -31,7 +31,7 @@ from __future__ import annotations
 import ast
 import random
 import types
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Dict, List, Mapping, Optional
 
 from hsr_nous.sim.state import BREAK_DOT_ID_PREFIX, ActorState
@@ -373,12 +373,16 @@ class SettlementPipeline:
         return w
 
     def _base_res(self, dmg_type: Optional[str], target: ActorState) -> float:
-        """基础抗性解析（引擎侧语义）：弱点 0 / 面板抗性 / 非弱点默认抗性."""
+        """基础抗性 + `res_<element>` 修饰：弱点 0 / 面板抗性 / 非弱点默认后同位加算."""
         if dmg_type and dmg_type in self.effective_weakness(target):
-            return 0.0
-        if dmg_type in target.actor.stats.resistance:
-            return target.actor.stats.resistance[dmg_type]
-        return self._rb.constants["non_weakness_res"]
+            base = 0.0
+        elif dmg_type in target.actor.stats.resistance:
+            base = target.actor.stats.resistance[dmg_type]
+        else:
+            base = self._rb.constants["non_weakness_res"]
+        if not dmg_type:
+            return base
+        return base + float(self.effective_stats(target).get(f"res_{dmg_type}", 0.0))
 
     # ------------------------------------------------------------------
     # 效果命中判定（§4.7：debuff/dot/control 施加前概率闸）
@@ -440,7 +444,7 @@ class SettlementPipeline:
           effective_stats，不取主人+召唤物并集（主人面板已含一切加成）；主人查不到
           （未注入反查/裸件直调）回退施放者自身面板。灵砂 1222 浮元族，R-LS1 收官）
         - incoming_heal（受治疗量变化——加成为正、降低为负，如萨姆领域）：**受疗者** effective_stats
-        封顶 = 受疗者有效生命上限（与 engine heal_self/复活同口径）。
+        封顶 = 受疗者有效生命上限与噬命可回复上限的较小者（mechanics 11 §11.9）。
         事件（on_hp_increase）由调用方（引擎侧）发射——pipeline 纯结算不持 bus。
         """
         src = self._as_state(source)
@@ -467,10 +471,14 @@ class SettlementPipeline:
         # healBonusMulti 从公式 trace 中间节点取（(基数) * (1+加成) 根节点的右子树）——展示层不抄公式
         heal_multi = outcome.trace["children"][1]["value"]
         old = tgt.current_hp
-        # 封顶 = 受疗者有效生命上限；**超上限目标治疗不压血**（忆灵/召唤物 HP 继承口径
-        # 可超 effective 上限——min 下钳会把 HP 压回上限=治疗变扣血：actual 取 max(0, …)，
-        # 超出部分全计溢出 excess；昔涟 1415 德谬歌/小伊卡组 e2e 钓出）
-        new = min(te["hp"], old + value)
+        # 封顶 = 有效生命上限与噬命可回复上限的较小者；**超上限目标治疗不压血**
+        # （忆灵/召唤物 HP 继承可超 effective 上限，噬命期间当前 HP 也可已高于可回复上限——
+        # min 下钳会把 HP 压回上限=治疗变扣血：actual 取 max(0, …)，超出部分全计溢出 excess）。
+        recoverable_ratio = min(
+            float(self._rb.constants["recoverable_hp_reduction_cap"]),
+            max(0.0, float(te.get("recoverable_hp_reduction", 0.0))))
+        recoverable_cap = te["hp"] * (1.0 - recoverable_ratio)
+        new = min(te["hp"], recoverable_cap, old + value)
         actual = max(0.0, new - old)
         tgt.current_hp = max(old, new)
         return SettleResult(value=value, node={
@@ -822,9 +830,18 @@ class SettlementPipeline:
             raise ValueError(
                 f"通用 settle：route[{category!r}] 无 settle 声明"
                 f"（新伤害类别 = rulebook 加 route/settle 数据，引擎零改动）")
-        return _SettleCtx(self, category, source, target, action=action,
-                          skill_level=skill_level, modifier=modifier,
-                          element=element, params=params, shared=shared).run()
+        target_state = self._as_state(target)
+        result = _SettleCtx(self, category, source, target_state, action=action,
+                            skill_level=skill_level, modifier=modifier,
+                            element=element, params=params, shared=shared).run()
+        fixed_bars = max((m.fixed_hp_bars for m in target_state.modifiers.values()), default=0)
+        if fixed_bars > 0:
+            fixed_value = self.effective_stats(target_state)["hp"] / fixed_bars
+            if self._rb.route[category]["settle"].get("hp_deduct"):
+                # run() 已按原公式扣血，替换为固定 HP 条时只补差值，避免 DoT 漏扣/错扣。
+                target_state.current_hp += result.value - fixed_value
+            return replace(result, value=fixed_value)
+        return result
 
     def _settle_composition(self, category: str) -> "_SettleComposition":
         """类别组合静态分析（缓存）：公式引用的每个标识符分派三种取值形态——

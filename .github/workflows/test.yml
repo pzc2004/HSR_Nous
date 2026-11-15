@@ -10,10 +10,10 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - uses: actions/setup-node@v4
         with:
-          # 钉小版本：2026-10-14 node v26.12.0 发布当天起，oracle 对拍两测试
-          #（optimizer_not_covered 族）在 CI 全挂、26.11.1 全绿——与 optimizer
-          # commit 钉死同原则（运行时也进钉死面；v26.12.0 行为差待查，查清前锁版）
-          node-version: 26.11.1
+          # 钉小版本：v26.12.0 行为差已根治——c5219e8 起 oracle 判定走结构化
+          # 错误契约、不再读 stderr 文本；本机 26.12.0 实证对拍族 674 全绿。
+          # 钉死哲学不变：钉在已验证版本，不 float。
+          node-version: 26.12.0
       # 本地与 CI 共用同一份环境准备：Release 数据快照、生成件、optimizer、
       # Playwright 与项目包均由脚本统一安装，避免两套步骤漂移。
       - name: 统一测试环境准备

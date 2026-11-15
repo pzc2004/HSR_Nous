@@ -41,7 +41,7 @@ class ExpressionError(ValueError):
 # 预处理：C 三元、布尔运算符、命名空间
 # ---------------------------------------------------------------------------
 
-_NS_PATTERN = re.compile(r"\$(self|resource|event|target|build|prev|last|team|it|modifier|mod|snapshot)\b")
+_NS_PATTERN = re.compile(r"\$(self|resource|event|target|build|prev|last|team|it|modifier|mod|snapshot|level)\b")
 
 
 def _convert_ternary(expr: str) -> str:
@@ -176,10 +176,12 @@ def _unmask_strings(expr: str, literals: List[str]) -> str:
 #: 13_validator §13.5.2 + 22_syntax_reference §22.4/§22.10 为镜像复述，
 #: 一致由 tests/test_doc_lint.py 词表闸保证——改白名单只改这里）
 EFFECT_FUNCTIONS = frozenset(
-    {"min", "max", "abs", "round", "clamp", "sum", "chance", "in_zone", "stacks",
-     "enemies_alive", "has_modifier", "count", "unique_sources", "mechanic_chance",
-     "actor_type_of", "hp_of", "max_hp_of", "resource_of", "count_team", "stat_of",
-     "controlled", "path_of", "has_summon", "in_group", "element_of", "who_has",
+    {"min", "max", "abs", "round", "clamp", "sum", "chance", "roll", "in_zone", "stacks", "sum_stacks",
+     "modifier_duration",
+     "enemies_alive", "has_modifier", "modifier_source", "count", "count_selected", "count_modifier", "unique_sources", "mechanic_chance",
+     "actor_type_of", "hp_of", "max_hp_of", "toughness_of", "resource_of", "dynamic_of", "count_team", "stat_of",
+     "has_pending_one_more", "turn_owner_of", "position_of", "side_size", "position_delta", "neighbor_of",
+     "base_stat_of", "controlled", "action_disabled", "path_of", "has_summon", "in_group", "element_of", "who_has", "character_id", "monster_id", "monster_rank", "monster_unique_id",
      "elation_of",
      "broken_of", "has_debuff", "debuff_count", "dot_count", "actor_alive",
      "weakness_count", "has_stat_penalty", "has_shield", "shielded_count",

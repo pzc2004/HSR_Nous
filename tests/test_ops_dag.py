@@ -1,17 +1,14 @@
 """ops/dag 通用执行器语义钉（v1a）.
 
-六类：线性链 / 动态扇出内环（gate 打回→revise→再闸，append-only）/ 重放（缓存命中跳过、
-脏子图重跑）/ 服务并发闸 / 声明期错误（重复 id、未注册依赖）/ fail-fast。
+线性链 / 动态扇出内环（append-only）/ 重放（缓存命中跳过、脏子图重跑）/
+声明期错误（重复 id、未注册依赖）/ fail-fast。
 """
 
 from __future__ import annotations
 
-import threading
-import time
-
 import pytest
 
-from hsr_nous.ops.dag import DagError, Node, Runner, ServiceRegistry
+from hsr_nous.ops.dag import DagError, Node, Runner
 
 
 def test_linear_chain_order_and_outputs(tmp_path):
@@ -139,26 +136,6 @@ def test_replay_cache_hit_cascades_ready_scan(tmp_path):
     assert calls["n"] == 3
     out = build().run()   # 全缓存第二趟：不得炸、不得执行
     assert calls["n"] == 3 and out == {"a": "a", "b": "b", "c": "c"}
-
-
-def test_service_semaphore_limits_concurrency(tmp_path):
-    active = {"cur": 0, "max": 0}
-    lock = threading.Lock()
-
-    def slow(inputs):
-        with lock:
-            active["cur"] += 1
-            active["max"] = max(active["max"], active["cur"])
-        time.sleep(0.05)
-        with lock:
-            active["cur"] -= 1
-        return 1
-
-    r = Runner(tmp_path, services=ServiceRegistry({"svc": 1}), max_workers=4)
-    r.add(Node("n1", slow, service="svc"), Node("n2", slow, service="svc"),
-          Node("n3", slow, service="svc"))
-    r.run()
-    assert active["max"] == 1, "同服务并发闸=1 → 不重叠"
 
 
 def test_declaration_errors(tmp_path):

@@ -125,6 +125,10 @@ def get_stage_hakushin(
         _resolve_stages_dir(stages_dir) / "hakushin" / "details" / hak_mode / f"{period_id}.json"
     )
     floors_raw = _load_json(str(path))
+    # Hakushin 详情有两种外层形态：maze 直接是 floor 数组，maze_extra/maze_boss
+    # 则以 {"level": floor 数组} 包装；统一归一为 floor 数组再映射。
+    if isinstance(floors_raw, dict):
+        floors_raw = floors_raw.get("level") or []
 
     floors: List[Dict[str, Any]] = []
     for floor in floors_raw:
@@ -155,6 +159,25 @@ def get_stage_hakushin(
         "source": "hakushin",
         "floors": floors,
     }
+
+
+def list_hakushin_monster_ids(mode: str, *, stages_dir: Optional[str] = None) -> List[str]:
+    """列出某玩法全部 Hakushin 期数引用的敌人实例 ID（去重、排序）.
+
+    与 MonsterTemplateConfig 的模板花名册不同：关卡可引用同模板的多阶段/多变体
+    MonsterID。生成 stage 前必须让敌人模板覆盖本集合，否则引用侧无法编译。
+    """
+    monster_ids: set[str] = set()
+    for period in list_stages(mode, stages_dir=stages_dir):
+        if period["source"] != "hakushin":
+            continue
+        data = get_stage_hakushin(mode, period["id"], stages_dir=stages_dir)
+        for floor in data["floors"]:
+            for side in floor["sides"]:
+                for event in side:
+                    for monster in event.get("monster_list") or []:
+                        monster_ids.update(str(v) for v in monster.values() if v)
+    return sorted(monster_ids)
 
 
 def get_stage_buh(
