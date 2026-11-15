@@ -276,7 +276,7 @@ actor:
 | `variable_bindings` | `List[str]` | 按 build 查表/覆盖变量——**未落地**（同上，写了编译期炸；绑定层未接线） | `15_data_separation.md` |
 | `summoner_id` | `str` | 召唤者 actor_id（仅召唤物/忆灵；代码真身字段名，缺省 `""`）——**已落地**（受击回能归召唤者用） | `12_summon.md` |
 | `summons` | `Dict[str, SummonDef]` | **召唤物定义块**（模板顶层键，已落地 v1.2）：`{summon_actor_id: {name, inheritance, base_stats, capabilities, actions, hooks, max_hp_ratio, custom_resources}}`——`inheritance` = `"full"`（默认，召唤时继承召唤者 Layer-1 编译期面板）/ `"none"`（用自带 base_stats）/ stat 字段名列表（部分继承）；`max_hp_ratio` = hp 覆写为召唤时刻召唤者有效生命上限 × 比例（正浮点，与 inheritance 的 hp 分量覆盖关系，语义见 `12_summon.md` §12.1 末）；`custom_resources` = 召唤物自带资源值块（布场时初始化，见 `12_summon.md` §12.5）；`actions`/`hooks` 与角色模板同构同闸；triggered 行为 = 召唤物自身 hooks + `trigger_action`（不立新描述层） | `12_summon.md` |
-| `summon_flags`（`capabilities`） | `Dict[str, bool]` | 召唤物能力闸（summons 块内 `capabilities` 键 → 编译烘焙为 Actor.summon_flags）：`av`（上行动条）/ `enemy_targetable` / `ally_targetable` / `taunt`——**默认全开**，仅技能文本明确否认的逐实例显式 `false`（小伊卡 `av: false`、Netherwing `enemy_targetable: false` 族） | `12_summon.md` §12.4 |
+| `summon_flags`（`capabilities`） | `Dict[str, bool]` | 召唤物与敌人模板能力闸（summons 块或敌人模板 `capabilities` 键 → 编译烘焙为 Actor.summon_flags）：`av`（上行动条）/ `enemy_targetable` / `ally_targetable` / `taunt`——**默认全开**，仅技能文本明确否认的逐实例显式 `false`（小伊卡 `av: false`、Netherwing `enemy_targetable: false`、Cirrus Soulsplit 族）；`enemy_targetable: false` 同时排除单体、AoE 与通用 hook 的敌方目标池，但不用于敌方选同阵营友方 | `12_summon.md` §12.4；敌人实例见 `14_policy.md` |
 | `behavior` | `SummonBehavior?` | 召唤物行为模式（仅 `actor_type: "summon"`）——**不立**（压缩裁决 2026-09-06：independent/triggered 由 `capabilities.av` + 召唤物自身 hooks 组合表达） | `12_summon.md` |
 | `special_mechanics` | `List[MechanicDef]?` | 召唤物/忆灵特有机制描述——**不立**（同上：复用 summons 块的 `hooks`） | `12_summon.md` |
 | `relic_set_effects` | `List[Effect]` | 已激活遗器套装效果 | `06_relics.md` |
@@ -400,20 +400,21 @@ actions:
 | `ult_consume_amount` | `float` | **实际扣量 ≠ 门槛**时显式声明（昔涟 141503 门槛 24 扣 12 族——fandom energy_cost 与 params #4 双源）；缺省 `0` = 与 `ult_cost_amount` 同（门槛=扣量全扣，遐蝶新蕊族口径）。仅特殊充能语境有意义 |
 | `ult_quick_cast` | `bool` | **免确认立即释放**：按下即放、不进确认态（白厄变身/遐蝶召唤/银狼LV.999 族）。与机制类型无关——阿格莱雅变身反例：变身 ≠ 免确认；游戏设计逐角色定，必须显式标注，缺省 `false` 进确认态 |
 | `split` | `str` | `""`（默认）/ `"even"`：分配轴——总伤按结算时存活目标数均分，逐目标各自跑公式（05_effects §split；白厄最后一击、赛飞儿族） |
-| `instances` | `int` | 多段段数（scaling/toughness_dmg 均为每段值；段间目标死亡后续段落空——有下波则**转波续段**（续段执行 2026-09-07 落地：段间全灭时推进波次重解析目标继续，黄泉族砍穿波次；无下波才鞭尸损失） |
+| `instances` | `int` | 多段段数（scaling/toughness_dmg 均为每段值，toughness_dmg 允许小数且编译不截断；段间目标死亡后续段落空——有下波则**转波续段**（续段执行 2026-09-07 落地：段间全灭时推进波次重解析目标继续，黄泉族砍穿波次；无下波才鞭尸损失） |
 | `segment_confirm` | `bool` | **逐段确认**：`instances > 1` 时第 2 段起每段结算前挂起回决策点等确认（黄泉三段族）。仅手动模式有观察效应；脚本/编译策略与 expected/roll 直通（确定性零影响）。段间换目标与段级变体见下两键 |
 | `instance_variants` | `List[Dict?]` | **段级变体**（黄泉 3 单刀+1 群攻混合段型族）：下标对齐段序逐段覆写 `{target_type, scaling, damage_type, toughness_dmg}`（`None`=该段用基础行动，未列字段沿用基础行动） |
 | `segment_choice` | `bool` | **逐击选招**（飞霄族）：每段的变体是一次真决策（玩家从 `instance_variants` 选）——蕴含 `segment_confirm`；首段 = 变体 0（ult 按下即首段），选招决策自第 2 段起；脚本/编译策略恒取变体 0（确定性缺省口径）。段间决策（选招/换目标）入决策簿 record 第四位，重放逐段复现 |
 | `energy_grant` | `float` | **受击回能**（per-attack 归属，mechanics 05 §5.1）：命中时受击方回能 = 本值 × 受击方 ERR（档位 5/10/15/20/25；打盾照回、多段逐段、忆灵受击归忆师；默认 0） |
-| `scaling_blast` / `toughness_dmg_blast` | 按等级数组 / `int?` | 扩散副目标倍率表/削韧（None=副同主/副=主一半） |
+| `scaling_blast` / `toughness_dmg_blast` | 按等级数组 / `float?` | 扩散副目标倍率表/削韧（None=副同主/副=主一半）；`blast` 与 `bounce_blast` 共用，`bounce_blast` 每段重选主目标并命中其相邻单位 |
 | `scaling` 行键 `elation` | 按等级数组 | **欢愉技纯倍率**（行含 `elation` 键即整段走 `elation_damage` 路由：比例量纲不基于角色属性（mechanics 02 §2.14 abilityMultiplier），`punchline_source` 恒取阿哈笑点池实时值（21_elation.md §21.2 定槽——欢愉技=实时池）；与 atk/hp/def 行键不混写（一段一路由），`action_type: "elation_skill"` 为正身声明 |
 | `apply_modifiers` | `List[Dict]` | 施放后挂身 modifier（dict 声明→引擎物化；`target: self`（默认）/ `all_enemies` 植入 debuff 族；字段词表见 `04_modifier.md`） |
 | `act_now_targets` | `str` | 立即行动（拉条族）：非空时施放后使指定目标立即行动（`"all_enemies"`=敌方全体，白厄 140809 族） |
 | `toughness_scope` | `str` / `List[str]` | **削韧作用域**（乱破/波提欧"无视弱点属性削减韧性"族）：`""`（默认）= own_element 闸（攻击属性 ∈ 目标有效弱点才可削，植入弱点计入）；`"all"`=无视弱点任意属性可削；元素列表=这些元素无视弱点可削（modifier 携带的动态闸（`toughness_scope`/`toughness_dmg_ratio` 静动合成）未落地——`_MODIFIER_SPEC_KEYS` 无此键，写了编译期炸） |
-| `instances_from_resource` / `instances_per_point` / `instances_cap` | `str` / `float` / `int` | **资源驱动段数**（毁伤族，白厄 140811）：非空时段数 = 该资源当前值 × per_point（消耗前读），cap>0 时封顶 |
-| `consume_all_resource` | `str` | 非空时施放后消耗该资源全部当前值（段数已先读——与 instances_from_resource 配套） |
+| `instances_from_resource` / `instances_base` / `instances_per_point` / `instances_cap` | `str` / `int` / `float` / `int` | **资源驱动段数**（毁伤族，白厄 140811）：非空时段数 = `instances_base` + 该资源当前值 × per_point（消耗前读），cap>0 时封顶；`instances_base` 缺省 0，Obscure Blaze 族用 1 表示“基础 1 击 + 每层追加 1 击” |
+| `scaling_from_resource` / `scaling_per_point` | `str` / `float` | **资源驱动 ATK 倍率增量**：非空时每个 scaling 行的 `atk` 倍率增加“消耗前资源值 × per_point”；与 `consume_all_resource` 配套时先定格倍率和段数再清空，不把增量误拆成额外攻击段 |
+| `consume_all_resource` | `str` | 非空时施放后消耗该资源全部当前值（段数和倍率增量已先读——与 instances_from_resource / scaling_from_resource 配套） |
 | `cleanse_self` | `bool` | 净化：施放后解除自身所有可驱散负面（140811 族） |
-| `prefer_target` | `str` | **机制级优先目标**（词表：`"owner_last_target"`——召唤物"优先召唤者最后攻击的敌人"族，长夜月 Evey 1141301"automatically selects a target, prioritizing the enemy target that Evernight last attacked"首实例，2026-09-07 落地）：非空时目标解析先按词表求值（无法解析——无记录/目标已离场/非召唤物——回落统一决策链：手动 > policy target_rules > 缺省首个存活）；引擎按 `_last_target_by_actor` 逐 actor 记账（`_last_target_id` 的 per-actor 版） |
+| `prefer_target` | `str` | **机制级优先目标**：`"owner_last_target"`=召唤物优先召唤者最后攻击的敌人（长夜月 Evey 1141301 族，引擎按 `_last_target_by_actor` 逐 actor 记账）；`"dot:<kind>"`=优先持有指定 DoT 的目标，`kind` 词表同 `DOT_KIND_ELEMENTS`（`shock`/`wind_shear`/`burn`/`bleed`），判定要求 `modifier_type=="dot"` 且 `dot_element` 命中种类映射（炽燃徘徊者 Combustion Slash 优先灼烧目标首实例）。非空时目标解析先求值；无记录、目标已离场或无匹配 DoT 等无法解析情况回落各侧既有目标链（我方：手动 > policy target_rules > 缺省首个存活；敌方：强制嘲讽/锁定 > 嘲讽加权） |
 | `level_key` | `str` | 倍率表取档键：非空时按此键读 `skill_levels`（如 `"talent"`——追加攻击倍率跟天赋级；缺省按 action_type 映射）。hook/modifier 侧系数的等级取档不走本键——用模板 `skill_params` 块 + `param()` 编译期引用（`05_effects.md` §5.1） |
 | `available_if` | `str` | **行动级可用条件**（合法性表达式，2026-09-07 落地——"条件不满足则技能不可用/被替换"族）：非空时该 action 进合法行动集前现场求值，假 = 不进合法集（政策/手动/web choices/召唤自动回合同一漏斗只读过滤，时序在形态机注入之后；终结技窗口 ready 清单同闸）。语境：`$self` = 行动方（hook 同 NS）+ `res_<rid>` 自身资源平铺（hook condition 同口径）+ `22_syntax_reference.md` §22.4 hook 函数族（`has_modifier` / `resource_of` / `controlled` / `count_team` / `stat_of` 等跨 actor 读）。**在场换技能 = 同槽双技互斥声明**（纯合法性替换，非形态机——state_config entry 是变身语义会误 `end_current_turn` + 授倒计时）：遐蝶 140702 `available_if: "actor_alive('1407_netherwing') < 1"` ↔ 140709 `>= 1`（官方"若死龙在场，战技变为骸爪"——在场判定走 `actor_alive` 谓词，2026-09-17 闩绝育后唯一通道）；**施放条件 = 单技门槛**：长夜月 1141307"忆质 ≥16 且不受控" `available_if: "resource_of('1413', 'memoria') >= 16 && !controlled('1413')"`。编译期预编译 + `$self` 字段闸（`hit_condition` 同口径，`13_validator.md` §13.3）；运行期求值失败按不可用 + ⚠ 战斗日志（同口径） |
 

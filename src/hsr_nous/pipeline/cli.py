@@ -126,7 +126,7 @@ def _update_build(args) -> Dict[str, str]:
 
 
 def _update_enemies(args) -> Dict[str, str]:
-    """enemies 域：tbgd 五件 + theBowja 冻结源备料（一次性快照）+ Fandom 语义."""
+    """enemies 域：tbgd 表/Ability/AI + theBowja 冻结备料 + Fandom 语义."""
     from hsr_nous.pipeline.enemies.update import TBGD_FILES, _GITLAB_RAW
     from hsr_nous.pipeline.enemies.update import run_update as tbgd_update
     from hsr_nous.pipeline.paths import turnbasedgamedata_dir
@@ -222,9 +222,9 @@ def _check_build(args) -> List[str]:
 def _check_enemies(args) -> List[str]:
     from hsr_nous.pipeline.paths import enemies_dir, turnbasedgamedata_dir
 
-    lines = ["[enemies] 敌人域（turnbasedgamedata 五件 + theBowja 冻结备料）"]
+    lines = ["[enemies] 敌人域（turnbasedgamedata 五表 + 引用 ConfigAI + theBowja 冻结备料）"]
     mf = turnbasedgamedata_dir() / "manifest.json"
-    lines.append(f"  tbgd 五件: 本地下载于 {_fmt_ts(_manifest_updated_at(mf))}"
+    lines.append(f"  tbgd 五表 + 引用 ConfigAI: 本地下载于 {_fmt_ts(_manifest_updated_at(mf))}"
                  + ("" if mf.exists() else "（无 manifest——未下载）"))
     bowja = enemies_dir() / "enemies.json"
     lines.append(f"  theBowja（冻结保留）: "

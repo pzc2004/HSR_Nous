@@ -11,22 +11,33 @@ effect_type 编译期即炸（不允许静默吞）。文档侧登记见 `docs/0
 ENGINE_EFFECT_TYPES = frozenset({
     "apply_modifier",    # 挂 modifier（dict 声明→物化）
     "remove_modifier",   # 摘除 modifier
+    "absorb_modifier",   # 按名称吸收 modifier：累计层数入持有者资源并摘除
     "adjust_stacks",     # 层数增减（clamp [0, max_stack]）
     "deal_damage",       # 直伤（scaling_atk/scaling_hp 单行倍率）
+    "barrage_damage",    # 右侧优先的连续攻击；重复目标追加 repeat_scaling_atk 段
+    "random_choice",     # options 中随机执行一个 effect（expected 取首项）
     "break_damage",      # 击破伤害（通用 settle "break" 路由 × ratio）
     "trigger_dot",       # 强制结算目标 DoT（卡芙卡族；不消耗 duration，on_dot_retrigger 照发；
                          # scope="all"（缺省全结）/"self"/modifier_id + dot_element 属性窄化可选；
                          # ratio=引爆比例（缺省 1.0——「立即产生原伤害 X%」族，卢卡 111104 首实例））
     "adjust_duration",   # modifier 时长 ±N（≠ refresh 重置满值；调到 0 按到期移除——刃族）
     "add_toughness_bar", # 追加韧性条（03_actor §3.10 虚韧性族机制赋予；运行期追加按加入序承接）
-    "trigger_action",    # 代放/复制行动（可选 scaling_atk 动态倍率覆写）
+    "restore_toughness", # 恢复韧性至上限并解除击破态（bar_index 回主条，追加条保留）
+    "reduce_toughness",  # 固定削韧（amount + floor 保底；toughness_lock 与 bars_exhausted 同闸）
+    "trigger_action",    # 代放/复制行动（可选 scaling_atk 动态倍率覆写、target 强制主目标）
     "gain_resource",     # 自定义资源 +=（发 on_resource_gain）
     "set_resource",      # 自定义资源直接设值
+    "set_dynamic_value", # ConfigAI 动态值直接设值（dynamic_key + amount，写敌方 policy 运行态）
+    "bind_roll",        # 执行帧共享掷骰绑定锚（roll_key + 可选 scale——编译器概率分支
+                        # 翻译前置绑定，23_event_hook_system §23.15；roll 模式采主流、
+                        # expected 绑 0.5 下邻浮点，与 mechanic_chance 期望口径一致）
+    "once_per_battle",  # 战斗级 latch（latch_id 已存在则终止当前 hook 剩余效果）
     "refund_bank",       # bank 返还（16 §16.12 糖展开原语：<rid>_bank → <rid> clamp 回填不回流）
     "gain_skill_point",  # 战技点 +=（可携 overflow_to——溢出恢复转记资源池，花火 1130603 族）
     "set_sp_max",        # 战技点上限覆写（state.sp_max_override——花火天赋「上限额外增加」族首实例）
     "refill_skill_point",  # 溢出回补（from_resource 记录池补足至上限——花火 1130603 族）
     "gain_energy",       # 回能（可走 err_exempt 豁免 ERR）
+    "consume_energy",    # 扣能（amount 非负，min(amount, 当前能量)，不走 on_gain_energy）
     "heal_self",         # 自疗（hp_scaling=ratio，走统一治疗管线）
     "heal",              # 治疗（target 选择器 + ratio=施放者 HP 比例，走统一治疗管线——忆灵/丰饶族）
     "set_hp_to_percent", # HP 设为上限×比例（可致死，走死亡检查）
@@ -34,6 +45,7 @@ ENGINE_EFFECT_TYPES = frozenset({
                          # 发 on_hp_decrease reason='drain'，不触发伤害类 hook——遐蝶耗血族）
     "summon",            # 召唤物入场（summon_id → 布场+上行动条+actor_enter；12_summon）
     "dismiss_summon",    # 召唤物离场（summon_id → actor_exit reason=dismiss）
+    "leave_battle",      # 非击杀离场/逃跑（actor_exit reason=flee，不发 on_kill）
     "grant_extra_turn",  # 授予额外回合
     "immediate_action",  # 立即行动（剩余距离置 0 到顶，无视推条；普通回合口径）
     "delay_action",      # 行动延后（amount 百分数）
@@ -79,6 +91,7 @@ POLICY_SELECTOR_DICT_TYPES = frozenset({"min", "max", "random", "has_modifier", 
 #: hook effects 的已知表达式槽位：字符串值按白名单表达式编译期预编译（B8：
 #: 非法表达式编译期炸——condition 早有闸，effects 数值槽同口径）
 EFFECT_EXPR_SLOTS = frozenset({
-    "amount", "ratio", "scaling_atk", "scaling_hp", "delta", "percent",
+    "amount", "ratio", "scaling_atk", "scaling_hp", "delta", "percent", "floor",
     "toughness_dmg", "punchline_source", "pool_override", "elation",
+    "instances_expr", "repeat_scaling_atk", "scale",
 })

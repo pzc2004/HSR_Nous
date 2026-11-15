@@ -77,6 +77,64 @@ class TestEffectTypeWhitelist:
             BuildCompiler()._validate_effects(
                 [{"effect_type": "deal_damage", "scaling_atkk": 1.0}], "模板 X")
 
+    def test_set_dynamic_value_required_fields(self):
+        compiler = BuildCompiler()
+        compiler._validate_effects([{
+            "effect_type": "set_dynamic_value", "dynamic_key": "Phase_Flag", "amount": 2,
+        }], "模板 X")
+        with pytest.raises(ValueError, match="dynamic_key 不能为空"):
+            compiler._validate_effects([{
+                "effect_type": "set_dynamic_value", "dynamic_key": "", "amount": 2,
+            }], "模板 X")
+        with pytest.raises(ValueError, match="缺 amount"):
+            compiler._validate_effects([{
+                "effect_type": "set_dynamic_value", "dynamic_key": "Phase_Flag",
+            }], "模板 X")
+
+    def test_set_dynamic_value_amount_target_validation(self):
+        compiler = BuildCompiler()
+        compiler._validate_effects([{
+            "effect_type": "set_dynamic_value", "target": "self", "dynamic_key": "_MaxHP",
+            "amount": "max_hp_of($target)",
+            "amount_target": {"pool": "allies", "where": "hp_of($it) > 0"},
+        }], "模板 X")
+        with pytest.raises(ValueError, match="未知 amount_target 选择器"):
+            compiler._validate_effects([{
+                "effect_type": "set_dynamic_value", "dynamic_key": "X", "amount": 1,
+                "amount_target": "not_a_selector",
+            }], "模板 X")
+        with pytest.raises(ValueError, match="未知键 'amount_target'"):
+            compiler._validate_effects([{
+                "effect_type": "deal_damage", "amount": 1, "amount_target": "self",
+            }], "模板 X")
+
+    def test_once_per_battle_requires_latch_id(self):
+        compiler = BuildCompiler()
+        compiler._validate_effects([{
+            "effect_type": "once_per_battle", "latch_id": "bitter_fracture",
+        }], "模板 X")
+        with pytest.raises(ValueError, match="latch_id 不能为空"):
+            compiler._validate_effects([{
+                "effect_type": "once_per_battle", "latch_id": "",
+            }], "模板 X")
+
+    def test_absorb_modifier_required_fields(self):
+        compiler = BuildCompiler()
+        compiler._validate_effects([{
+            "effect_type": "absorb_modifier", "modifier_name": "Enkindle",
+            "resource_id": "absorbed_enkindle",
+        }], "模板 X")
+        with pytest.raises(ValueError, match="modifier_name 不能为空"):
+            compiler._validate_effects([{
+                "effect_type": "absorb_modifier", "modifier_name": "",
+                "resource_id": "absorbed_enkindle",
+            }], "模板 X")
+        with pytest.raises(ValueError, match="resource_id 不能为空"):
+            compiler._validate_effects([{
+                "effect_type": "absorb_modifier", "modifier_name": "Enkindle",
+                "resource_id": "",
+            }], "模板 X")
+
     def test_engine_backstop_rejects_unknown_effect_type(self):
         """绕过编译层手写 CompiledHook 时引擎同口径炸（不静默跳过）."""
         eng = _engine()
@@ -1122,3 +1180,42 @@ class TestDiseaseGates:
               "target": {"pool": "allies", "where": "$it.actor_id != '1217'"},
               "amount": "0.2 * stat_of($target, 'max_energy')"}],
             "模板 X", event_ns="on_ultimate")
+
+
+# ---------------------------------------------------------------------------
+# 元素键词表闸（lightning≠thunder 死弱点案：弱点永不命中 → non_weakness_res
+# 暗抗 + 前端词表回退首字母"双料事故"——编译期炸而非运行期沉默）
+# ---------------------------------------------------------------------------
+
+class TestElementVocabGate:
+    def test_inline_enemy_bad_weakness_rejected(self):
+        st = _stage()
+        st["stage"]["enemies"] = [
+            {"actor_id": "e1", "name": "假人", "hp": 1e6, "spd": 100,
+             "max_toughness": 30, "weakness": ["lightning", "ice"]}]
+        with pytest.raises(ValueError, match="weakness 非法值 'lightning'"):
+            compile_encounter(_build(), st, template_roots=TEST_TEMPLATE_ROOTS)
+
+    def test_action_bad_damage_type_rejected(self):
+        b = _build()
+        b["build"]["team"][0]["actions"][0]["damage_type"] = "lightning"
+        with pytest.raises(ValueError, match="damage_type 非法值 'lightning'"):
+            compile_encounter(b, _stage(), template_roots=TEST_TEMPLATE_ROOTS)
+
+    def test_thunder_weakness_passes(self):
+        """canonical 键正控——闸不误伤合法配置。"""
+        st = _stage()
+        st["stage"]["enemies"] = [
+            {"actor_id": "e1", "name": "假人", "hp": 1e6, "spd": 100,
+             "max_toughness": 30, "weakness": ["thunder", "ice"]}]
+        c = compile_encounter(_build(), st, template_roots=TEST_TEMPLATE_ROOTS)
+        assert list(c.stage.enemies[0].stats.weakness) == ["thunder", "ice"]
+
+    def test_inline_enemy_bad_resistance_key_rejected(self):
+        """resistance 键与 weakness 同词表对称面（_base_res 精确查键，错键静默落默认抗）。"""
+        st = _stage()
+        st["stage"]["enemies"] = [
+            {"actor_id": "e1", "name": "假人", "hp": 1e6, "spd": 100,
+             "max_toughness": 30, "resistance": {"Ice": 0.4}}]
+        with pytest.raises(ValueError, match="resistance 非法值 'Ice'"):
+            compile_encounter(_build(), st, template_roots=TEST_TEMPLATE_ROOTS)
