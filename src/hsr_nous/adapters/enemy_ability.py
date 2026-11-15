@@ -149,6 +149,8 @@ TASK_HANDLERS = {
     "RPG.GameCore.TurnInsertAction": "_compile_turn_insert_action",
     "RPG.GameCore.EscapeFromBattle": "_compile_escape_from_battle",
     "RPG.GameCore.RemoveShield": "_compile_remove_shield",
+    "RPG.GameCore.LockHP": "_compile_lock_hp",
+    "RPG.GameCore.SetModifierDynamicValue": "_compile_set_modifier_dynamic_value",
     "RPG.GameCore.LoopExecuteTaskListWithInterval": "_compile_loop_execute",
     "RPG.GameCore.LoopTargetList": "_compile_loop_target_list",
     "RPG.GameCore.AddEntityToTeamFormation": "_compile_add_to_formation",
@@ -2905,6 +2907,35 @@ class AbilityCompiler:
         """LoopTargetList（目标列表遍历）：对每个技能目标逐个执行 TaskList——
         效果本就按目标池逐个应用，直接内联（决策卡 #42）。"""
         self._compile_tasks(task.get("TaskList") or [], ctx, f"{path}/TaskList", stack)
+
+    def _compile_lock_hp(self, task: Dict[str, Any], ctx: _Context,
+                         path: str, stack: Tuple[str, ...]) -> None:
+        """LockHP（锁血阈值）：hp_lock 锁血 modifier（决策卡 #43）。"""
+        target = self._hook_target(self._alias(task) or "Caster", ctx)
+        if target is None:
+            self._issue(ctx, path, "LockHP", f"锁血目标未注册：{self._alias(task)}")
+            return
+        threshold = self._value(task.get("Threshold"), ctx, f"{path}/Threshold")
+        if threshold is None:
+            self._issue(ctx, path, "LockHP", "锁血阈值未注册")
+            return
+        self._add_effect(ctx, {"effect_type": "apply_modifier", "target": target,
+                               "modifier": {"modifier_id": f"ENEMY_LOCK_HP_{self.enemy_id}",
+                                            "name": "锁血", "modifier_type": "buff",
+                                            "hp_lock": True, "lock_threshold": threshold,
+                                            "duration": 0, "max_stack": 1, "dispellable": True}})
+
+    def _compile_set_modifier_dynamic_value(self, task: Dict[str, Any], ctx: _Context,
+                                            path: str, stack: Tuple[str, ...]) -> None:
+        """SetModifierDynamicValue（修改 modifier 动态值）→ set_dynamic_value（决策卡 #43）。"""
+        key = str((task.get("DynamicKey") or {}).get("Value") or "")
+        value = self._value(task.get("NewValue"), ctx, f"{path}/NewValue")
+        target = self._hook_target(self._alias(task), ctx)
+        if not key or value is None or target is None:
+            self._issue(ctx, path, "SetModifierDynamicValue", "动态键/值/目标未注册")
+            return
+        self._add_effect(ctx, {"effect_type": "set_dynamic_value", "target": target,
+                               "dynamic_key": key, "amount": value})
 
     def _compile_add_modifier(self, task: Dict[str, Any], ctx: _Context,
                               path: str, stack: Tuple[str, ...]) -> None:
