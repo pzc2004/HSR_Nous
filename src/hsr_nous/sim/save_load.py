@@ -225,6 +225,7 @@ FIELD_CODECS: Dict[type, Dict[str, str]] = {
 #: 由 from_compiled 重带；完备性闸在 tests/test_save_restore.py 与结构豁免单同钉）
 _ENGINE_RUNTIME_FIELDS = (
     "current_wave",
+    "battle_events",
     "_enemy_policy_state",
     "_last_target_id",
     "_last_target_by_actor",
@@ -413,7 +414,11 @@ def _restore_scheduler(d: Dict[str, Any], actors_by_id: Dict[str, Actor]) -> Sch
 def _save_engine_fields(engine: Any) -> Dict[str, Any]:
     out: Dict[str, Any] = {}
     for fname in _ENGINE_RUNTIME_FIELDS:
-        if fname == "_resource_provenance":
+        if fname == "battle_events":
+            # EventID 是 int 键；列表编码避免 JSON 对象往返把键变成字符串。
+            out[fname] = [[int(event_id), copy.deepcopy(payload)]
+                          for event_id, payload in sorted(engine.battle_events.items())]
+        elif fname == "_resource_provenance":
             # 键是 tuple(actor_id, rid)、值是来源集合——JSON 化转 [aid, rid, sorted(srcs)]
             out[fname] = [[aid, rid, sorted(srcs)]
                           for (aid, rid), srcs in sorted(engine._resource_provenance.items())]
@@ -431,7 +436,10 @@ def _save_engine_fields(engine: Any) -> Dict[str, Any]:
 
 def _restore_engine_fields(engine: Any, d: Dict[str, Any]) -> None:
     for fname in _ENGINE_RUNTIME_FIELDS:
-        if fname == "_resource_provenance":
+        if fname == "battle_events":
+            engine.battle_events = {int(event_id): copy.deepcopy(payload)
+                                    for event_id, payload in d[fname]}
+        elif fname == "_resource_provenance":
             engine._resource_provenance = {(aid, rid): set(srcs)
                                            for aid, rid, srcs in d[fname]}
         elif fname == "_level_state_obj":

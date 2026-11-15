@@ -420,6 +420,19 @@ class TestCompletenessGate:
         blob = json.dumps(eng.save_state(), ensure_ascii=False)
         assert blob and json.loads(blob)["save_version"] == SAVE_VERSION
 
+    def test_battle_event_registry_json_roundtrip(self):
+        """战斗事件注册表在档，且 JSON 往返不丢失整数 EventID 键."""
+        compiled = compile_encounter(_pela_build(), _pela_stage(),
+                                     template_roots=TEST_TEMPLATE_ROOTS)
+        eng = CombatEngine.from_compiled(compiled, mode=MODE_ROLL, seed=42)
+        eng.setup()
+        eng.battle_events[20020] = {"team": "TeamDark", "created": True}
+        save = json.loads(json.dumps(eng.save_state()))
+        restored = CombatEngine.load_state(compiled, save)
+        assert restored.battle_events == eng.battle_events
+        assert all(isinstance(event_id, int) for event_id in restored.battle_events)
+        assert restored.save_state() == save
+
     def test_save_restore_fixed_point(self):
         """存档→恢复→再存档定点：恢复引擎立刻再存档与原存档逐比特全等.
 
