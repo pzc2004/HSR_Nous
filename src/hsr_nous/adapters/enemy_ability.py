@@ -84,7 +84,6 @@ IGNORED_TASK_TYPES = frozenset({
     "RPG.GameCore.SetAttachmentScale",
     "RPG.GameCore.SetAttachmentVisibility",
     "RPG.GameCore.SetAttachEffectTimeSlow",
-    "RPG.GameCore.SetBattleAchievement",
     "RPG.GameCore.SetBattleBGMState",
     "RPG.GameCore.SetCharacterEffectMaterialBlock",
     "RPG.GameCore.SetCharacterPartsVisibility",
@@ -95,7 +94,6 @@ IGNORED_TASK_TYPES = frozenset({
     "RPG.GameCore.SetEntityPosition",
     "RPG.GameCore.SetEntityVisible",
     "RPG.GameCore.SetLocalOffsetAsMoveTarget",
-    "RPG.GameCore.SetMonsterEnergyBarState",
     "RPG.GameCore.SetSimulationSpeedEnable",
     "RPG.GameCore.SetSkillTargetFormationByPos",
     "RPG.GameCore.SetTargetDamageTextVisible",
@@ -110,7 +108,6 @@ IGNORED_TASK_TYPES = frozenset({
     "RPG.GameCore.ShowUIPage",
     "RPG.GameCore.SkillExecutionStart",
     "RPG.GameCore.SkillPerformFinish",
-    "RPG.GameCore.StackStatusDesc",
     "RPG.GameCore.StartAim",
     "RPG.GameCore.StopAim",
     "RPG.GameCore.SyncMonsterLightByCameraDir",
@@ -137,6 +134,15 @@ IGNORED_TASK_TYPES = frozenset({
     "RPG.GameCore.ClearActionBarHighlightEntity",
     "RPG.GameCore.SwitchChallengeBossInfoPanelState",  # UI 面板（Add/Remove 同族已在列）
     "RPG.GameCore.PreloadBattleEventByID",    # 战斗事件预载（表现资产）
+    # —— OnStack 残余复核：原始字段只含动画、模型或 UI 展示 ——
+    "RPG.GameCore.ClearEntityFloatMessage",
+    "RPG.GameCore.HideMonsterSkillInViewMode",
+    "RPG.GameCore.HideSkillDisplayInfo",
+    "RPG.GameCore.RefreshWeaknessUI",
+    "RPG.GameCore.SaveModelWhenDead",
+    "RPG.GameCore.SetIronTombInfinityHPUI",
+    "RPG.GameCore.SetMonsterPhasePointPrefab",
+    "RPG.GameCore.TriggerAnimStateOnModifierCustomEvent",
 })
 
 #: 注册表即节点覆盖矩阵；值为 AbilityCompiler 方法名。
@@ -955,6 +961,8 @@ class AbilityCompiler:
 
     @staticmethod
     def _predicate_target(alias: str) -> Optional[str]:
+        if alias.startswith("Monster_") and alias.endswith("_Self"):
+            return "$self.actor_id"
         return {"ParamEntity": "$it", "AbilityTargetEntity": "$event.target",
                 "Caster": "$self.actor_id", "ModifierOwnerEntity": "$self.actor_id",
                 "LevelEntity": "$level",
@@ -1038,12 +1046,10 @@ class AbilityCompiler:
             namespace = "$self" if target == "$self.actor_id" else target
             return f"dynamic_of({namespace}, '{key}') {operator} {compare}"
         if node_type == "RPG.GameCore.ByCompareMonsterPhase":
-            if alias.endswith("_Self"):
-                alias = "Caster"
-            if alias not in {"", "Caster", "ModifierOwnerEntity"}:
+            if not isinstance(target, str):
                 self._issue(ctx, path, node_type, f"阶段谓词目标未注册：{alias}")
                 return None
-            if "current_phase" in ctx.dynamic_writes and not allow_written:
+            if target == "$self.actor_id" and "current_phase" in ctx.dynamic_writes and not allow_written:
                 self._issue(ctx, path, node_type, "写后读阶段谓词仅限 PredicateTaskList 分支活读")
                 return None
             compare = self._number(predicate.get("CompareValue"), ctx, f"{path}/CompareValue")
@@ -1051,7 +1057,8 @@ class AbilityCompiler:
             if compare is None or operator is None:
                 self._issue(ctx, path, node_type, "阶段比较值/比较符未注册")
                 return None
-            return f"dynamic_of($self, 'current_phase') {operator} {compare}"
+            namespace = "$self" if target == "$self.actor_id" else target
+            return f"dynamic_of({namespace}, 'current_phase') {operator} {compare}"
         if node_type == "RPG.GameCore.ByCompareMonsterRank":
             if target is None:
                 self._issue(ctx, path, node_type, f"怪物等级谓词目标未注册：{alias}")
@@ -1344,14 +1351,12 @@ class AbilityCompiler:
         "RPG.GameCore.ByTargetTeam": "队伍侧判定（TeamDark/Light）与 actor_type 词表映射待实测钉",
         "RPG.GameCore.ByCompareStageType": "关卡类型语境运行时无载体（编译器不知关卡）",
         "RPG.GameCore.ByCompareStageID": "关卡 ID 语境运行时无载体",
-        "RPG.GameCore.ByCompareBattleEventID": "战斗事件体系未收编",
         "RPG.GameCore.ByTargetListIntersects": "目标集交集无表达式原语（ByTargetListAny 已收编）",
         "RPG.GameCore.ByCompareAbilityProperty": "当前技能属性运行时载体缺",
         "RPG.GameCore.ByCompareParamString": "参数串比较语境未收编",
         "RPG.GameCore.ByIsTargetValid": "目标有效性判定语义未钉",
         "RPG.GameCore.ByCompareSomatoType": "体型（somato）体系未收编",
         "RPG.GameCore.ByCharacterSomatoWidthType": "体宽体系未收编",
-        "RPG.GameCore.ByCharacterDamageType": "角色伤害属性谓词载体缺",
         "RPG.GameCore.ByIsTurnActionEntity": "行动实体判定仅回合语境可翻——见语境拒因",
         "RPG.GameCore.ByDistance": "距离体系（站位域）未收编",
         "RPG.GameCore.ByCompareCustomValue": "CustomValue 数值比较语境未收编",
@@ -1754,9 +1759,6 @@ class AbilityCompiler:
                     spec["where"] = self._and_condition(spec["where"], where)
                 else:
                     spec["where"] = where
-        if not self._presentation_only(task.get("FailedTaskList") or []):
-            self._issue(ctx, path, str(task.get("$type")), "Retarget 空候选机制分支未注册")
-            return
         previous = ctx.retarget
         before = len(ctx.damages)
         ctx.retarget = spec
@@ -1765,6 +1767,16 @@ class AbilityCompiler:
             self._issue(ctx, path, str(task.get("$type")), "Retarget 伤害目标尚未接入 Action")
             del ctx.damages[before:]
         ctx.retarget = previous
+        failed_tasks = task.get("FailedTaskList") or []
+        if not self._presentation_only(failed_tasks):
+            where_text = str(spec.get("where", "true"))
+            if str(spec["pool"]).startswith("$event.") or "$event." in where_text:
+                self._issue(ctx, path, str(task.get("$type")), "Retarget 空候选计数不支持事件语境目标")
+                return
+            pool = self._string_literal(str(spec["pool"]))
+            where = self._string_literal(where_text)
+            empty = f"count_selected({pool}, {where}) == 0"
+            self._compile_live_branch(failed_tasks, empty, ctx, f"{path}/FailedTaskList", stack)
 
     def _compile_character_count(self, task: Dict[str, Any], ctx: _Context,
                                  path: str, stack: Tuple[str, ...]) -> None:
@@ -1889,10 +1901,17 @@ class AbilityCompiler:
     #: 任务位未注册节点的逐型拒因（14_policy.md 任务节点长尾节）——default 分支查表，
     #: 不再只报"未注册任务节点"。键=上游 $type 全名，值=写清理由的拒因文本。
     _UNREGISTERED_TASK_REASONS = {
-        "RPG.GameCore.LockHP": "比例阈值锁血——引擎 hp_lock 仅钳 1 血，Threshold 比例语义无载体",
-        "RPG.GameCore.CreateBattleEvent": "战斗事件体系（EventID 时间条）未收编",
         "RPG.GameCore.ModifyDamageData": "攻击数据装配期（伤害结算前属性改写）无发射点",
-        "RPG.GameCore.RetargetList": "多目标重定向逐目标语义待钉（现 Retarget 仅收 MaxNumber=1）",
+        "RPG.GameCore.SwitchOverrideController": "形态控制器切换待核对 state_config 支持范围，不按表现节点忽略",
+        "RPG.GameCore.SetBattleTargetProgress": "关卡目标进度系统未收编，不能按纯 UI 忽略",
+        "RPG.GameCore.SetIronTombProgress": "BOSS 进度语义未钉，不能按纯 UI 忽略",
+        "RPG.GameCore.RetargetList": "多目标重定向列表语义待钉（与已收编的 Retarget 是不同节点）",
+        "RPG.GameCore.RemoveBpFeature": "特殊 BP 特性移除依赖 BP 体系，不能按普通 modifier 摘除近似",
+        "RPG.GameCore.SetDynamicValueByMaxBP": "MaxBP 依赖队伍 BP 上限语义，当前引擎无对应载体",
+        "RPG.GameCore.ApplyOperation": "空节点只有类型名，操作对象与效果未由数据给出",
+        "RPG.GameCore.TaskConfig": "空节点只有类型名，配置内容未由数据给出",
+        "RPG.GameCore.MoveStageOnTargetForward": "Stage 前移与行动值推进的关系待实测，不按 ModifyActionDelay 近似",
+        "RPG.GameCore.IncludeGlobalTaskListTemplate": "引用的全局 TaskListTemplate 不在当前数据闭包，不能凭空展开",
         "RPG.GameCore.SetHP": "ModifyValue 绝对值/比例歧义未钉（锁血配合族，待实测）",
         "RPG.GameCore.DefineHPSharedGroup": "HP 共享组（连坐血条）未收编",
         "RPG.GameCore.AddStageAbilityByName": "行动表动态加装（阶段进化）未收编",
@@ -1904,7 +1923,6 @@ class AbilityCompiler:
         "RPG.GameCore.AttachSkillTypeDisable": "技能类型禁用（形态机 locked_actions 不通用）未收编",
         "RPG.GameCore.TriggerStanceCountDown": "多韧性条倒计时未收编",
         "RPG.GameCore.SetDynamicValueByVariateType": "VariateType 动态值变体（MaxMonsterPhase 等引擎内建枚举）未收编",
-        "RPG.GameCore.SetModifierDynamicValue": "modifier 级动态值命名空间未收编",
         "RPG.GameCore.SetModifierValue": "modifier 值改写（无 ModifierName 自指语境）未钉",
         "RPG.GameCore.AddGlobalDynamicOffset": "关卡级全局偏移表（ConfigName 引用）未收编",
         "RPG.GameCore.SetEntityActionState": "具名实体行动态开关（UniqueName 寻址链）未收编",
@@ -2054,8 +2072,7 @@ class AbilityCompiler:
         target = self._hook_target(alias, ctx)
         # 动态值是怪物专属概念：只允许写敌方侧（自身/关卡/召唤者/召唤物）——
         # 写我方角色（ParamEntity/PartEntity/TargetSequence 可能指到我方）保持显式拒。
-        allowed = {"self", "$level", "summoner_of($self.actor_id)", "summoner_of($it)",
-                   "summoner_of($self.actor_id)"}
+        allowed = {"self", "$level", "summoner_of($self.actor_id)", "summoner_of($it)"}
         minion_pool = {"pool": "enemies", "where": "$it.summoner_id == $self.actor_id"}
         target_ok = (isinstance(target, str) and target in allowed) or target == minion_pool
         if not key or value is None or not target_ok:
@@ -3132,6 +3149,8 @@ class AbilityCompiler:
             nonlocal toughness_lock
             for item in tasks:
                 node_type = str(item.get("$type") or "")
+                if node_type in IGNORED_TASK_TYPES:
+                    continue
                 if node_type == "RPG.GameCore.PredicateTaskList":
                     branch = self._static_monster_predicate(item.get("Predicate") or {})
                     if branch is not None:
@@ -3150,6 +3169,8 @@ class AbilityCompiler:
                             ("FailedTaskList", item.get("FailedTaskList") or [])):
                         branch_condition = predicate if branch_name == "SuccessTaskList"                             else self._negate_condition(predicate)
                         for task in branch_tasks:
+                            if str(task.get("$type")) in IGNORED_TASK_TYPES:
+                                continue
                             if str(task.get("$type")) != "RPG.GameCore.StackProperty":
                                 if str(task.get("$type")) in TASK_HANDLERS:
                                     runtime_stack_tasks.append((task, branch_condition))
@@ -3214,6 +3235,8 @@ class AbilityCompiler:
                 elif node_type in TASK_HANDLERS:
                     # 叠层触发型行为（AddModifier/LockHP 等）——编译为 after_apply_modifier 运行时钩
                     runtime_stack_tasks.append((item, None))
+                else:
+                    self._issue(ctx, path, node_type, "OnStack 回调任务未被定义编译消费")
 
         for callback in callbacks:
             event = callback.get("Event")

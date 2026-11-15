@@ -144,6 +144,70 @@ def _predicate_skill(predicate):
     }
 
 
+@pytest.mark.parametrize(("alias", "namespace"), [
+    ("Monster_W4_Nikadory_00_Self", "$self"),
+    ("CasterSummoner", "summoner_of($self.actor_id)"),
+    ("ParamEntity", "$it"),
+])
+def test_monster_phase_predicate_uses_resolved_target(alias, namespace):
+    skills, sources = _predicate_skill({
+        "$type": "RPG.GameCore.ByCompareMonsterPhase",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": alias},
+        "CompareType": "GreaterEqual",
+        "CompareValue": {"IsDynamic": False, "FixedValue": {"Value": 2}},
+    })
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    assert f"dynamic_of({namespace}, 'current_phase') >= 2" in out["hooks"][0]["condition"]
+
+
+def test_monster_phase_predicate_rejects_target_set():
+    skills, sources = _predicate_skill({
+        "$type": "RPG.GameCore.ByCompareMonsterPhase",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "CasterLeftEntity"},
+        "CompareType": "Equal",
+        "CompareValue": {"IsDynamic": False, "FixedValue": {"Value": 2}},
+    })
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert not out["ok"]
+    assert any("阶段谓词目标未注册" in issue["reason"] for issue in out["unsupported"])
+
+
+def test_monster_self_alias_is_shared_by_modifier_predicate():
+    skills, sources = _predicate_skill({
+        "$type": "RPG.GameCore.ByIsContainModifier",
+        "TargetType": {
+            "$type": "RPG.GameCore.TargetAlias", "Alias": "Monster_W4_Nikadory_00_Self"},
+        "ModifierName": {"Value": "Mark"},
+    })
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    assert "has_modifier($self.actor_id, 'Mark')" in out["hooks"][0]["condition"]
+
+
+def test_summoner_phase_predicate_reads_summoner_runtime():
+    from tests._builders import engine_vs_dummy, make_dummy
+
+    skills, sources = _predicate_skill({
+        "$type": "RPG.GameCore.ByCompareMonsterPhase",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "CasterSummoner"},
+        "CompareType": "Equal",
+        "CompareValue": {"IsDynamic": False, "FixedValue": {"Value": 2}},
+    })
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    boss = make_dummy("boss")
+    part = make_dummy("part")
+    part.summoner_id = "boss"
+    eng = engine_vs_dummy(enemies=[boss, part])
+    runtime = eng._enemy_policy_state.setdefault("boss", {"current_phase": 1})
+    condition = out["hooks"][0]["condition"]
+    payload = {"actor": "part", "action_id": "s1"}
+    runtime["current_phase"] = 2
+    assert eng._hooks._hook_amount(condition, eng.state.actors["part"], payload) == 1.0
+    runtime["current_phase"] = 1
+    assert eng._hooks._hook_amount(condition, eng.state.actors["part"], payload) == 0.0
+
+
 def test_behavior_flag_inverse_is_not_dropped():
     skills, sources = _predicate_skill({
         "$type": "RPG.GameCore.ByContainBehaviorFlag",
@@ -584,6 +648,77 @@ def test_retarget_without_max_number_takes_all_candidates():
     out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
     assert out["ok"] and not out["unsupported"]
     assert out["hooks"][0]["effects"][0]["target"] == {"pool": "allies"}
+
+
+def test_retarget_empty_candidates_run_failed_tasks_in_engine():
+    from hsr_nous.sim.state import Modifier
+    from tests._builders import engine_vs_dummy, make_dummy
+
+    skills, sources = _predicate_skill({})
+    sources["abilities"]["A"]["OnStart"] = [{
+        "$type": "RPG.GameCore.Retarget",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "AllEnemy"},
+        "Predicate": {
+            "$type": "RPG.GameCore.ByIsContainModifier",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "ParamEntity"},
+            "ModifierName": {"Value": "Mark"},
+        },
+        "TaskList": [{
+            "$type": "RPG.GameCore.AddModifier",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "ParamEntity"},
+            "ModifierName": {"Value": "Selected"},
+        }],
+        "FailedTaskList": [{
+            "$type": "RPG.GameCore.AddModifier",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+            "ModifierName": {"Value": "Fallback"},
+        }],
+    }]
+    sources["modifiers"] = {
+        "Mark": {},
+        "Selected": {"BehaviorFlagList": ["RemoveWhenCasterDead"]},
+        "Fallback": {"BehaviorFlagList": ["RemoveWhenCasterDead"]},
+    }
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    effects = out["hooks"][0]["effects"]
+    assert effects[0]["target"] == {
+        "pool": "allies", "where": "has_modifier($it, 'Mark')"}
+    assert effects[1]["target"] == "self"
+    assert effects[1]["condition"] == (
+        'count_selected("allies", "has_modifier($it, \'Mark\')") == 0')
+
+    eng = engine_vs_dummy(enemies=[make_dummy("source")])
+    source = eng.state.actors["source"]
+    hero = eng.state.actors["hero"]
+    for effect in effects:
+        eng._hooks._run_hook_effect(source, effect, {})
+    assert "Fallback" in source.modifiers and "Selected" not in hero.modifiers
+
+    source.modifiers.clear()
+    hero.modifiers["Mark"] = Modifier(modifier_id="Mark", name="Mark", modifier_type="buff")
+    for effect in effects:
+        eng._hooks._run_hook_effect(source, effect, {})
+    assert "Selected" in hero.modifiers and "Fallback" not in source.modifiers
+
+
+@pytest.mark.parametrize("alias", ["AbilityTargetEntity", "AbilityTargetAdjoinEntity"])
+def test_retarget_empty_fallback_rejects_event_context(alias):
+    skills, sources = _predicate_skill({})
+    sources["abilities"]["A"]["OnStart"] = [{
+        "$type": "RPG.GameCore.Retarget",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": alias},
+        "FailedTaskList": [{
+            "$type": "RPG.GameCore.AddModifier",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+            "ModifierName": {"Value": "Fallback"},
+        }],
+    }]
+    sources["modifiers"] = {"Fallback": {"BehaviorFlagList": ["RemoveWhenCasterDead"]}}
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert not out["ok"]
+    assert any("空候选计数不支持事件语境目标" in issue["reason"]
+               for issue in out["unsupported"])
 
 
 @pytest.mark.parametrize(("alias", "pool", "where"), [
@@ -3969,6 +4104,8 @@ def test_on_stack_conditional_property_compiles_expression():
                 "SuccessTaskList": [{
                     "$type": "RPG.GameCore.StackProperty", "Property": "AttackAddedRatio",
                     "PropertyValue": {"IsDynamic": False, "FixedValue": {"Value": 0.5}},
+                }, {
+                    "$type": "RPG.GameCore.SetMonsterEnergyBarState",
                 }],
                 "FailedTaskList": [{
                     "$type": "RPG.GameCore.StackProperty", "Property": "AttackAddedRatio",
@@ -3985,6 +4122,25 @@ def test_on_stack_conditional_property_compiles_expression():
     expr = mod["stat_exprs"]["atk_pct"]
     assert "dynamic_of" in expr and "?" in expr, f"属性应编译为条件表达式：{expr}"
     assert "0.5" in expr and "0.1" in expr
+
+    callback = sources["modifiers"]["Buff"]["_CallbackList"][0]["CallbackConfig"]
+    for node_type in (
+            "RPG.GameCore.DebugLog",
+            "RPG.GameCore.ClearEntityFloatMessage",
+            "RPG.GameCore.HideMonsterSkillInViewMode",
+            "RPG.GameCore.HideSkillDisplayInfo",
+            "RPG.GameCore.RefreshWeaknessUI",
+            "RPG.GameCore.SaveModelWhenDead",
+            "RPG.GameCore.SetIronTombInfinityHPUI",
+            "RPG.GameCore.SetMonsterPhasePointPrefab",
+            "RPG.GameCore.TriggerAnimStateOnModifierCustomEvent"):
+        callback.append({"$type": node_type})
+    assert AbilityCompiler("fake", skills, sources).compile_skill("Skill01")["ok"]
+    callback.append({"$type": "RPG.GameCore.SwitchOverrideController"})
+    rejected = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert not rejected["ok"]
+    assert any(issue["node_type"] == "RPG.GameCore.SwitchOverrideController"
+               for issue in rejected["unsupported"])
 
 
 def test_turn_insert_action_and_escape_and_remove_shield():
