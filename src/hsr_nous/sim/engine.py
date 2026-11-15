@@ -2663,6 +2663,7 @@ class CombatEngine:
 
     def _run_turn(self, actor_state: ActorState, kind: str) -> None:
         actor = actor_state.actor
+        self._current_turn_actor_id = actor.actor_id
         is_countdown = kind == EXTRA_COUNTDOWN
 
         # 阶段 1 · 回合开始（A 类结算：DOT 跳伤；倒计时类不广播）

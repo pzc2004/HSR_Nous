@@ -38,7 +38,14 @@ IGNORED_TASK_TYPES = frozenset({
     "RPG.GameCore.SetComfortZoneWidthOverride",  # 镜头舒适区（纯表现）
     "RPG.GameCore.OverrideSelectDarkTeamEntityCamera",  # 镜头选目标权重（纯表现）
     "RPG.GameCore.SwitchBossHeadEffType",     # boss 头部特效切换（纯表现）
+    "CLMMOEFOCNP",                            # 自定义 Hint 节点（技能提示，纯表现）
     "RPG.GameCore.DisableHeadLookAtOverride",  # 头部看向动画开关（纯表现）
+    "RPG.GameCore.SetMonsterEnergyBarState",   # 怪物能量条 UI 状态（纯表现）
+    "RPG.GameCore.SetModifierOverrideNameForStatus",  # modifier 状态显示名覆盖（纯表现）
+    "RPG.GameCore.SetBattleUIPauseEnvironmentInfo",   # 战斗 UI 环境信息（纯表现）
+    "RPG.GameCore.SetDawnsEyeWeatherUI",       # 黎明之眼天气 UI（纯表现）
+    "RPG.GameCore.SetBattleAchievement",       # 战斗成就（纯表现）
+    "RPG.GameCore.StackStatusDesc",            # 状态描述文本（纯表现）
     "RPG.GameCore.ChangeTargetModifierEffectState",
     "RPG.GameCore.CharacterChangePhase",
     "RPG.GameCore.CharacterReactionAnimConfig",
@@ -140,6 +147,9 @@ TASK_HANDLERS = {
     "RPG.GameCore.TurnInsertAction": "_compile_turn_insert_action",
     "RPG.GameCore.EscapeFromBattle": "_compile_escape_from_battle",
     "RPG.GameCore.RemoveShield": "_compile_remove_shield",
+    "RPG.GameCore.LoopExecuteTaskListWithInterval": "_compile_loop_execute",
+    "RPG.GameCore.AddEntityToTeamFormation": "_compile_add_to_formation",
+    "RPG.GameCore.SetDynamicEntityParam": "_compile_set_entity_param",
     "RPG.GameCore.DefineDynamicValue": "_compile_define_dynamic",
     "RPG.GameCore.ForceKill": "_compile_force_kill",
     "RPG.GameCore.FireProjectile": "_compile_projectile",
@@ -1193,6 +1203,20 @@ class AbilityCompiler:
                 return None
             expr = f"actor_alive({target})"
             return self._negate_condition(expr) if predicate.get("Inverse") else expr
+        if node_type == "RPG.GameCore.ByTurnOwnerHasPendingOneMore":
+            if target is None:
+                self._issue(ctx, path, node_type, f"再动挂起谓词目标未注册：{alias}")
+                return None
+            return f"has_pending_one_more({target})"
+        if node_type == "RPG.GameCore.ByCharacterDamageType":
+            if target is None:
+                self._issue(ctx, path, node_type, f"伤害属性谓词目标未注册：{alias}")
+                return None
+            element = _element(predicate.get("DamageType"))
+            if not element:
+                self._issue(ctx, path, node_type, "伤害属性词表外")
+                return None
+            return f"element_of({target}) == '{element}'"
         if node_type == "RPG.GameCore.ByCompareHP":
             if alias in {"CasterSummoner", "ModifierOwnerSummoner"}:
                 target = "summoner_of($self.actor_id)"
@@ -1396,14 +1420,11 @@ class AbilityCompiler:
             expr = f"monster_unique_id({target}) == {int(value)}"
             return self._negate_condition(expr) if predicate.get("Inverse") else expr
         if node_type == "RPG.GameCore.ByIsTurnOwnerEntity":
-            if ctx.event not in {"on_turn_start", "on_turn_end", "on_action"}:
-                self._issue(ctx, path, node_type,
-                            f"回合实体谓词需回合/行动事件语境（实得 {ctx.event}）")
+            if target is None:
+                self._issue(ctx, path, node_type, f"回合实体谓词目标未注册：{alias}")
                 return ""
-            if target in {None, "$self.actor_id"}:
-                return "$event.actor == $self.actor_id"
-            self._issue(ctx, path, node_type, f"回合实体谓词目标未注册：{alias}")
-            return ""
+            # 全语境回合归属者（引擎跟踪当前回合 actor，不再限回合/行动事件）
+            return f"turn_owner_of() == {target}"
         return None  # 未接管——走 _UNREGISTERED_PREDICATE_REASONS
 
     def _damage_only_records(self, tasks: Iterable[Dict[str, Any]], ctx: _Context,
@@ -2001,8 +2022,9 @@ class AbilityCompiler:
         # （与 ConfigAI 解释器同口径：Define/Set 均为绝对写，ResetValue/Value 皆写）。
         value = self._value(raw_value, ctx, f"{path}/Value") if raw_value is not None else 0
         alias = self._alias(task)
-        if not alias and task.get("$type") == "RPG.GameCore.SetDynamicValue":
-            # 上游省略 TargetType 的 SetDynamicValue 由施放者持有；ConfigAI 也从自身读取该键。
+        if not alias and task.get("$type") in {"RPG.GameCore.SetDynamicValue",
+                                               "RPG.GameCore.DefineDynamicValue"}:
+            # 上游省略 TargetType 的动态写由施放者持有；ConfigAI 也从自身读取该键。
             alias = "Caster"
         target = self._hook_target(alias, ctx)
         # 动态值是怪物专属概念：只允许写敌方侧（自身/关卡/召唤者/召唤物）——
@@ -2814,6 +2836,43 @@ class AbilityCompiler:
             self._issue(ctx, path, "RemoveShield", f"移除护盾目标未注册：{self._alias(task)}")
             return
         self._add_effect(ctx, {"effect_type": "remove_shield", "target": target})
+
+    def _compile_loop_execute(self, task: Dict[str, Any], ctx: _Context,
+                              path: str, stack: Tuple[str, ...]) -> None:
+        """LoopExecuteTaskListWithInterval（间隔循环执行）：静态 MaxLoopCount 编译期展开；
+        动态次数显式拒（DSL 禁运行时循环，循环只存在于编译期）。"""
+        count = self._number(task.get("MaxLoopCount"), ctx, f"{path}/MaxLoopCount")
+        if count is None or not float(count).is_integer() or count < 1:
+            self._issue(ctx, path, "LoopExecuteTaskListWithInterval",
+                        "循环次数需静态正整数（动态次数不展开）")
+            return
+        for i in range(int(count)):
+            self._compile_tasks(task.get("TaskList") or [], ctx, f"{path}/Loop{i}", stack)
+
+    def _compile_add_to_formation(self, task: Dict[str, Any], ctx: _Context,
+                                  path: str, stack: Tuple[str, ...]) -> None:
+        """AddEntityToTeamFormation（编队加装）：按本敌召唤规格召唤上场（与 summon 同义）。"""
+        if not ctx.summons:
+            return   # 无召唤规格 = 空操作
+        for spec in ctx.summons:
+            self._add_effect(ctx, {"effect_type": "summon", "summon_id": spec["summon_id"]})
+
+    def _compile_set_entity_param(self, task: Dict[str, Any], ctx: _Context,
+                                  path: str, stack: Tuple[str, ...]) -> None:
+        """SetDynamicEntityParam（动态目标绑定）：把动态键绑定到目标实体
+        （DynamicTarget 机制——后续动态目标选择按绑定取目标；决策卡 #39）。
+        仅收简单目标形态（自身/召唤者），复杂形态显式拒。"""
+        key = str(task.get("DynamicKey") or "")
+        target_alias = self._alias({"TargetType": task.get("ParamTargetType")})
+        if not key or target_alias not in {"Caster", "ModifierOwnerEntity",
+                                          "ModifierOwnerSummoner", "CasterSummoner"}:
+            self._issue(ctx, path, "SetDynamicEntityParam",
+                        f"动态目标绑定形态未注册：{target_alias}")
+            return
+        self._add_effect(ctx, {"effect_type": "set_dynamic_target",
+                               "dynamic_key": key,
+                               "target": "self" if target_alias in {"Caster", "ModifierOwnerEntity"}
+                               else "summoner_of($self.actor_id)"})
 
     def _compile_add_modifier(self, task: Dict[str, Any], ctx: _Context,
                               path: str, stack: Tuple[str, ...]) -> None:

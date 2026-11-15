@@ -180,7 +180,7 @@ EFFECT_FUNCTIONS = frozenset(
      "modifier_duration",
      "enemies_alive", "has_modifier", "modifier_source", "count", "count_selected", "count_modifier", "unique_sources", "mechanic_chance",
      "actor_type_of", "hp_of", "max_hp_of", "toughness_of", "resource_of", "dynamic_of", "count_team", "stat_of",
-     "position_of", "side_size", "position_delta", "neighbor_of",
+     "has_pending_one_more", "turn_owner_of", "position_of", "side_size", "position_delta", "neighbor_of",
      "base_stat_of", "controlled", "action_disabled", "path_of", "has_summon", "in_group", "element_of", "who_has", "character_id", "monster_id", "monster_rank", "monster_unique_id",
      "elation_of",
      "broken_of", "has_debuff", "debuff_count", "dot_count", "actor_alive",

@@ -4017,3 +4017,58 @@ def test_turn_insert_action_and_escape_and_remove_shield():
     st.shields.append(ShieldInstance(shield_id="s", name="测试盾", remaining=100))
     eng._hooks._run_hook_effect(st, {"effect_type": "remove_shield", "target": "self"}, {})
     assert not st.shields, "护盾应被移除"
+
+
+def test_loop_execute_and_add_formation_and_entity_param():
+    """循环展开/编队加装/动态目标绑定（决策卡 #39）."""
+    skills = [{"skill_id": "s1", "trigger_key": "Skill01", "param_list": []}]
+    sources = {
+        "character_config": {"SkillList": [{
+            "Name": "Skill01", "SkillType": "Skill",
+            "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "A",
+        }]},
+        "abilities": {"A": {"Name": "A", "OnStart": [
+            {"$type": "RPG.GameCore.LoopExecuteTaskListWithInterval",
+             "MaxLoopCount": {"IsDynamic": False, "FixedValue": {"Value": 2}},
+             "TaskList": [{"$type": "RPG.GameCore.DefineDynamicValue",
+                           "DynamicKey": {"Value": "X"},
+                           "Value": {"IsDynamic": False, "FixedValue": {"Value": 1}}}]},
+            {"$type": "RPG.GameCore.SetDynamicEntityParam",
+             "DynamicKey": "MTest_DynamicTarget",
+             "ReadTargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+             "ParamTargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"}},
+        ]}},
+        "modifiers": {},
+    }
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"], out["unsupported"]
+    effects = [e for h in out["hooks"] for e in h["effects"]]
+    assert sum(1 for e in effects if e["effect_type"] == "set_dynamic_value") == 2, "循环展开两次"
+    assert any(e["effect_type"] == "set_dynamic_target" for e in effects)
+
+    # 运行时：动态目标绑定写入
+    from tests._builders import engine_vs_dummy
+    eng = engine_vs_dummy()
+    eng.setup()
+    st = eng.state.actors["e1"]
+    eng._hooks._run_hook_effect(st, {"effect_type": "set_dynamic_target",
+                                     "dynamic_key": "MTest", "target": "self"}, {})
+    assert eng._enemy_policy_state["e1"]["dynamic_targets"]["MTest"] == "e1"
+
+
+def test_character_damage_type_and_turn_owner_predicates():
+    """伤害属性判定 + 全语境回合归属者（决策卡 #40）."""
+    skills, sources = _predicate_skill({
+        "$type": "RPG.GameCore.ByCharacterDamageType",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "ParamEntity"},
+        "DamageType": "Fire",
+    })
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and "element_of($it) == 'fire'" in out["hooks"][0]["condition"]
+
+    skills2, sources2 = _predicate_skill({
+        "$type": "RPG.GameCore.ByIsTurnOwnerEntity",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+    })
+    out2 = AbilityCompiler("fake", skills2, sources2).compile_skill("Skill01")
+    assert out2["ok"] and "turn_owner_of() == $self.actor_id" in out2["hooks"][0]["condition"]

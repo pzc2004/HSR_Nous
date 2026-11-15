@@ -239,6 +239,7 @@ _ENGINE_RUNTIME_FIELDS = (
     "_resource_provenance",
     "_cond_aura_present",
     "_battle_end_emitted",
+    "_current_turn_actor_id",  # 当前回合归属者（turn_owner_of 直译通道）
     "_level_state_obj",  # 关卡黑板（决策卡 #31）：伪 ActorState（modifier 池）进存档
 )
 
@@ -423,7 +424,8 @@ def _save_engine_fields(engine: Any) -> Dict[str, Any]:
             st = engine._level_state_obj
             out[fname] = None if st is None else _encode(ActorState, st)
         else:
-            out[fname] = copy.deepcopy(getattr(engine, fname))
+            out[fname] = copy.deepcopy(getattr(engine, fname, "") if fname == "_current_turn_actor_id"
+                                       else getattr(engine, fname))
     return out
 
 

@@ -682,6 +682,18 @@ class HookRuntime:
             return [s for s in self._engine.state.actors.values()
                     if s.alive and self._engine._is_enemy(s.actor) == want_enemy]
 
+        def has_pending_one_more(target: Any) -> float:
+            """目标是否有挂起的额外回合（ByTurnOwnerHasPendingOneMore 直译通道）。"""
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
+            handle = self._engine.scheduler._handles.get(st2.actor.actor_id)
+            return 1.0 if any(h == handle for h, _kind in self._engine.scheduler._extra_queue) else 0.0
+
+        def turn_owner_of() -> str:
+            """当前回合归属者 actor_id（ByIsTurnOwnerEntity 全语境直译通道）。"""
+            return str(getattr(self._engine, "_current_turn_actor_id", ""))
+
         def position_of(target: Any, team: Any = "dark") -> float:
             # 站位索引（同侧存活列表序，1 起）——与 blast 相邻判定同口径（存活列表 ±1）。
             # team='dark' 敌方 / 'light' 我方；目标不在该侧/查无返回 0（false-y 安全缺省）。
@@ -891,6 +903,8 @@ class HookRuntime:
                 "mechanic_chance": mechanic_chance, "roll": roll,
                 "actor_type_of": actor_type_of,
                 "hp_of": hp_of, "max_hp_of": max_hp_of, "toughness_of": toughness_of,
+                "has_pending_one_more": has_pending_one_more,
+                "turn_owner_of": turn_owner_of,
                 "position_of": position_of, "side_size": side_size,
                 "position_delta": position_delta, "neighbor_of": neighbor_of,
                 "resource_of": resource_of,
@@ -1148,6 +1162,13 @@ class HookRuntime:
                 # 差量现值走统一读取口径（punchline/certified_banger 重定向——
                 # 队伍账/条目列表；直读 st.resources 会拿持有者空账算错差量）
                 self._engine._gain_resource(t2, rid, target - self._engine._resource_value(t2, rid))
+        elif t == "set_dynamic_target":
+            # 动态目标绑定（SetDynamicEntityParam）：DynamicKey → 目标 actor_id
+            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+                runtime = self._engine._enemy_policy_state.setdefault(t2.actor.actor_id, {
+                    "seq_idx": 0, "cooldown_left": {}, "current_phase": 1,
+                    "dynamic_values": {}, "dynamic_targets": {}})
+                runtime.setdefault("dynamic_targets", {})[str(eff["dynamic_key"])] = t2.actor.actor_id
         elif t == "set_dynamic_value":
             key = str(eff["dynamic_key"])
             # amount_target 只提供 $target 求值语境，写入仍由 target 决定；
