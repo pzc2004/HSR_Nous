@@ -137,6 +137,7 @@ class CombatEngine:
             }
             for actor_id, policy in self._enemy_policies.items()
         }
+        self.battle_events: Dict[int, Dict[str, Any]] = {}  # 战斗事件注册表（决策卡 #44）
         self._level_state_obj = None
         # 召唤物定义注册件（模板 summons 块的编译产物 SummonDef；from_compiled 注入——
         # summon effect 按 summon_id 查表布场，见 12_summon）

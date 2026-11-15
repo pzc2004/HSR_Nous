@@ -690,6 +690,10 @@ class HookRuntime:
             handle = self._engine.scheduler._handles.get(st2.actor.actor_id)
             return 1.0 if any(h == handle for h, _kind in self._engine.scheduler._extra_queue) else 0.0
 
+        def battle_event_exists(event_id: Any) -> float:
+            """EventID 是否已注册（ByCompareBattleEventID 直译通道）。"""
+            return 1.0 if int(event_id) in self._engine.battle_events else 0.0
+
         def turn_owner_of() -> str:
             """当前回合归属者 actor_id（ByIsTurnOwnerEntity 全语境直译通道）。"""
             return str(getattr(self._engine, "_current_turn_actor_id", ""))
@@ -904,6 +908,7 @@ class HookRuntime:
                 "actor_type_of": actor_type_of,
                 "hp_of": hp_of, "max_hp_of": max_hp_of, "toughness_of": toughness_of,
                 "has_pending_one_more": has_pending_one_more,
+                "battle_event_exists": battle_event_exists,
                 "turn_owner_of": turn_owner_of,
                 "position_of": position_of, "side_size": side_size,
                 "position_delta": position_delta, "neighbor_of": neighbor_of,
@@ -1162,6 +1167,10 @@ class HookRuntime:
                 # 差量现值走统一读取口径（punchline/certified_banger 重定向——
                 # 队伍账/条目列表；直读 st.resources 会拿持有者空账算错差量）
                 self._engine._gain_resource(t2, rid, target - self._engine._resource_value(t2, rid))
+        elif t == "create_battle_event":
+            # 战斗事件注册（决策卡 #44）：EventID → 事件标记（ByCompareBattleEventID 判定用）
+            self._engine.battle_events[int(eff["event_id"])] = {
+                "team": str(eff.get("team") or ""), "created": True}
         elif t == "set_dynamic_target":
             # 动态目标绑定（SetDynamicEntityParam）：DynamicKey → 目标 actor_id
             for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
