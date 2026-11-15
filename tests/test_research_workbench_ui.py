@@ -26,6 +26,8 @@ const worldline=worldlineCard({worldline_id:worldlineId,status:'failed',observed
 eq(worldline.includes('失败') && worldline.includes('派生') && worldline.includes('—/92'),'worldline failed card');
 eq(worldline.includes('bad &lt;script&gt;') && !worldline.includes('bad <script>'),'worldline card escapes failure text');
 eq(worldlinePlayerPath(worldlineId)==='/player/'+worldlineId+'/','worldline player path');
+const selection=worldlineSelection({worldline_id:worldlineId},{event_id:'event-1'},'events',65);
+eq(selection.type==='event' && selection.id==='event-1' && selection.investigation===worldlineId && selection.parent_context.worldline_id===worldlineId && selection.parent_context.ordinal===65,'worldline selection contract');
 const turnEvents=[
  {payload:{event_type:'battle_start'}},
  {payload:{event_type:'turn_start',actor_id:'a'},

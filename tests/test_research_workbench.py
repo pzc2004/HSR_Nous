@@ -124,6 +124,41 @@ def test_workbench_read_only_worldlines(tmp_path):
     assert failed_detail["failure_reasons"]
     assert failed_detail["spec"]["derived_from"]["worldline_id"] == completed.worldline_id
 
+    selection = {
+        "type": "event",
+        "id": completed.events[65]["event_id"],
+        "project": "demo",
+        "investigation": completed.worldline_id,
+        "parent_context": {"worldline_id": completed.worldline_id},
+    }
+    focused = client.post("/api/focus", json={"selection": selection})
+    assert focused.status_code == 200, focused.text
+    focused_payload = focused.json()
+    assert focused_payload["selection"] == selection
+    assert focused_payload["target"]["ordinal"] == 65
+    assert focused_payload["target"]["turn"] == 4
+    worldline_focus = client.post("/api/focus", json={"selection": {
+        "type": "worldline", "id": completed.worldline_id,
+    }})
+    assert worldline_focus.json()["target"]["action"] == "select"
+    modifier_focus = client.post("/api/focus", json={"selection": {
+        "type": "modifier",
+        "id": completed.modifiers[0]["modifier_id"],
+        "parent_context": {"worldline_id": completed.worldline_id},
+    }})
+    assert modifier_focus.status_code == 200
+    assert modifier_focus.json()["target"]["ordinal"] == 0
+    assert client.post("/api/focus", json={"selection": {
+        "type": "run", "id": "run-1",
+    }}).status_code == 400
+    assert client.post("/api/focus", json={"selection": {
+        "type": "event", "id": "missing",
+    }}).status_code == 404
+    assert client.post("/api/focus", json={"selection": {
+        "type": "event", "id": "missing",
+        "parent_context": {"worldline_id": completed.worldline_id},
+    }}).status_code == 404
+
     player = client.get(f"/player/{completed.worldline_id}/")
     assert player.status_code == 200, player.text
     assert "HSR_Nous 战斗调试台" in player.text

@@ -26,6 +26,7 @@ from hsr_nous.research.schema import (
     Claim,
     ClaimSubmissionResult,
     EvidenceLink,
+    FocusRequest,
     InvestigationState,
     ResearchContract,
 )
@@ -176,6 +177,43 @@ class ResearchGateway:
     def resolve_evidence(self, link: EvidenceLink) -> dict[str, Any]:
         self._require("allow_read_artifacts")
         return self._store.resolve_evidence(link)
+
+    def focus(self, request: FocusRequest) -> dict[str, Any]:
+        self._require("allow_read_artifacts")
+        selection = request.selection
+        if selection.type == "worldline":
+            artifact = self._store.read_worldline(selection.id)
+            return {
+                **request.to_dict(),
+                "target": {
+                    "type": "worldline",
+                    "worldline_id": artifact.worldline_id,
+                    "action": "select",
+                },
+            }
+        worldline_id = selection.parent_context.get("worldline_id")
+        if not isinstance(worldline_id, str):
+            raise ValueError("event/modifier selection requires parent_context.worldline_id")
+        artifact = self._store.read_worldline(worldline_id)
+        records = artifact.events if selection.type == "event" else artifact.modifiers
+        id_key = "event_id" if selection.type == "event" else "modifier_id"
+        for ordinal, record in enumerate(records):
+            if record[id_key] != selection.id:
+                continue
+            target = {
+                "type": selection.type,
+                "worldline_id": artifact.worldline_id,
+                id_key: selection.id,
+                "ordinal": ordinal,
+                "action": "open",
+            }
+            if selection.type == "event":
+                target["turn"] = sum(
+                    event["payload"].get("event_type") == "turn_start"
+                    for event in artifact.events[:ordinal + 1]
+                )
+            return {**request.to_dict(), "target": target}
+        raise ValueError(f"{selection.type} {selection.id} not found in worldline {worldline_id}")
 
     def list_worldlines(self, limit: int = 50) -> list[dict[str, Any]]:
         self._require("allow_read_artifacts")

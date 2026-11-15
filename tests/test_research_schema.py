@@ -11,9 +11,11 @@ from hsr_nous.research.schema import (
     CLAIM_STATUSES,
     Claim,
     EvidenceLink,
+    FocusRequest,
     MetricSpec,
     ResearchContract,
     RunRecord,
+    Selection,
     canonical_bytes,
     canonical_json,
     canonical_round,
@@ -53,6 +55,21 @@ def test_canonical_round_is_separate_from_raw_storage():
     raw = {"values": [1.23456789, 2]}
     assert canonical_round(raw) == {"values": [1.234568, 2]}
     assert json.loads(canonical_json(raw)) == raw
+
+
+def test_focus_request_round_trip_and_type_validation():
+    request = FocusRequest(Selection(
+        type="event",
+        id="event-1",
+        project="demo",
+        investigation="worldline-1",
+        parent_context={"worldline_id": "worldline-1"},
+    ))
+    assert FocusRequest.from_dict(request.to_dict()) == request
+    with pytest.raises(ValueError, match="Selection type"):
+        Selection(type="run", id="run-1")
+    with pytest.raises(ValueError, match="non-empty"):
+        Selection(type="event", id="")
 
 
 def test_contract_round_trip_and_unknown_field_rejection():

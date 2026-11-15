@@ -13,7 +13,7 @@ from hsr_nous.research.permissions import (
     PermissionDeniedError,
     ResearchGateway,
 )
-from hsr_nous.research.schema import Claim, ClaimSubmissionResult
+from hsr_nous.research.schema import Claim, ClaimSubmissionResult, FocusRequest, Selection
 from tests._research_builders import make_demo_contract
 
 
@@ -57,6 +57,8 @@ def test_worldline_reads_require_artifact_capability(tmp_path):
         gateway.list_worldlines()
     with pytest.raises(PermissionDeniedError):
         gateway.read_worldline("0" * 64)
+    with pytest.raises(PermissionDeniedError):
+        gateway.focus(FocusRequest(Selection(type="worldline", id="0" * 64)))
 
 
 def test_path_permissions_cover_secrets_repo_and_symlinks(tmp_path):

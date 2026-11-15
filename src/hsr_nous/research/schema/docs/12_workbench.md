@@ -19,6 +19,7 @@
 | `GET /api/trials/{trial_id}/reports/{report_id}` | 单候选完整 trial 报告 |
 | `GET /api/worldlines` | 按 worldline_id 排序、带上限的只读世界线摘要 |
 | `GET /api/worldlines/{worldline_id}` | 经完整读时校验的单个 worldline-v1 artifact |
+| `POST /api/focus` | 校验 Selection 并返回事件/modifier 焦点与回合 |
 | `POST /api/evidence` | 只读解析既有 EvidenceLink 到 run/event/final modifier |
 
 不提供任务 start/cancel/resume、任务编辑、任意路径、命令或 artifact 发布入口。非法 ID、证据不匹配和未就绪报告必须显式报错，不能把异常伪装成正常空态。
@@ -66,8 +67,14 @@ completed 世界线通过 `/player/{worldline_id}/` 挂载现有 `sim.web` 战�
 
 点击事件列表时，页面保留该事件的 JSON 详情，并按最近一个 `turn_start` 的事件序计算回合，调用原面板 `/api/goto`。这是 `DebugController` 提供的回合级定位，不宣称精确到单个伤害或 modifier 发生的瞬时状态；没有 `turn_start` 的早期事件跳转到第 0 回合，modifier 详情不做时间跳转。
 
+## Selection / FocusRequest 原型
+
+`Selection` 是 frozen dataclass，字段为 `type + id + project + investigation + parent_context`，当前只支持 `worldline / event / modifier`。`FocusRequest` 只包含一个 selection。`POST /api/focus` 复用 `allow_read_artifacts` 和完整 artifact 读时校验，按 ID 找到真实记录：worldline 返回选择目标，event 返回 `worldline_id + ordinal + turn`，modifier 返回 `worldline_id + ordinal`。未知类型、缺父级或找不到对象均显式失败，不能静默跳错位置。
+
+页面点击事件时先生成 Selection 并调用该 API，再按返回的回合导航；详情中同时保留原始事件 JSON 与 Selection JSON，便于后续 Agent 使用同一对象模型。通用 `focusEvidence(selection)` 复用同一路径选择世界线并打开事件，但当前不涉及 Agent 自动推送或全局 Memory。
+
 世界线深链为 `#/worldline/<64 位小写 hex>`。研究 API 不提供世界线执行、派生或 fork 入口，内存面板中的操作不形成持久研究产物，单条轨迹也不展示为统计结论。
 
 ## 当前限制
 
-不提供任务编辑、世界线执行或派生、fork、人工接管、共享 Memory、常驻 Agent 主动推送；聊天视图与研究视图本期仅标签级并列（「打开研究视图」入口），除上述事件到回合的导航外，不做通用 Selection/FocusRequest 深度联动（Agent 引用对象 → 前端定位高亮）。只读展示本身不提升证据等级，所有结论继续标明 simulated/pending_real_validation 和当前候选集范围。
+不提供任务编辑、世界线执行或派生、fork、人工接管、共享 Memory、常驻 Agent 主动推送；聊天视图与研究视图本期仅标签级并列（「打开研究视图」入口）。Selection 当前仅覆盖上述 worldline / event / modifier，不支持其他证据类型或 Agent 主动 Selection 推送，也不做全局 Selection/FocusRequest 深度联动。只读展示本身不提升证据等级，所有结论继续标明 simulated/pending_real_validation 和当前候选集范围。

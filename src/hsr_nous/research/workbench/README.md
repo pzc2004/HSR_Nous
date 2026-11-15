@@ -30,7 +30,8 @@ hsr-research-web --research-root /path/to/research --port 8001 --no-open
 - run → event / final modifier 的结构化详情和原始 JSON；
 - 世界线列表与详情、随机消费、失败原因、父代 lineage，以及 event / final modifier / final_save 下钻；
 - completed 世界线通过 `/player/{worldline_id}/` 直接挂载原 `sim.web` 面板：单步、连续、速度控制、回退、跳转、断点、终结技和检视均由原 `WebSession/DebugController` 提供；
-- 点击世界线事件时调用原面板 `/api/goto` 跳转到所属回合（回合级定位），同时保留事件 JSON；同一世界线的 iframe 不因详情切换而重建，引擎忙时有限重试。
+- 点击世界线事件时调用原面板 `/api/goto` 跳转到所属回合（回合级定位），同时保留事件 JSON；同一世界线的 iframe 不因详情切换而重建，引擎忙时有限重试；
+- Selection / FocusRequest 原型：支持 `worldline / event / modifier`，`POST /api/focus` 校验真实证据并返回 ordinal 与回合，详情同时展示原始事件和 Selection。
 
 运行中只有部分候选完成时，可先查看对应单候选报告，但不提前生成最终排名。页面持续显示 `simulated / pending_real_validation` 与当前候选集范围。世界线是独立的只读轨迹视图，不冒充 paired 统计证据。
 

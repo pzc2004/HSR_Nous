@@ -6,7 +6,7 @@ import math
 import re
 from collections.abc import Mapping
 from copy import deepcopy
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from numbers import Real
 from types import MappingProxyType, UnionType
 from typing import Any, Union, get_args, get_origin, get_type_hints
@@ -390,6 +390,30 @@ class TrialArtifact(_DataModel):
     status: str
     caveats: tuple[dict[str, Any], ...] = ()
     failure_reasons: tuple[str, ...] = ()
+
+
+SELECTION_TYPES = frozenset({"worldline", "event", "modifier"})
+
+
+@dataclass(frozen=True)
+class Selection(_DataModel):
+    type: str
+    id: str
+    project: str = ""
+    investigation: str = ""
+    parent_context: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.type not in SELECTION_TYPES:
+            raise ValueError(f"unsupported Selection type: {self.type!r}")
+        if not self.id:
+            raise ValueError("Selection id must be non-empty")
+
+
+@dataclass(frozen=True)
+class FocusRequest(_DataModel):
+    selection: Selection
 
 
 @dataclass(frozen=True)

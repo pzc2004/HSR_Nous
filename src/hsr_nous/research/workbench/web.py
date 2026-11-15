@@ -22,7 +22,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Resp
 
 from hsr_nous.common import research_root
 from hsr_nous.research.permissions import ArtifactError, ResearchGateway, open_research_gateway
-from hsr_nous.research.schema import EvidenceLink, canonical_json
+from hsr_nous.research.schema import EvidenceLink, FocusRequest, canonical_json
 from hsr_nous.sim import web as sim_web
 
 _STATIC = Path(__file__).parent / "web_static" / "index.html"
@@ -174,6 +174,14 @@ def create_app(
     @app.get("/api/worldlines/{worldline_id}")
     def worldline(worldline_id: str) -> dict[str, Any]:
         return _read(gateway.read_worldline, worldline_id)
+
+    @app.post("/api/focus")
+    def focus(request: dict[str, Any] = Body(...)) -> dict[str, Any]:
+        try:
+            parsed = FocusRequest.from_dict(request)
+        except (TypeError, ValueError, KeyError) as error:
+            raise HTTPException(400, str(error)) from error
+        return json.loads(canonical_json(_read(gateway.focus, parsed)))
 
     @app.post("/api/evidence")
     def evidence(link: dict[str, Any] = Body(...)) -> dict[str, Any]:
