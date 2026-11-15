@@ -1300,6 +1300,9 @@ class HookRuntime:
         elif t == "dismiss_summon":
             # 召唤物离场（12_summon；未登记/未在场由引擎按 no-op/报错口径处理）
             self._engine.dismiss_summon_actor(str(eff["summon_id"]))
+        elif t == "remove_shield":
+            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+                t2.shields.clear()
         elif t == "leave_battle":
             # 非击杀离场/逃跑：与 summon dismiss 共用 actor_exit 链，但不走 _check_death/on_kill
             for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):

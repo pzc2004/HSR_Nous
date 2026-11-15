@@ -3982,3 +3982,38 @@ def test_on_stack_conditional_property_compiles_expression():
     expr = mod["stat_exprs"]["atk_pct"]
     assert "dynamic_of" in expr and "?" in expr, f"属性应编译为条件表达式：{expr}"
     assert "0.5" in expr and "0.1" in expr
+
+
+def test_turn_insert_action_and_escape_and_remove_shield():
+    """插入行动/逃逸/移除护盾三处理器（决策卡 #38）."""
+    skills = [{"skill_id": "s1", "trigger_key": "Skill01", "param_list": []}]
+    sources = {
+        "character_config": {"SkillList": [{
+            "Name": "Skill01", "SkillType": "Skill",
+            "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "A",
+        }]},
+        "abilities": {"A": {"Name": "A", "OnStart": [
+            {"$type": "RPG.GameCore.TurnInsertAction",
+             "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"}},
+            {"$type": "RPG.GameCore.RemoveShield",
+             "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"}},
+            {"$type": "RPG.GameCore.EscapeFromBattle"},
+        ]}},
+        "modifiers": {},
+    }
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"], out["unsupported"]
+    effects = [e for h in out["hooks"] for e in h["effects"]]
+    assert any(e["effect_type"] == "grant_extra_turn" for e in effects)
+    assert any(e["effect_type"] == "remove_shield" for e in effects)
+    assert any(e["effect_type"] == "leave_battle" and e.get("reason") == "flee" for e in effects)
+
+    # 运行时：remove_shield 清空护盾
+    from tests._builders import engine_vs_dummy
+    from hsr_nous.sim.state import ShieldInstance
+    eng = engine_vs_dummy()
+    eng.setup()
+    st = eng.state.actors["e1"]
+    st.shields.append(ShieldInstance(shield_id="s", name="测试盾", remaining=100))
+    eng._hooks._run_hook_effect(st, {"effect_type": "remove_shield", "target": "self"}, {})
+    assert not st.shields, "护盾应被移除"

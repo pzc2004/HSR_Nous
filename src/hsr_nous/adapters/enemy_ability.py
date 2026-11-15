@@ -137,6 +137,9 @@ TASK_HANDLERS = {
     "RPG.GameCore.DamageByAttackProperty": "_compile_damage",
     "RPG.GameCore.DamageStance": "_compile_damage_stance",
     "RPG.GameCore.DispelStatus": "_compile_dispel_status",
+    "RPG.GameCore.TurnInsertAction": "_compile_turn_insert_action",
+    "RPG.GameCore.EscapeFromBattle": "_compile_escape_from_battle",
+    "RPG.GameCore.RemoveShield": "_compile_remove_shield",
     "RPG.GameCore.DefineDynamicValue": "_compile_define_dynamic",
     "RPG.GameCore.ForceKill": "_compile_force_kill",
     "RPG.GameCore.FireProjectile": "_compile_projectile",
@@ -2786,6 +2789,31 @@ class AbilityCompiler:
                         else "（非 DoT modifier 的相位回调无消费点）"
                         if event != "OnStack" else ""))
             self._issue(ctx, f"{path}/{index}", node_type or "<missing $type>", where)
+
+    def _compile_turn_insert_action(self, task: Dict[str, Any], ctx: _Context,
+                                    path: str, stack: Tuple[str, ...]) -> None:
+        """TurnInsertAction（插入行动/再动）：给目标授予额外回合（决策卡 #38）。"""
+        target = self._hook_target(self._alias(task), ctx)
+        if target is None:
+            self._issue(ctx, path, "TurnInsertAction", f"插入行动目标未注册：{self._alias(task)}")
+            return
+        self._add_effect(ctx, {"effect_type": "grant_extra_turn", "target": target})
+
+    def _compile_escape_from_battle(self, task: Dict[str, Any], ctx: _Context,
+                                    path: str, stack: Tuple[str, ...]) -> None:
+        """EscapeFromBattle（逃逸离场）：leave_battle reason=flee（决策卡 #38）。"""
+        self._add_effect(ctx, {"effect_type": "leave_battle",
+                               "target": self._hook_target(self._alias(task), ctx) or "self",
+                               "reason": "flee"})
+
+    def _compile_remove_shield(self, task: Dict[str, Any], ctx: _Context,
+                               path: str, stack: Tuple[str, ...]) -> None:
+        """RemoveShield（移除目标护盾，决策卡 #38）。"""
+        target = self._hook_target(self._alias(task), ctx)
+        if target is None:
+            self._issue(ctx, path, "RemoveShield", f"移除护盾目标未注册：{self._alias(task)}")
+            return
+        self._add_effect(ctx, {"effect_type": "remove_shield", "target": target})
 
     def _compile_add_modifier(self, task: Dict[str, Any], ctx: _Context,
                               path: str, stack: Tuple[str, ...]) -> None:
