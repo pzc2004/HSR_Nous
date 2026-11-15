@@ -76,6 +76,12 @@ class ScriptedRandom(random.Random):
         self._cursor = cursor
         super().setstate(state["base_state"])
 
+    def __deepcopy__(self, memo: dict[int, Any]) -> "ScriptedRandom":
+        clone = type(self)(self._values)
+        clone.setstate(self.getstate())
+        memo[id(self)] = clone
+        return clone
+
 
 @dataclass(frozen=True)
 class ScriptedResult:

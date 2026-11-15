@@ -7,16 +7,17 @@
 <style>
 :root{--bg:#0f1117;--panel:#171a23;--panel2:#202534;--line:#30374b;--fg:#dbe1ed;--dim:#9199af;--gold:#e8b45a;--blue:#65a9f5;--green:#62c78a;--red:#ed7676}
 *{box-sizing:border-box;margin:0;padding:0}body{background:var(--bg);color:var(--fg);font:14px/1.55 "PingFang SC","Microsoft YaHei",system-ui,sans-serif;min-height:100vh}button,input{background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:7px 10px;font:inherit}button{cursor:pointer}button:hover:not(:disabled){border-color:var(--gold);color:var(--gold)}button:disabled{opacity:.42;cursor:not-allowed}h1{font-size:18px;color:var(--gold);letter-spacing:1px}h2{font-size:15px;margin-bottom:12px}h3{font-size:13px;margin:14px 0 8px}.dim{color:var(--dim)}.small{font-size:12px}.mono{font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.spacer{flex:1}.badge{display:inline-block;border:1px solid var(--line);border-radius:10px;padding:1px 7px;font-size:11px;color:var(--dim);white-space:nowrap}.badge.gold{color:var(--gold);border-color:var(--gold)}.badge.green{color:var(--green);border-color:var(--green)}.badge.red{color:var(--red);border-color:var(--red)}.card{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:14px;margin-bottom:12px}.empty{color:var(--dim);padding:18px 4px}.error{color:var(--red);white-space:pre-wrap}.link{color:var(--blue);border-color:transparent;background:transparent;padding:2px 4px;text-align:left}.primary{border-color:var(--gold);color:var(--gold)}
-header{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 18px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:4}header input{width:min(520px,100%);font-family:ui-monospace,Menlo,monospace;font-size:12px}#viewTabs{display:flex;gap:4px;margin-left:8px}.tab{border-color:transparent;color:var(--dim)}.tab.active{color:var(--gold);border-color:var(--gold)}.view{display:none}.view.active{display:block}#layout{display:grid;grid-template-columns:300px minmax(0,1fr);max-width:1680px;margin:0 auto;min-height:calc(100vh - 62px)}aside{border-right:1px solid var(--line);padding:14px;background:#12151d}main{padding:16px;min-width:0}.task-card{display:block;width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:9px}.task-card.active{border-color:var(--gold)}.task-card .q{font-weight:600;margin-bottom:6px}.progress{height:7px;border-radius:4px;background:var(--panel2);overflow:hidden;margin:7px 0}.progress>i{display:block;height:100%;background:var(--blue)}.progress.done>i{background:var(--green)}.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}.metric{background:var(--panel2);border-radius:7px;padding:8px 10px}.metric .v{font-size:16px;font-weight:600;font-variant-numeric:tabular-nums}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:8px 7px;vertical-align:top}th{color:var(--dim);font-weight:500}tr.clickable{cursor:pointer}tr.clickable:hover{background:var(--panel2)}.chart{width:100%;height:auto;min-height:100px}.chart text{fill:var(--fg);font-size:11px}.chart .axis{stroke:var(--dim);stroke-width:1}.chart .ci{stroke:var(--blue);stroke-width:3}.chart .selected-ci{stroke:var(--gold);stroke-width:3}.chart .effect{fill:var(--blue)}.chart .selected-effect{fill:var(--gold)}.two-col{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.range{position:relative;height:10px;background:var(--panel2);border-radius:5px;margin:14px 4px 8px}.range .band{position:absolute;height:100%;background:#35567d;border-radius:5px}.range .mark{position:absolute;width:2px;height:16px;top:-3px;background:var(--gold)}.event-list{max-height:520px;overflow-y:auto}.event-row{display:flex;gap:8px;align-items:center;width:100%;text-align:left;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:6px 8px;margin-bottom:5px;font-size:12px}.event-row.active{border-color:var(--gold)}.event-row .ordinal{color:var(--dim);min-width:34px}.detail{max-height:620px;overflow:auto}pre{white-space:pre-wrap;word-break:break-word;background:#11151d;border:1px solid var(--line);border-radius:7px;padding:10px;font:11px/1.55 ui-monospace,Menlo,monospace;color:var(--dim)}details{margin-top:8px}summary{cursor:pointer;color:var(--dim)}.stat-effects{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:5px}.stat-effects div{background:var(--panel2);border-radius:5px;padding:5px 7px;font-size:12px}#toast{position:fixed;right:16px;bottom:16px;max-width:520px;background:#4c2529;color:#ffd4d4;border:1px solid var(--red);border-radius:7px;padding:10px 14px;display:none;z-index:10}
+header{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 18px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:4}header input{width:min(520px,100%);font-family:ui-monospace,Menlo,monospace;font-size:12px}#viewTabs{display:flex;gap:4px;margin-left:8px}.tab{border-color:transparent;color:var(--dim)}.tab.active{color:var(--gold);border-color:var(--gold)}.view{display:none}.view.active{display:block}#layout,#worldlineLayout{display:grid;grid-template-columns:300px minmax(0,1fr);max-width:1680px;margin:0 auto;min-height:calc(100vh - 62px)}aside{border-right:1px solid var(--line);padding:14px;background:#12151d}main{padding:16px;min-width:0}.task-card{display:block;width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:9px}.task-card.active{border-color:var(--gold)}.task-card .q{font-weight:600;margin-bottom:6px}.progress{height:7px;border-radius:4px;background:var(--panel2);overflow:hidden;margin:7px 0}.progress>i{display:block;height:100%;background:var(--blue)}.progress.done>i{background:var(--green)}.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}.metric{background:var(--panel2);border-radius:7px;padding:8px 10px}.metric .v{font-size:16px;font-weight:600;font-variant-numeric:tabular-nums}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:8px 7px;vertical-align:top}th{color:var(--dim);font-weight:500}tr.clickable{cursor:pointer}tr.clickable:hover{background:var(--panel2)}.chart{width:100%;height:auto;min-height:100px}.chart text{fill:var(--fg);font-size:11px}.chart .axis{stroke:var(--dim);stroke-width:1}.chart .ci{stroke:var(--blue);stroke-width:3}.chart .selected-ci{stroke:var(--gold);stroke-width:3}.chart .effect{fill:var(--blue)}.chart .selected-effect{fill:var(--gold)}.two-col{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.range{position:relative;height:10px;background:var(--panel2);border-radius:5px;margin:14px 4px 8px}.range .band{position:absolute;height:100%;background:#35567d;border-radius:5px}.range .mark{position:absolute;width:2px;height:16px;top:-3px;background:var(--gold)}.event-list{max-height:520px;overflow-y:auto}.event-row{display:flex;gap:8px;align-items:center;width:100%;text-align:left;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:6px 8px;margin-bottom:5px;font-size:12px}.event-row.active{border-color:var(--gold)}.event-row .ordinal{color:var(--dim);min-width:34px}.detail{max-height:620px;overflow:auto}pre{white-space:pre-wrap;word-break:break-word;background:#11151d;border:1px solid var(--line);border-radius:7px;padding:10px;font:11px/1.55 ui-monospace,Menlo,monospace;color:var(--dim)}details{margin-top:8px}summary{cursor:pointer;color:var(--dim)}.stat-effects{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:5px}.stat-effects div{background:var(--panel2);border-radius:5px;padding:5px 7px;font-size:12px}#toast{position:fixed;right:16px;bottom:16px;max-width:520px;background:#4c2529;color:#ffd4d4;border:1px solid var(--red);border-radius:7px;padding:10px 14px;display:none;z-index:10}
 .metric{min-width:0;overflow-wrap:anywhere}.metric .v{word-break:break-all}.chart-scroll{overflow-x:auto}.table-wrap table{min-width:560px}
+.worldline-player{display:block;width:100%;height:900px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
 #chatLayout{display:grid;grid-template-columns:250px minmax(0,1fr) 280px;max-width:1680px;margin:0 auto;min-height:calc(100vh - 62px)}#chatView aside{overflow-y:auto}#sessionPane{border-right:1px solid var(--line)}#chatInspector{border-right:0;border-left:1px solid var(--line)}#chatMain{padding:16px;min-width:0;display:flex;flex-direction:column;gap:10px}#chatStatus{min-height:1.2em}#chatStream{flex:1;overflow-y:auto;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:12px;min-height:16rem;max-height:calc(100vh - 225px);white-space:pre-wrap;word-break:break-word}#composer{display:flex;gap:8px}#composer input{flex:1}.chat-msg{margin:6px 0;white-space:pre-wrap;word-break:break-word}.chat-msg.user{color:var(--blue)}.chat-sys{color:var(--dim);font-size:12px;margin:6px 0}.chat-error{color:var(--red);white-space:pre-wrap;margin:6px 0}.chat-thought{margin:6px 0 6px 12px}.chat-thought summary{cursor:pointer;color:var(--dim)}.chat-thought-text{color:var(--dim);font-style:italic;white-space:pre-wrap;margin:4px 0}.chat-tool{margin:6px 0 6px 12px}.chat-tool summary{cursor:pointer;color:var(--green)}.chat-tool .meta{color:var(--dim);font-size:12px;white-space:pre-wrap;word-break:break-word;margin:4px 0}.session-item{display:block;width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:9px 10px;margin-bottom:8px}.session-item.active{border-color:var(--gold)}.session-item .q{font-weight:600;margin-bottom:4px;overflow-wrap:anywhere}
-@media(max-width:900px){#layout{grid-template-columns:1fr}#chatLayout{grid-template-columns:1fr}aside{border-right:0;border-bottom:1px solid var(--line);max-height:330px;overflow-y:auto}#chatInspector{border-left:0}main{padding:12px}.two-col{grid-template-columns:1fr}header{position:static}header input{width:100%;order:3}.chart{min-width:0}.table-wrap{overflow-x:auto}}
+@media(max-width:900px){#layout,#worldlineLayout{grid-template-columns:1fr}#chatLayout{grid-template-columns:1fr}aside{border-right:0;border-bottom:1px solid var(--line);max-height:330px;overflow-y:auto}#chatInspector{border-left:0}main{padding:12px}.two-col{grid-template-columns:1fr}header{position:static}header input{width:100%;order:3}.chart{min-width:0}.table-wrap{overflow-x:auto}}
 </style>
 </head>
 <body>
 <header>
   <h1>HSR_Nous · 研究台</h1><span class="badge">研究数据只读</span><span class="badge gold">simulated / pending_real_validation</span>
-  <div id="viewTabs"><button class="tab active" data-view="research">研究</button><button class="tab" data-view="chat">聊天</button></div>
+  <div id="viewTabs"><button class="tab active" data-view="research">研究</button><button class="tab" data-view="worldlines">世界线</button><button class="tab" data-view="chat">聊天</button></div>
   <div class="spacer"></div>
   <input id="taskInput" class="mono" placeholder="输入 task_id 打开研究任务" aria-label="task_id">
   <button id="openTask" class="primary">打开</button>
@@ -29,6 +30,16 @@ header{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 18px
       <section id="candidates" class="card"></section>
       <section id="trial" class="card"></section>
       <section id="evidence" class="card"></section>
+    </main>
+  </div>
+</div>
+<div id="worldlineView" class="view">
+  <div id="worldlineLayout">
+    <aside><h2>世界线</h2><div id="worldlineList" class="empty">正在加载…</div></aside>
+    <main>
+      <section id="worldlineOverview" class="card"><div class="empty">请选择一条世界线。</div></section>
+      <section id="worldlineReplay" class="card"></section>
+      <section id="worldlineEvidence" class="card"></section>
     </main>
   </div>
 </div>
@@ -57,7 +68,7 @@ header{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 18px
 const TERMINAL = new Set(['completed','failed','cancelled']);
 const STATUS = {draft:'待启动',validated:'已校验',queued:'排队中',running:'运行中',validating:'验证中',completed:'已完成',failed:'失败',cancel_requested:'取消中',cancelled:'已取消',accepted:'已接受',inconclusive:'证据不足',rejected:'已拒绝',stale:'已过期'};
 const $ = id => document.getElementById(id);
-const state = {tasks:[],task:null,events:[],report:null,trialReport:null,selectedCandidate:null,currentDrilldown:null,run:null,detail:null,eventCursor:'',view:'research'};
+const state = {tasks:[],task:null,events:[],report:null,trialReport:null,selectedCandidate:null,currentDrilldown:null,run:null,detail:null,eventCursor:'',worldlines:[],worldline:null,worldlineDetail:null,worldlinesLoaded:false,view:'research'};
 function esc(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function statusZh(value){return STATUS[value]||String(value??'—');}
 function fmt(value,digits=2){const n=Number(value);if(!Number.isFinite(n))return '—';const a=Math.abs(n);const d=a>=1000?0:a>=100?1:digits;return n.toLocaleString('zh-CN',{minimumFractionDigits:d,maximumFractionDigits:d});}
@@ -68,6 +79,8 @@ async function api(path,body){const options=body===undefined?{}:{method:'POST',h
 function toast(error){const el=$('toast');el.textContent=String(error.message||error);el.style.display='block';clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.style.display='none',6000);}
 function taskHash(taskId){return `#/task/${encodeURIComponent(taskId)}`;}
 function taskFromHash(hash){const match=String(hash||'').match(/^#\/task\/([0-9a-f]{64})$/);return match?match[1]:null;}
+function worldlineHash(worldlineId){return `#/worldline/${encodeURIComponent(worldlineId)}`;}
+function worldlineFromHash(hash){const match=String(hash||'').match(/^#\/worldline\/([0-9a-f]{64})$/);return match?match[1]:null;}
 function effectChart(candidates){
   const rows=(candidates||[]).filter(c=>c.holdout_adjusted&&c.holdout_adjusted.confidence_interval);
   if(!rows.length)return '<div class="empty">当前没有可绘制的 holdout 修正比较。</div>';
@@ -95,13 +108,62 @@ function cohortCard(role,cohort,data){return `<div class="metric"><div class="ro
 function actorDamageRows(actorDamage){const rows=[];for(const role of ['baseline','variant']){const cohort=actorDamage[role]?.holdout||{};for(const [actorId,item] of Object.entries(cohort)){rows.push(`<tr><td>${esc(role)}</td><td>${esc(item.display_name||actorId)}</td><td>${esc(item.status)}</td><td>${esc(item.n)}</td><td>${item.distribution?fmt(item.distribution.mean):'—'}</td></tr>`);}}return rows.join('');}
 function renderTrial(){const r=state.trialReport;if(!r){$('trial').innerHTML='';return;}const cohorts=[];for(const role of ['baseline','variant'])for(const cohort of ['dev','holdout'])cohorts.push(cohortCard(role,cohort,r.cohorts[role][cohort]));const caveats=r.caveats||[];const failures=r.failure_reasons||[];$('trial').innerHTML=`<h2>单候选报告 · ${esc(state.selectedCandidate)}</h2><div class="row small">${badge(statusZh(r.claim.status),r.claim.status==='accepted'?'green':'')}${badge(r.flags.world)}${badge(r.flags.validation,'gold')}</div><p>${esc(r.conclusion)}</p>${failures.length?`<div class="error">${esc(failures.join('\n'))}</div>`:''}<h3>两臂分布</h3><div class="two-col">${cohorts.join('')}</div><h3>角色伤害（描述性，不参与结论判定）</h3><div class="table-wrap"><table><thead><tr><th>arm</th><th>角色</th><th>状态</th><th>n</th><th>mean</th></tr></thead><tbody>${actorDamageRows(r.actor_damage)}</tbody></table></div><h3>证据下钻</h3><div class="row">${r.evidence.drilldown.map((d,i)=>`<button data-action="open-run" data-index="${i}">${esc(d.arm_id)} · run</button>`).join('')}</div><details><summary>caveats（${caveats.length}）</summary>${caveats.map(c=>`<p class="small dim">${esc(c.level)} · ${esc(c.actor||'')} · ${esc(c.text)}</p>`).join('')}</details><details><summary>完整报告 JSON</summary><pre>${esc(JSON.stringify(r,null,2))}</pre></details>`;}
 function renderEvidence(){const r=state.run;if(!r){$('evidence').innerHTML='';return;}const record=r.evidence;const events=record.events||[],modifiers=record.modifiers||[];const detail=state.detail;$('evidence').innerHTML=`<h2>run 证据</h2><div class="row small">${badge(record.status)}${badge(`seed ${record.seed}`)}${badge(record.cohort)}${badge(record.arm_id)}</div><div class="summary"><div class="metric"><span class="dim small">total_damage</span><div class="v">${fmt(record.observed.total_damage)}</div></div><div class="metric"><span class="dim small">truncated</span><div class="v">${esc(record.observed.truncated)}</div></div><div class="metric"><span class="dim small">run_id</span><div class="v mono small">${esc(record.run_id)}</div></div></div><div class="two-col"><div><h3>事件（${events.length}）</h3><div class="event-list">${events.length?events.map((e,i)=>{const p=e.payload||{};return `<button class="event-row ${state.detail&&state.detail.kind==='event'&&state.detail.evidence.event_id===e.event_id?'active':''}" data-action="open-event" data-index="${i}"><span class="ordinal">#${esc(e.ordinal)}</span><span>${esc(p.kind||p.action_type||'event')}</span><span class="dim">${esc(p.source||p.actor||'')}${p.target?` → ${p.target}`:''}${p.amount!==undefined?` · ${fmt(p.amount)}`:''}</span></button>`;}).join(''):empty('此 run 没有事件。')}</div></div><div><h3>final modifiers（${modifiers.length}）</h3><div class="event-list">${modifiers.length?modifiers.map((m,i)=>{const d=m.details||{};return `<button class="event-row" data-action="open-modifier" data-index="${i}"><span>${esc(d.name||m.modifier_id)}</span><span class="dim">×${esc(d.stacks??'—')} · ${esc(d.duration??'—')}</span></button>`;}).join(''):empty('此 run 没有 final modifier。')}</div></div></div><div id="detailPanel">${detail?detailHtml(detail):''}</div><details><summary>完整 RunRecord</summary><pre>${esc(JSON.stringify(record,null,2))}</pre></details>`;}
-function detailHtml(result){const e=result.evidence||{};const d=e.details||e.payload||e;const rows=[];for(const [key,value] of Object.entries(d)){if(typeof value!=='object'||value===null)rows.push(`<div><span class="dim">${esc(key)}</span> ${esc(value)}</div>`);}return `<h3>${esc(result.kind)} · ${esc(result.status)}</h3>${result.reason?`<p class="dim">${esc(result.reason)}</p>`:''}<div class="stat-effects">${rows.join('')}</div><details open><summary>结构化详情</summary><pre>${esc(JSON.stringify(e,null,2))}</pre></details>`;}
+function detailHtml(result){const e=result.evidence||{};const d=e.details||e.payload||e;const rows=[];for(const [key,value] of Object.entries(d)){if(typeof value!=='object'||value===null)rows.push(`<div><span class="dim">${esc(key)}</span> ${esc(value)}</div>`);}return `<h3>${esc(result.kind)} · ${esc(result.status)}</h3>${result.navigation?`<p class="dim small">原面板已跳转至第 ${esc(result.navigation.turn)} 回合（回合级定位）</p>`:''}${result.reason?`<p class="dim">${esc(result.reason)}</p>`:''}<div class="stat-effects">${rows.join('')}</div><details open><summary>结构化详情</summary><pre>${esc(JSON.stringify(e,null,2))}</pre></details>`;}
 async function selectTask(taskId){try{const nonce=(state.selectNonce||0)+1;state.selectNonce=nonce;const sameTask=state.task&&state.task.task_id===taskId;const task=await api(`/api/tasks/${encodeURIComponent(taskId)}`);if(nonce!==state.selectNonce)return;const eventData=await api(`/api/tasks/${encodeURIComponent(taskId)}/events`);const report=task.report_id?await api(`/api/tasks/${encodeURIComponent(taskId)}/report`):null;if(nonce!==state.selectNonce)return;state.task=task;state.events=eventData.events;state.eventCursor=state.events.length?state.events[state.events.length-1].event_id:'';state.report=report;if(!sameTask){state.trialReport=null;state.selectedCandidate=null;state.currentDrilldown=null;state.run=null;state.detail=null;}renderAll();}catch(error){toast(error);}}
 function renderAll(){renderTaskList();renderOverview();renderCandidates();renderTrial();renderEvidence();}
 async function loadTasks(selectFirst=true){try{state.tasks=await api('/api/tasks');renderTaskList();const fromHash=taskFromHash(location.hash);if(fromHash)await selectTask(fromHash);else if(selectFirst&&state.tasks.length)await selectTask(state.tasks[0].task_id);}catch(error){toast(error);}}
 async function openTrial(button){const trialId=button.dataset.trial,reportId=button.dataset.report;if(!trialId||!reportId){toast(new Error('该候选尚无完整报告'));return;}try{state.selectedCandidate=button.dataset.contract;state.trialReport=await api(`/api/trials/${encodeURIComponent(trialId)}/reports/${encodeURIComponent(reportId)}`);state.run=null;state.detail=null;renderTrial();renderEvidence();$('trial').scrollIntoView({behavior:'smooth',block:'start'});}catch(error){toast(error);}}
 async function openRun(index){try{const drilldown=state.trialReport.evidence.drilldown[index];state.currentDrilldown=drilldown;state.run=await api('/api/evidence',drilldown.run);state.detail=null;renderEvidence();$('evidence').scrollIntoView({behavior:'smooth',block:'start'});}catch(error){toast(error);}}
 async function openEvidence(kind,index){try{const link=state.currentDrilldown[kind][index];state.detail=await api('/api/evidence',link);renderEvidence();}catch(error){toast(error);}}
+// ---- 世界线只读视图（直接消费已校验的 worldline-v1 artifact）----
+function worldlinePlayerPath(worldlineId){return `/player/${encodeURIComponent(worldlineId)}/`;}
+function renderWorldlineReplay(){
+  const w=state.worldline,el=$('worldlineReplay');if(!w){state.worldlinePlayerId=null;el.innerHTML='';return;}
+  if(!w.final_save){state.worldlinePlayerId=null;el.innerHTML=`<h2>战斗模拟器面板</h2>${empty('failed 世界线没有 completed 终态证据，不创建战斗面板。')}`;return;}
+  if(state.worldlinePlayerId===w.worldline_id)return;
+  state.worldlinePlayerId=w.worldline_id;
+  const path=worldlinePlayerPath(w.worldline_id);
+  el.innerHTML=`<h2>战斗模拟器面板</h2><p class="dim small">直接复用 sim.web：单步、连续、0.5x/1x/2x/4x、回退、跳转、断点、终结技和检视均为原实现。操作只影响内存会话，不修改原 artifact。</p><p><a href="${path}" target="_blank" rel="noopener">在新标签打开原战斗面板 →</a></p><iframe id="worldlinePlayer" class="worldline-player" src="${path}" title="HSR_Nous 战斗模拟器"></iframe>`;
+}
+function worldlineCard(w){const o=w.observed||{},random=`${o.random_consumed??'—'}/${w.random_total??'—'}`;return `<button class="task-card worldline-card ${state.worldline&&state.worldline.worldline_id===w.worldline_id?'active':''}" data-action="select-worldline" data-worldline="${esc(w.worldline_id)}"><div class="q mono">${esc(w.worldline_id.slice(0,16))}…</div><div class="row small">${badge(statusZh(w.status),w.status==='completed'?'green':w.status==='failed'?'red':'')}${w.derived_from?badge('派生'):badge('独立')}</div><div class="small dim">${esc(o.outcome||'—')} · ${fmt(o.total_damage)} 伤害 · ${esc(o.turn_count??'—')} 回合</div><div class="small dim">随机 ${esc(random)} · 事件 ${esc(w.event_count)}${w.failure_reasons&&w.failure_reasons.length?` · ${esc(w.failure_reasons[0])}`:''}</div></button>`;}
+function renderWorldlineList(){const el=$('worldlineList');el.className='';el.innerHTML=state.worldlines.length?state.worldlines.map(worldlineCard).join(''):empty('此 research root 还没有世界线。');}
+function renderWorldline(){
+  const w=state.worldline;
+  if(!w){$('worldlineOverview').innerHTML=empty('请选择一条世界线。');$('worldlineReplay').innerHTML='';$('worldlineEvidence').innerHTML='';return;}
+  const o=w.observed||{},spec=w.spec||{},derived=spec.derived_from,caveats=w.caveats||[],failures=w.failure_reasons||[];
+  const randomTotal=(spec.random_values||[]).length,random=`${o.random_consumed??'—'}/${randomTotal}`;
+  $('worldlineOverview').innerHTML=`<h2>worldline-v1 · ${esc(w.worldline_id.slice(0,16))}…</h2><div class="row small">${badge(statusZh(w.status),w.status==='completed'?'green':w.status==='failed'?'red':'')}${badge(w.schema_version)}${badge('simulated / pending_real_validation','gold')}</div><div class="summary"><div class="metric"><span class="dim small">结果</span><div class="v">${esc(o.outcome||'—')}</div></div><div class="metric"><span class="dim small">total_damage</span><div class="v">${fmt(o.total_damage)}</div></div><div class="metric"><span class="dim small">回合 / action_value</span><div class="v">${esc(o.turn_count??'—')} / ${fmt(o.action_value)}</div></div><div class="metric"><span class="dim small">随机消费 / 声明</span><div class="v">${esc(random)}</div></div><div class="metric"><span class="dim small">worldline_id</span><div class="v mono small">${esc(w.worldline_id)}</div></div></div>${failures.length?`<h3>失败原因</h3><div class="error">${esc(failures.join('\n'))}</div>`:''}<h3>lineage</h3>${derived?`<button class="link" data-action="select-worldline" data-worldline="${esc(derived.worldline_id)}">父代 ${esc(derived.worldline_id)}</button><div class="small dim">${esc(derived.note||'无派生说明')}</div><div class="small mono dim">parent content_hash: ${esc(derived.content_hash)}</div>`:'<p class="dim small">独立世界线，无父代。</p>'}<details><summary>caveats（${caveats.length}）</summary>${caveats.length?caveats.map(c=>`<p class="small dim">${esc(c)}</p>`).join(''):empty('无 caveats。')}</details><details><summary>build / stage / 随机序列</summary><pre>${esc(JSON.stringify({build:spec.build,stage:spec.stage,random_values:spec.random_values},null,2))}</pre></details><details><summary>版本指纹</summary><pre>${esc(JSON.stringify(w.fingerprint,null,2))}</pre></details>`;
+  renderWorldlineReplay();
+  const events=w.events||[],modifiers=w.modifiers||[],detail=state.worldlineDetail;
+  $('worldlineEvidence').innerHTML=`<h2>世界线证据</h2><div class="two-col"><div><h3>事件（${events.length}）</h3><div class="event-list">${events.length?events.map((e,i)=>{const p=e.payload||{};return `<button class="event-row ${detail&&detail.kind==='event'&&detail.evidence.event_id===e.event_id?'active':''}" data-action="worldline-event" data-index="${i}"><span class="ordinal">#${esc(e.ordinal)}</span><span>${esc(p.kind||p.event_type||p.action_type||'event')}</span><span class="dim">${esc(p.source||p.source_id||p.actor||p.actor_id||'')}${(p.target||p.target_id)?` → ${esc(p.target||p.target_id)}`:''}${p.amount!==undefined?` · ${fmt(p.amount)}`:''}</span></button>`;}).join(''):empty('此世界线没有事件。')}</div></div><div><h3>final modifiers（${modifiers.length}）</h3><div class="event-list">${modifiers.length?modifiers.map((m,i)=>{const d=m.details||{};return `<button class="event-row" data-action="worldline-modifier" data-index="${i}"><span>${esc(d.name||m.modifier_id)}</span><span class="dim">×${esc(d.stacks??'—')} · ${esc(d.duration??'—')}</span></button>`;}).join(''):empty('此世界线没有 final modifier。')}</div></div></div><div id="worldlineDetailPanel">${detail?detailHtml(detail):''}</div>${w.final_save?`<details><summary>final_save</summary><pre>${esc(JSON.stringify(w.final_save,null,2))}</pre></details>`:'<p class="dim small">失败世界线没有 final_save。</p>'}<details><summary>完整 WorldlineArtifact</summary><pre>${esc(JSON.stringify(w,null,2))}</pre></details>`;
+}
+async function selectWorldline(worldlineId){try{const nonce=(state.worldlineSelectNonce||0)+1;state.worldlineSelectNonce=nonce;const same=state.worldline&&state.worldline.worldline_id===worldlineId;const artifact=await api(`/api/worldlines/${encodeURIComponent(worldlineId)}`);if(nonce!==state.worldlineSelectNonce)return;state.worldline=artifact;if(!same)state.worldlineDetail=null;renderWorldlineList();renderWorldline();}catch(error){toast(error);}}
+async function loadWorldlines(selectFirst=true){try{state.worldlines=await api('/api/worldlines');renderWorldlineList();const fromHash=worldlineFromHash(location.hash);if(fromHash)await selectWorldline(fromHash);else if(selectFirst&&state.worldlines.length)await selectWorldline(state.worldlines[0].worldline_id);else if(!state.worldlines.length)renderWorldline();}catch(error){toast(error);}}
+function worldlineEventTurn(events,index){let turn=0;for(let i=0;i<=index;i++){if(events[i]?.payload?.event_type==='turn_start')turn+=1;}return turn;}
+async function gotoWorldlineTurn(worldlineId,turn){
+  let lastError;
+  for(let attempt=0;attempt<3;attempt++){
+    try{return await api(`${worldlinePlayerPath(worldlineId)}api/goto`,{n:turn});}
+    catch(error){
+      lastError=error;
+      if(!/引擎忙/.test(error.message)||attempt===2)throw error;
+      await new Promise(resolve=>setTimeout(resolve,1000));
+    }
+  }
+  throw lastError;
+}
+async function openWorldlineEvidence(kind,index){
+  const records=kind==='events'?state.worldline.events:state.worldline.modifiers,event=records[index];
+  state.worldlineDetail={kind:kind==='events'?'event':'modifier',status:'resolved',evidence:event};renderWorldline();
+  if(kind!=='events'||!state.worldline.final_save)return;
+  const turn=worldlineEventTurn(state.worldline.events,index),nonce=(state.worldlineEvidenceNonce||0)+1;
+  state.worldlineEvidenceNonce=nonce;
+  try{
+    await gotoWorldlineTurn(state.worldline.worldline_id,turn);
+    if(nonce!==state.worldlineEvidenceNonce)return;
+    state.worldlineDetail.navigation={turn};renderWorldline();
+  }catch(error){toast(new Error(`事件已打开，但原面板跳转失败：${error.message}`));}
+}
 // ---- 聊天视图（ACP 桥；唯一前端是研究台，独立桥仅开发调试）----
 const LS_SID='hsr_nous.workbench.chat_last_session';
 const chat={available:false,sessions:[],sid:null,attached:false,es:null,inFlight:false,msgNode:null,thoughtDet:null,thoughtCount:0,toolNodes:{},remembered:null,typeBuf:'',toolGroup:null,toolCount:0,maxSeq:0,seen:new Set(),liveStream:false};
@@ -338,8 +400,12 @@ function switchView(view){
   state.view=view;
   document.querySelectorAll('#viewTabs .tab').forEach(b=>b.classList.toggle('active',b.dataset.view===view));
   $('researchView').classList.toggle('active',view==='research');
+  $('worldlineView').classList.toggle('active',view==='worldlines');
   $('chatView').classList.toggle('active',view==='chat');
+  $('taskInput').style.display=view==='worldlines'?'none':'';
+  $('openTask').style.display=view==='worldlines'?'none':'';
   if(view==='research'&&!state.researchLoaded){state.researchLoaded=true;loadTasks();}
+  if(view==='worldlines'&&!state.worldlinesLoaded){state.worldlinesLoaded=true;loadWorldlines().catch(toast);}
   if(view==='chat')loadChatSessions().catch(()=>{});
 }
 function bind(){
@@ -359,13 +425,17 @@ function bind(){
     else if(action==='open-run')openRun(Number(button.dataset.index));
     else if(action==='open-event')openEvidence('events',Number(button.dataset.index));
     else if(action==='open-modifier')openEvidence('modifiers',Number(button.dataset.index));
+    else if(action==='select-worldline'){location.hash=worldlineHash(button.dataset.worldline);selectWorldline(button.dataset.worldline);}
+    else if(action==='worldline-event')openWorldlineEvidence('events',Number(button.dataset.index));
+    else if(action==='worldline-modifier')openWorldlineEvidence('modifiers',Number(button.dataset.index));
     else if(action==='select-session')selectChatSession(button.dataset.sid);
     else if(action==='resume-session')resumeChatSession(button.dataset.sid).catch(toast);
     else if(action==='switch-view')switchView(button.dataset.view);
   });
   window.addEventListener('hashchange',()=>{
-    const id=taskFromHash(location.hash);
+    const id=taskFromHash(location.hash),worldlineId=worldlineFromHash(location.hash);
     if(id){switchView('research');if(!state.task||state.task.task_id!==id)selectTask(id);}
+    if(worldlineId){switchView('worldlines');if(!state.worldline||state.worldline.worldline_id!==worldlineId)selectWorldline(worldlineId);}
   });
   setInterval(()=>{if(state.view==='research'&&state.task&&!TERMINAL.has(state.task.status))selectTask(state.task.task_id);},2000);
 }
@@ -373,8 +443,9 @@ async function init(){
   bind();
   chat.remembered=localStorage.getItem(LS_SID)||null;
   try{await loadChatSessions();}catch(error){chat.available=false;renderSessionList();}
-  const fromHash=taskFromHash(location.hash);
+  const fromHash=taskFromHash(location.hash),fromWorldline=worldlineFromHash(location.hash);
   if(fromHash){switchView('research');await selectTask(fromHash);}
+  else if(fromWorldline){switchView('worldlines');await selectWorldline(fromWorldline);}
   else if(chat.available&&chat.remembered&&chat.sessions.some(s=>s.session_id===chat.remembered)){switchView('chat');selectChatSession(chat.remembered);}
   else switchView('research');
 }

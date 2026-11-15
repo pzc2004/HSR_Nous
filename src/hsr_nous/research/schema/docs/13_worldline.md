@@ -11,9 +11,9 @@ worldline-v1 回答"这一条完全声明的轨迹执行出来是什么"——`W
 确定性执行 → 一个不可变 `WorldlineArtifact`。边界：
 
 - 不共用 paired 的 arm/cohort/seed 坐标，不产生 `RunRecord`/`ComparisonSet`；
-- 不进 `ReportComposer`/`ClaimValidator`，`resolve_evidence` 不认 worldline
-  （paired 证据下钻的世界线版本未实装）；
-- 不接 Agent 桥、前端、workbench 与 CandidateSet。
+- 不进 `ReportComposer`/`ClaimValidator`，paired 的 `resolve_evidence` 不认 worldline；
+- 不接 Agent 桥与 CandidateSet；workbench 只读列表、详情与证据展示见
+  [12_workbench.md](12_workbench.md)，不提供执行或派生入口。
 
 ## WorldlineSpec
 
@@ -217,5 +217,6 @@ initial_energy_ratio=None, note=None)`：
 ### 与 paired 链的边界
 
 lineage 只活在 `worldlines/` 目录内：不动 trial/run/result 的
-`parent_run_id` 体系，不进 `resolve_evidence`（worldline 证据下钻仍未实装），
-世界线之间不构成 paired 证据——派生是谱系声明，不是统计对照。
+`parent_run_id` 体系，不进 paired 的 `resolve_evidence`，世界线之间不构成
+paired 证据——派生是谱系声明，不是统计对照。workbench 直接读取已校验的
+worldline-v1 artifact 展示父链与事件，不借用 paired 的证据链接契约。

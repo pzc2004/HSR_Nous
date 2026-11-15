@@ -177,6 +177,31 @@ class ResearchGateway:
         self._require("allow_read_artifacts")
         return self._store.resolve_evidence(link)
 
+    def list_worldlines(self, limit: int = 50) -> list[dict[str, Any]]:
+        self._require("allow_read_artifacts")
+        return [
+            {
+                "worldline_id": artifact.worldline_id,
+                "schema_version": artifact.schema_version,
+                "status": artifact.status,
+                "observed": dict(artifact.observed),
+                "event_count": len(artifact.events),
+                "modifier_count": len(artifact.modifiers),
+                "caveat_count": len(artifact.caveats),
+                "random_total": len(artifact.spec.random_values),
+                "derived_from": (
+                    dict(artifact.spec.derived_from)
+                    if artifact.spec.derived_from is not None else None
+                ),
+                "failure_reasons": list(artifact.failure_reasons),
+            }
+            for artifact in self._store.list_worldlines(limit)
+        ]
+
+    def read_worldline(self, worldline_id: str) -> dict[str, Any]:
+        self._require("allow_read_artifacts")
+        return self._store.read_worldline(worldline_id).to_dict()
+
     def start_candidate_set(self, candidate_set: CandidateSet) -> dict[str, Any]:
         self._require(
             "allow_run_simulation",

@@ -1,6 +1,6 @@
 # research/workbench
 
-HSR_Nous 研究台（模块别名：伊德莉拉）：**唯一前端单页**——研究侧把后台任务、可信报告与证据呈现为可读页面；聊天侧提供 ACP Agent 会话视图。不执行任务编辑或模拟，可信结论仍只由 research/core 产出。
+HSR_Nous 研究台（模块别名：伊德莉拉）：**唯一前端单页**——研究侧把后台任务、可信报告与证据呈现为可读页面；聊天侧提供 ACP Agent 会话视图。研究 API 不执行任务编辑或发布产物；completed 世界线可挂载 `sim.web` 做内存回放，可信结论仍只由 research/core 产出。
 
 ## 启动
 
@@ -27,13 +27,16 @@ hsr-research-web --research-root /path/to/research --port 8001 --no-open
 - 任务列表、真实 completed/total 进度、attempt、错误与完成事件；
 - 最终候选报告的 dev 排名、holdout 效应与 Bonferroni 修正 CI（原生 SVG）；
 - 单候选完整 trial 报告、两臂分布、描述性 actor_damage 与 caveats；
-- run → event / final modifier 的结构化详情和原始 JSON。
+- run → event / final modifier 的结构化详情和原始 JSON；
+- 世界线列表与详情、随机消费、失败原因、父代 lineage，以及 event / final modifier / final_save 下钻；
+- completed 世界线通过 `/player/{worldline_id}/` 直接挂载原 `sim.web` 面板：单步、连续、速度控制、回退、跳转、断点、终结技和检视均由原 `WebSession/DebugController` 提供；
+- 点击世界线事件时调用原面板 `/api/goto` 跳转到所属回合（回合级定位），同时保留事件 JSON；同一世界线的 iframe 不因详情切换而重建，引擎忙时有限重试。
 
-运行中只有部分候选完成时，可先查看对应单候选报告，但不提前生成最终排名。页面持续显示 `simulated / pending_real_validation` 与当前候选集范围。
+运行中只有部分候选完成时，可先查看对应单候选报告，但不提前生成最终排名。页面持续显示 `simulated / pending_real_validation` 与当前候选集范围。世界线是独立的只读轨迹视图，不冒充 paired 统计证据。
 
 ## 只读边界
 
-研究 API（`/api/*`）仅提供任务/报告/证据读取：任务清单与详情、增量事件、候选报告、trial 报告和 EvidenceLink 解析。没有 start/cancel/resume、任务编辑、artifact 发布或 Agent 自由 HTML 入口。`POST /api/evidence` 仅用于提交 EvidenceLink 进行只读解析。
+研究 API（`/api/*`）仅提供任务/报告/世界线/证据读取：任务清单与详情、增量事件、候选报告、trial 报告、世界线摘要与完整 artifact 和 EvidenceLink 解析。没有 start/cancel/resume、任务编辑、世界线执行或派生、artifact 发布或 Agent 自由 HTML 入口。`POST /api/evidence` 仅用于提交 EvidenceLink 进行只读解析。`/player/*` 是独立内存回放会话，不发布新 artifact，也不提升证据等级。
 
 聊天路由（`/chat/*`，反代）不是研究数据 API：它把人在页面上的输入透传给回环上的桥子进程，Agent 的工具调用与提交仍全部在 DSH 白名单与研究网关内完成，workbench 不产生可信结论、不直接 import research/core 或 agents。
 

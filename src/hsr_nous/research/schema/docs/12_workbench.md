@@ -17,6 +17,8 @@
 | `GET /api/tasks/{task_id}/events` | 按 after_event_id 非阻塞增量读取持久事件 |
 | `GET /api/tasks/{task_id}/report` | 最终 candidate-v1 报告；未形成时明确未就绪 |
 | `GET /api/trials/{trial_id}/reports/{report_id}` | 单候选完整 trial 报告 |
+| `GET /api/worldlines` | 按 worldline_id 排序、带上限的只读世界线摘要 |
+| `GET /api/worldlines/{worldline_id}` | 经完整读时校验的单个 worldline-v1 artifact |
 | `POST /api/evidence` | 只读解析既有 EvidenceLink 到 run/event/final modifier |
 
 不提供任务 start/cancel/resume、任务编辑、任意路径、命令或 artifact 发布入口。非法 ID、证据不匹配和未就绪报告必须显式报错，不能把异常伪装成正常空态。
@@ -52,6 +54,20 @@
 
 失败候选、无赢家、无报告、无事件、无 modifier 和无效深链均有明确空态。动态文本统一转义，原始 JSON 不作为可信 HTML 注入。
 
+## 世界线只读视图
+
+`GET /api/worldlines` 的 `limit` 规则与任务列表一致，摘要按 `worldline_id` 字典序确定性排列，包含状态、observed、事件与 modifier 数、声明随机值总数和 `derived_from`。`GET /api/worldlines/{worldline_id}` 返回完整 worldline-v1 artifact；网关必须经 `ArtifactStore.read_worldline` 完成身份、证据、事件/modifier 和父链校验，不能把目录扫描或未经校验的 JSON 当作有效世界线。
+
+页面展示状态、observed、声明与实际随机消费、failure_reasons、caveats、build/stage、父代链接，以及 event/final modifier/final_save 的结构化详情和原始 JSON。失败世界线同样可打开；空事件、空 modifier 和无父代均有明确空态。世界线详情直接消费已校验 artifact，不伪造 paired EvidenceLink、RunRecord 或 ComparisonSet。
+
+completed 世界线通过 `/player/{worldline_id}/` 挂载现有 `sim.web` 战斗调试台，直接复用原面板的单位卡、行动条、单步、连续、0.5x/1x/2x/4x、回退、跳转、断点、终结技与检视按钮。`sim.web` 从世界线的 build/stage/random_values/初始资源重新创建内存会话，默认交还 scripted policy 自动决策；检查点与单位详情全部由同一 `DebugController` 产生，不另造回放面板或状态投影。
+
+该面板是原 artifact 的内存回放/调试入口：不发布新世界线、不修改原 artifact，也不把内存中的分支状态提升为可信结论。failed 世界线没有 completed 终态证据，不挂载战斗面板，只展示失败原因、声明和 lineage。
+
+点击事件列表时，页面保留该事件的 JSON 详情，并按最近一个 `turn_start` 的事件序计算回合，调用原面板 `/api/goto`。这是 `DebugController` 提供的回合级定位，不宣称精确到单个伤害或 modifier 发生的瞬时状态；没有 `turn_start` 的早期事件跳转到第 0 回合，modifier 详情不做时间跳转。
+
+世界线深链为 `#/worldline/<64 位小写 hex>`。研究 API 不提供世界线执行、派生或 fork 入口，内存面板中的操作不形成持久研究产物，单条轨迹也不展示为统计结论。
+
 ## 当前限制
 
-不提供任务编辑、fork、人工接管、共享 Memory、常驻 Agent 主动推送；聊天视图与研究视图本期仅标签级并列（「打开研究视图」入口），不做 Selection/FocusRequest 深度联动（Agent 引用对象 → 前端定位高亮）。只读展示本身不提升证据等级，所有结论继续标明 simulated/pending_real_validation 和当前候选集范围。
+不提供任务编辑、世界线执行或派生、fork、人工接管、共享 Memory、常驻 Agent 主动推送；聊天视图与研究视图本期仅标签级并列（「打开研究视图」入口），除上述事件到回合的导航外，不做通用 Selection/FocusRequest 深度联动（Agent 引用对象 → 前端定位高亮）。只读展示本身不提升证据等级，所有结论继续标明 simulated/pending_real_validation 和当前候选集范围。

@@ -15,6 +15,7 @@ from hsr_nous.research.core import ArtifactStore, CandidateTaskManager
 from hsr_nous.research.permissions import open_research_gateway
 from hsr_nous.research.workbench.web import create_app
 from tests._research_builders import make_candidate_set
+from tests._worldline_builders import make_completed_and_failed_worldlines
 from tests.test_chat_server import (
     _read_events,
     chatty_handler,
@@ -80,6 +81,73 @@ def test_workbench_read_only_task_report_and_evidence_chain(tmp_path):
     assert client.get("/api/tasks", params={"limit": 0}).status_code == 400
     assert client.get("/api/tasks/not-a-task").status_code == 404
     assert client.post("/api/evidence", json={"unknown": True}).status_code == 400
+
+
+def test_workbench_read_only_worldlines(tmp_path):
+    root = tmp_path / "research"
+    completed, failed = make_completed_and_failed_worldlines(
+        ArtifactStore(root / "artifacts")
+    )
+    client = TestClient(create_app(gateway=open_research_gateway(root)))
+
+    response = client.get("/api/worldlines")
+    assert response.status_code == 200, response.text
+    summaries = response.json()
+    assert [item["worldline_id"] for item in summaries] == sorted(
+        [completed.worldline_id, failed.worldline_id]
+    )
+    by_id = {item["worldline_id"]: item for item in summaries}
+    completed_summary = by_id[completed.worldline_id]
+    assert completed_summary["status"] == "completed"
+    assert completed_summary["observed"]["random_consumed"] == 92
+    assert completed_summary["random_total"] == 92
+    assert completed_summary["event_count"] > 0
+    assert completed_summary["modifier_count"] > 0
+    assert completed_summary["derived_from"] is None
+    failed_summary = by_id[failed.worldline_id]
+    assert failed_summary["status"] == "failed"
+    assert failed_summary["failure_reasons"]
+    assert failed_summary["derived_from"]["worldline_id"] == completed.worldline_id
+    assert len(client.get("/api/worldlines", params={"limit": 1}).json()) == 1
+
+    detail_response = client.get(f"/api/worldlines/{completed.worldline_id}")
+    assert detail_response.status_code == 200, detail_response.text
+    detail = detail_response.json()
+    assert detail["schema_version"] == "worldline-v1"
+    assert detail["observed"]["turn_count"] == 16
+    assert detail["events"] and detail["modifiers"]
+    assert detail["final_save"]["state"]
+    failed_detail = client.get(f"/api/worldlines/{failed.worldline_id}").json()
+    assert failed_detail["status"] == "failed"
+    assert failed_detail["final_save"] is None
+    assert failed_detail["events"] == []
+    assert failed_detail["failure_reasons"]
+    assert failed_detail["spec"]["derived_from"]["worldline_id"] == completed.worldline_id
+
+    player = client.get(f"/player/{completed.worldline_id}/")
+    assert player.status_code == 200, player.text
+    assert "HSR_Nous 战斗调试台" in player.text
+    assert 'data-speed="0.5"' in player.text
+    state = client.get(f"/player/{completed.worldline_id}/api/state").json()
+    assert state["loaded"] is True
+    assert state["manual"] is False
+    assert state["mode"] == "roll"
+    assert len(state["actors"]) == 6
+    step = client.post(f"/player/{completed.worldline_id}/api/step")
+    assert step.status_code == 200, step.text
+    inspect = client.get(f"/player/{completed.worldline_id}/api/inspect/1308")
+    assert inspect.status_code == 200, inspect.text
+    assert "effective" in inspect.json()
+    restart = client.post(f"/player/{completed.worldline_id}/api/restart")
+    assert restart.status_code == 200, restart.text
+    assert client.get(
+        f"/player/{completed.worldline_id}/api/state"
+    ).json()["manual"] is False
+    assert client.get(f"/player/{failed.worldline_id}/").status_code == 404
+
+    assert client.get("/api/worldlines", params={"limit": 0}).status_code == 400
+    assert client.get("/api/worldlines/not-a-worldline").status_code == 404
+    assert client.post("/api/worldlines").status_code == 405
 
 
 # ---------------------------------------------------------------------------

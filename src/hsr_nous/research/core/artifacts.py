@@ -762,6 +762,18 @@ class ArtifactStore:
         self._validate_worldline_lineage(artifact)
         return artifact
 
+    def list_worldlines(self, limit: int = 50) -> list[WorldlineArtifact]:
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+            raise ValueError("limit must be between 1 and 100")
+        artifacts = []
+        for entry in sorted(self.worldlines_root.iterdir(), key=lambda path: path.name):
+            if not entry.is_dir() or not _ID_RE.fullmatch(entry.name):
+                continue
+            artifacts.append(self.read_worldline(entry.name))
+            if len(artifacts) == limit:
+                break
+        return artifacts
+
     def claim_path(self, trial_id: str, record_id: str) -> Path:
         self._validate_id(record_id, "claim record_id")
         return self._safe_path(self.trial_dir(trial_id) / "claims" / f"{record_id}.json")

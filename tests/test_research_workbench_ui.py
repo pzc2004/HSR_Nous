@@ -19,6 +19,27 @@ eq(pct(0.983)==='98.3%' && pct('bad')==='—','percent formatting');
 const id='a'.repeat(64);
 eq(taskFromHash('#/task/'+id)===id && taskHash(id)==='#/task/'+id,'task hash roundtrip');
 eq(taskFromHash('#/task/xyz')===null && taskFromHash('#/other/'+id)===null,'invalid hash');
+const worldlineId='b'.repeat(64);
+eq(worldlineFromHash('#/worldline/'+worldlineId)===worldlineId && worldlineHash(worldlineId)==='#/worldline/'+worldlineId,'worldline hash roundtrip');
+eq(worldlineFromHash('#/worldline/xyz')===null && worldlineFromHash('#/task/'+id)===null,'invalid worldline hash');
+const worldline=worldlineCard({worldline_id:worldlineId,status:'failed',observed:{},event_count:0,random_total:92,derived_from:{worldline_id:id},failure_reasons:['bad <script>']});
+eq(worldline.includes('失败') && worldline.includes('派生') && worldline.includes('—/92'),'worldline failed card');
+eq(worldline.includes('bad &lt;script&gt;') && !worldline.includes('bad <script>'),'worldline card escapes failure text');
+eq(worldlinePlayerPath(worldlineId)==='/player/'+worldlineId+'/','worldline player path');
+const turnEvents=[
+ {payload:{event_type:'battle_start'}},
+ {payload:{event_type:'turn_start',actor_id:'a'},
+ },
+ {payload:{event_type:'action',actor_id:'a'},
+ },
+ {payload:{event_type:'damage',source_id:'a'},
+ },
+ {payload:{event_type:'turn_start',actor_id:'b'},
+ },
+ {payload:{event_type:'action',actor_id:'b'},
+ },
+];
+eq(worldlineEventTurn(turnEvents,0)===0 && worldlineEventTurn(turnEvents,1)===1 && worldlineEventTurn(turnEvents,3)===1 && worldlineEventTurn(turnEvents,5)===2,'worldline event turn mapping');
 const rows=[
  {contract_id:'positive',dev_rank:1,selected:true,dev:{effect:12},holdout_adjusted:{effect:10,confidence_interval:{lower:5,upper:15}},
   selection_reason:'dev selected; holdout adjusted CI excludes 0',trial_id:'t1',report_id:'r1',status:'accepted'},

@@ -16,12 +16,14 @@ from pathlib import Path
 from typing import Any, Callable
 
 import httpx
+import yaml
 from fastapi import APIRouter, Body, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 
 from hsr_nous.common import research_root
 from hsr_nous.research.permissions import ArtifactError, ResearchGateway, open_research_gateway
 from hsr_nous.research.schema import EvidenceLink, canonical_json
+from hsr_nous.sim import web as sim_web
 
 _STATIC = Path(__file__).parent / "web_static" / "index.html"
 
@@ -163,6 +165,16 @@ def create_app(
     def trial_report(trial_id: str, report_id: str) -> dict[str, Any]:
         return _read(gateway.read_report, trial_id, report_id)
 
+    @app.get("/api/worldlines")
+    def worldlines(limit: int = 50) -> list[dict[str, Any]]:
+        if isinstance(limit, bool) or not 1 <= limit <= 100:
+            raise HTTPException(400, "limit must be between 1 and 100")
+        return _read(gateway.list_worldlines, limit)
+
+    @app.get("/api/worldlines/{worldline_id}")
+    def worldline(worldline_id: str) -> dict[str, Any]:
+        return _read(gateway.read_worldline, worldline_id)
+
     @app.post("/api/evidence")
     def evidence(link: dict[str, Any] = Body(...)) -> dict[str, Any]:
         try:
@@ -170,6 +182,30 @@ def create_app(
         except (TypeError, ValueError, KeyError) as error:
             raise HTTPException(400, str(error)) from error
         return json.loads(canonical_json(_read(gateway.resolve_evidence, parsed)))
+
+    @app.get("/player/{worldline_id}")
+    def worldline_player(worldline_id: str) -> RedirectResponse:
+        artifact = _read(gateway.read_worldline, worldline_id)
+        if artifact["status"] != "completed":
+            raise HTTPException(404, "worldline player is only available for completed artifacts")
+        return RedirectResponse(f"/player/{worldline_id}/")
+
+    for summary in _read(gateway.list_worldlines, 100):
+        if summary["status"] != "completed":
+            continue
+        worldline_id = summary["worldline_id"]
+        artifact = _read(gateway.read_worldline, worldline_id)
+        spec = artifact["spec"]
+        player = sim_web.create_app(
+            yaml.safe_dump(spec["build"], allow_unicode=True, sort_keys=False),
+            yaml.safe_dump(spec["stage"], allow_unicode=True, sort_keys=False),
+            mode=sim_web.MODE_ROLL,
+            random_values=spec["random_values"],
+            initial_sp=spec.get("initial_sp"),
+            initial_energy_ratio=spec.get("initial_energy_ratio"),
+            auto=True,
+        )
+        app.mount(f"/player/{worldline_id}", player)
 
     if chat_proxy is not None:
         app.include_router(_chat_proxy_router(chat_proxy))

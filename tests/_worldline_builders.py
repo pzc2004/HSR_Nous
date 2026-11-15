@@ -4,6 +4,8 @@ from __future__ import annotations
 import yaml
 
 from hsr_nous.common import repo_data_dir
+from hsr_nous.research.core import WorldlineRunner, derive_child_spec
+from hsr_nous.research.schema import WorldlineSpec
 
 
 def make_acheron_worldline_parts():
@@ -46,3 +48,20 @@ def make_acheron_worldline_parts():
         ],
     }
     return build, stage, [0.99] * 92
+
+
+def make_completed_and_failed_worldlines(store):
+    build, stage, values = make_acheron_worldline_parts()
+    runner = WorldlineRunner(store=store)
+    parent = runner.run(WorldlineSpec(
+        build, stage, tuple(values), initial_sp=5, initial_energy_ratio=1.0
+    ))
+    broken_script = [dict(entry) for entry in
+                     parent.spec.build["build"]["policy"]["script"]]
+    broken_script[0]["turn"] = 999
+    child = runner.run(derive_child_spec(
+        parent, script=broken_script, note="故意破坏普通行动脚本以验证失败展示"
+    ))
+    assert parent.status == "completed"
+    assert child.status == "failed"
+    return parent, child

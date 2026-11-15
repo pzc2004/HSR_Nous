@@ -51,6 +51,14 @@ def test_default_policy_denies_custom_execution_and_is_immutable(tmp_path):
         assert not hasattr(gateway, name)
 
 
+def test_worldline_reads_require_artifact_capability(tmp_path):
+    gateway = _gateway(tmp_path, allow_read_artifacts=False)
+    with pytest.raises(PermissionDeniedError):
+        gateway.list_worldlines()
+    with pytest.raises(PermissionDeniedError):
+        gateway.read_worldline("0" * 64)
+
+
 def test_path_permissions_cover_secrets_repo_and_symlinks(tmp_path):
     gateway = _gateway(tmp_path)
     assert gateway.authorize_path(tmp_path / "out.json", "write_project") == \
