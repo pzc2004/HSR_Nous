@@ -2957,10 +2957,51 @@ class AbilityCompiler:
                 node_type = str(item.get("$type") or "")
                 if node_type == "RPG.GameCore.PredicateTaskList":
                     branch = self._static_monster_predicate(item.get("Predicate") or {})
-                    if branch is None:
-                        self._issue(ctx, path, node_type, "OnStack 属性分支不能由怪物 ID 静态判定")
+                    if branch is not None:
+                        visit_stack(item.get("SuccessTaskList" if branch else "FailedTaskList") or [])
                         continue
-                    visit_stack(item.get("SuccessTaskList" if branch else "FailedTaskList") or [])
+                    # 运行时条件属性分支（决策卡 #36）：谓词可翻则属性改条件表达式
+                    predicate = self._predicate_expr(item.get("Predicate") or {}, ctx,
+                                                     f"{path}/Predicate")
+                    if predicate is None:
+                        self._issue(ctx, path, node_type, "OnStack 属性分支谓词未注册")
+                        continue
+                    branch_values: Dict[str, Dict[str, Any]] = {"SuccessTaskList": {},
+                                                                "FailedTaskList": {}}
+                    for branch_name, branch_tasks in (
+                            ("SuccessTaskList", item.get("SuccessTaskList") or []),
+                            ("FailedTaskList", item.get("FailedTaskList") or [])):
+                        branch_condition = predicate if branch_name == "SuccessTaskList"                             else self._negate_condition(predicate)
+                        for task in branch_tasks:
+                            if str(task.get("$type")) != "RPG.GameCore.StackProperty":
+                                if str(task.get("$type")) in TASK_HANDLERS:
+                                    runtime_stack_tasks.append((task, branch_condition))
+                                else:
+                                    self._issue(ctx, path, str(task.get("$type")),
+                                                "OnStack 条件分支的非属性任务待收编")
+                                continue
+                            stat = {
+                                "AllDamageReduce": "dmg_dmg_reduction",
+                                "AllDamageTypeAddedRatio": "all_dmg",
+                                "AllDamageTypeTakenRatio": "vulnerability",
+                                "AttackAddedRatio": "atk_pct", "AttackDelta": "atk",
+                                "CriticalDamageBase": "crit_dmg", "DefenceAddedRatio": "def_pct",
+                                "HPAddedRatio": "hp_pct", "HPDelta": "hp",
+                                "SPRatioBase": "energy_regen",
+                                "SpeedAddedRatio": "spd_pct", "SpeedDelta": "spd",
+                            }.get(task.get("Property"))
+                            if stat is None:
+                                self._issue(ctx, path, str(task.get("$type")),
+                                            f"未注册属性：{task.get('Property')}")
+                                continue
+                            value = self._value(task.get("PropertyValue"), ctx,
+                                                f"{path}/StackProperty/{stat}", symbols)
+                            if value is not None:
+                                branch_values[branch_name][stat] = value
+                    for stat, success_value in branch_values["SuccessTaskList"].items():
+                        failed_value = branch_values["FailedTaskList"].get(stat, 0)
+                        # 双分支合一条件表达式：cond ? 成功值 : 失败值（缺省 0）
+                        stats[stat] = f"(({predicate}) ? ({success_value}) : ({failed_value}))"
                 elif node_type == "RPG.GameCore.SetDynamicValueByModifierValue":
                     if item.get("ValueType") == "Layer":
                         symbols[dynamic_value_hash(str(item.get("DynamicKey")))] = \
@@ -2995,7 +3036,7 @@ class AbilityCompiler:
                     toughness_lock = True
                 elif node_type in TASK_HANDLERS:
                     # 叠层触发型行为（AddModifier/LockHP 等）——编译为 after_apply_modifier 运行时钩
-                    runtime_stack_tasks.append(item)
+                    runtime_stack_tasks.append((item, None))
 
         for callback in callbacks:
             event = callback.get("Event")
@@ -3015,16 +3056,20 @@ class AbilityCompiler:
                 if runtime_stack_tasks:
                     skill_id = str(ctx.skill.get("skill_id") or self.enemy_id)
                     modifier_id = self._modifier_id(name, definition, skill_id)
-                    sub = _Context(mode="event", skill=ctx.skill, event="after_apply_modifier",
-                                   current_modifier=name)
-                    self._compile_tasks(runtime_stack_tasks, sub, f"{path}/OnStack", ())
-                    ctx.handled.extend(sub.handled)
-                    ctx.lifecycle_hooks.extend(sub.lifecycle_hooks)
-                    for issue in sub.unsupported:
-                        self._issue(ctx, issue["path"], issue["node_type"], issue["reason"])
-                    condition = (f"$event.modifier_id == '{modifier_id}' "
-                                 f"and $event.target == $self.actor_id")
-                    ctx.lifecycle_hooks.extend(self._make_hooks(sub, condition, event="after_apply_modifier"))
+                    for task, branch_condition in runtime_stack_tasks:
+                        sub = _Context(mode="event", skill=ctx.skill,
+                                       event="after_apply_modifier", current_modifier=name)
+                        self._compile_tasks([task], sub, f"{path}/OnStack", ())
+                        ctx.handled.extend(sub.handled)
+                        ctx.lifecycle_hooks.extend(sub.lifecycle_hooks)
+                        for issue in sub.unsupported:
+                            self._issue(ctx, issue["path"], issue["node_type"], issue["reason"])
+                        condition = (f"$event.modifier_id == '{modifier_id}' "
+                                     f"and $event.target == $self.actor_id")
+                        if branch_condition is not None:
+                            condition = f"({condition}) and ({branch_condition})"
+                        ctx.lifecycle_hooks.extend(
+                            self._make_hooks(sub, condition, event="after_apply_modifier"))
         ctx.current_modifier = previous_modifier
         # 生命周期声明保留部分结果；纯表现与否由 _visual_modifier 独立判定。
         has_lifecycle = any(

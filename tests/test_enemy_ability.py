@@ -3941,3 +3941,44 @@ def test_frozen_behavior_flag_predicate():
     })
     out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
     assert out["ok"] and "controlled($it, 'freeze')" in out["hooks"][0]["condition"]
+
+
+def test_on_stack_conditional_property_compiles_expression():
+    """OnStack 条件属性分支（决策卡 #36）：谓词可翻则属性改条件表达式."""
+    sources = {
+        "character_config": {"SkillList": [{
+            "Name": "Skill01", "SkillType": "Skill",
+            "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "A",
+        }]},
+        "abilities": {"A": {"Name": "A", "OnStart": [{
+            "$type": "RPG.GameCore.AddModifier",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+            "ModifierName": {"Value": "Buff"},
+        }]}},
+        "modifiers": {"Buff": {"_CallbackList": [{
+            "Event": "OnStack", "CallbackConfig": [{
+                "$type": "RPG.GameCore.PredicateTaskList",
+                "Predicate": {"$type": "RPG.GameCore.ByCompareDynamicValue",
+                              "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+                              "DynamicKey": {"Value": "Flag"},
+                              "CompareType": "Greater",
+                              "CompareValue": {"IsDynamic": False, "FixedValue": {"Value": 0}}},
+                "SuccessTaskList": [{
+                    "$type": "RPG.GameCore.StackProperty", "Property": "AttackAddedRatio",
+                    "PropertyValue": {"IsDynamic": False, "FixedValue": {"Value": 0.5}},
+                }],
+                "FailedTaskList": [{
+                    "$type": "RPG.GameCore.StackProperty", "Property": "AttackAddedRatio",
+                    "PropertyValue": {"IsDynamic": False, "FixedValue": {"Value": 0.1}},
+                }],
+            }],
+        }]}},
+    }
+    skills = [{"skill_id": "s1", "trigger_key": "Skill01", "param_list": []}]
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"], out["unsupported"]
+    effects = [e for h in out["hooks"] for e in h["effects"]]
+    mod = next(e["modifier"] for e in effects if e["effect_type"] == "apply_modifier")
+    expr = mod["stat_exprs"]["atk_pct"]
+    assert "dynamic_of" in expr and "?" in expr, f"属性应编译为条件表达式：{expr}"
+    assert "0.5" in expr and "0.1" in expr
