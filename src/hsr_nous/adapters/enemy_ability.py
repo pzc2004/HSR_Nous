@@ -46,6 +46,8 @@ IGNORED_TASK_TYPES = frozenset({
     "RPG.GameCore.SetDawnsEyeWeatherUI",       # 黎明之眼天气 UI（纯表现）
     "RPG.GameCore.SetBattleAchievement",       # 战斗成就（纯表现）
     "RPG.GameCore.StackStatusDesc",            # 状态描述文本（纯表现）
+    "RPG.GameCore.SetBattleUIPanelState",      # 战斗 UI 面板状态（纯表现）
+    "RPG.GameCore.TriggerUITopEffect",         # UI 顶部特效（纯表现）
     "RPG.GameCore.ChangeTargetModifierEffectState",
     "RPG.GameCore.CharacterChangePhase",
     "RPG.GameCore.CharacterReactionAnimConfig",
@@ -952,6 +954,9 @@ class AbilityCompiler:
         return {"ParamEntity": "$it", "AbilityTargetEntity": "$event.target",
                 "Caster": "$self.actor_id", "ModifierOwnerEntity": "$self.actor_id",
                 "LevelEntity": "$level",
+            "CasterSummoner": "summoner_of($self.actor_id)",
+            "ParamEntitySummoner": "summoner_of($it)",
+            "ModifierOwnerSummoner": "summoner_of($self.actor_id)",
             "CasterLeftEntity": {"pool": "enemies",
                                  "where": "position_delta($it, $self.actor_id) == -1"},
             "CasterRightEntity": {"pool": "enemies",
@@ -1029,6 +1034,8 @@ class AbilityCompiler:
             namespace = "$self" if target == "$self.actor_id" else target
             return f"dynamic_of({namespace}, '{key}') {operator} {compare}"
         if node_type == "RPG.GameCore.ByCompareMonsterPhase":
+            if alias.endswith("_Self"):
+                alias = "Caster"
             if alias not in {"", "Caster", "ModifierOwnerEntity"}:
                 self._issue(ctx, path, node_type, f"阶段谓词目标未注册：{alias}")
                 return None
@@ -1058,6 +1065,14 @@ class AbilityCompiler:
             expr = f"character_id({target}) == '{int(character_id)}'"
             return self._negate_condition(expr) if predicate.get("Inverse") else expr
         if node_type == "RPG.GameCore.ByCompareMonsterID":
+            if alias.endswith("_Self"):
+                alias = "Caster"   # Monster_*_Self = 自身特定形态
+            if alias.startswith("Monster_"):
+                # 字面怪物 id 目标：静态比较该 id 与比较值
+                monster_id = self._number(predicate.get("TargetMonsterID"), ctx, f"{path}/TargetMonsterID")
+                if monster_id is None:
+                    return None
+                return "1 == 1" if alias == str(int(monster_id)) else "1 == 0"
             if target is None:
                 self._issue(ctx, path, node_type, f"怪物 ID 谓词目标未注册：{alias}")
                 return None
@@ -2465,8 +2480,18 @@ class AbilityCompiler:
         return str(target or "")
 
     def _hook_target(self, alias: str, ctx: Optional[_Context] = None) -> Any:
+        if alias.endswith("_Self"):
+            alias = "Caster"   # Monster_*_Self = 自身特定形态
         if alias == "ParamEntity":
             return ctx.retarget if ctx is not None else None
+        if alias in {"CasterSummoner", "ModifierOwnerSummoner"}:
+            return "summoner_of($self.actor_id)"
+        if alias == "ParamEntitySummoner":
+            return "summoner_of($it)"
+        if alias == "ModifierOwnerEntity.GetServant":
+            return {"pool": "enemies", "where": "$it.summoner_id == $self.actor_id"}
+        if alias.startswith("Monster_"):
+            return alias   # 字面怪物 id = 该 id 对应的 actor（模板 id 直选）
         return {
             "Caster": "self",
             "ModifierOwnerEntity": "self",
