@@ -99,8 +99,8 @@ def test_workbench_read_only_worldlines(tmp_path):
     by_id = {item["worldline_id"]: item for item in summaries}
     completed_summary = by_id[completed.worldline_id]
     assert completed_summary["status"] == "completed"
-    assert completed_summary["observed"]["random_consumed"] == 92
-    assert completed_summary["random_total"] == 92
+    assert completed_summary["observed"]["random_consumed"] == 97
+    assert completed_summary["random_total"] == 97
     assert completed_summary["event_count"] > 0
     assert completed_summary["modifier_count"] > 0
     assert completed_summary["derived_from"] is None

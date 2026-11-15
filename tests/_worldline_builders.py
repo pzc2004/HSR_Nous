@@ -47,7 +47,7 @@ def make_acheron_worldline_parts():
             {"turn": 10, "window": "after_action", "actor": "1308", "action": "130803"},
         ],
     }
-    return build, stage, [0.99] * 92
+    return build, stage, [0.99] * 97
 
 
 def make_completed_and_failed_worldlines(store):

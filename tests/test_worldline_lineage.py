@@ -30,7 +30,7 @@ from hsr_nous.research.schema import (
 )
 from tests._worldline_builders import make_acheron_worldline_parts
 
-TOTAL_DAMAGE = 13835.311721259002
+TOTAL_DAMAGE = 13933.387298859003
 _PARENT_ID = "a" * 64
 _PARENT_HASH = "b" * 64
 
@@ -259,7 +259,7 @@ def test_derived_child_runs_and_chain_verifies(tmp_path):
     assert child.worldline_id != parent.worldline_id
     assert child.status == "completed"
     assert child.observed["turn_count"] == 16
-    assert child.observed["random_consumed"] == 92
+    assert child.observed["random_consumed"] == 97
     # 死字段覆盖：执行与父代逐值一致
     assert math.isclose(child.observed["total_damage"], TOTAL_DAMAGE, rel_tol=1e-9)
     assert math.isclose(

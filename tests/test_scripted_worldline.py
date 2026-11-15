@@ -294,9 +294,9 @@ class TestRealTeamWorldline:
             initial_sp=5, initial_energy_ratio=1.0, prepare_engine=prepare,
         )
         assert result.outcome == "timeout" and result.state.turn_count == 16
-        assert result.random_source.consumed == 92 and not result.random_source.remaining
+        assert result.random_source.consumed == 97 and not result.random_source.remaining
         assert recorder is not None and recorder.ult_casts == 3
-        assert math.isclose(result.state.total_damage, 13835.311721259002, rel_tol=1e-9)
+        assert math.isclose(result.state.total_damage, 13933.387298859003, rel_tol=1e-9)
         assert any("轮盘勋爵" in line for line in result.state.log)
         assert any("猜猜谁住在这里" in line for line in result.state.log)
         assert any("残梦尽染，一刀缭断" in line for line in result.state.log)

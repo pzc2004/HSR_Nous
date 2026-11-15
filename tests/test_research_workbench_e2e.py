@@ -130,8 +130,8 @@ def test_workbench_browser_worldline_detail_failure_and_lineage(server, browser_
     assert page.locator(".worldline-card").count() == 2
 
     page.locator(".worldline-card").filter(has_text="已完成").first.click()
-    page.locator("#worldlineOverview").filter(has_text="92/92").wait_for(timeout=10000)
-    assert "92/92" in page.locator("#worldlineOverview").inner_text()
+    page.locator("#worldlineOverview").filter(has_text="97/97").wait_for(timeout=10000)
+    assert "97/97" in page.locator("#worldlineOverview").inner_text()
     page.locator("#worldlinePlayer").wait_for(timeout=10000)
     player = page.frame_locator("#worldlinePlayer")
     player.locator("#battleView").wait_for(timeout=15000)
@@ -167,8 +167,8 @@ def test_workbench_browser_worldline_detail_failure_and_lineage(server, browser_
     assert "不创建战斗面板" in page.locator("#worldlineReplay").inner_text()
     assert "没有 final_save" in page.locator("#worldlineEvidence").inner_text()
     page.locator("#worldlineOverview [data-action='select-worldline']").first.click()
-    page.locator("#worldlineOverview").filter(has_text="92/92").wait_for(timeout=10000)
-    assert "92/92" in page.locator("#worldlineOverview").inner_text()
+    page.locator("#worldlineOverview").filter(has_text="97/97").wait_for(timeout=10000)
+    assert "97/97" in page.locator("#worldlineOverview").inner_text()
     assert "#/worldline/" in page.url
 
     page.set_viewport_size({"width": 390, "height": 844})

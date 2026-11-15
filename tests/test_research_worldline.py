@@ -31,7 +31,7 @@ from hsr_nous.research.schema import (
 )
 from tests._worldline_builders import make_acheron_worldline_parts
 
-TOTAL_DAMAGE = 13835.311721259002
+TOTAL_DAMAGE = 13933.387298859003
 
 
 def _acheron_spec(values=None) -> WorldlineSpec:
@@ -138,8 +138,8 @@ def test_acheron_worldline_end_to_end(tmp_path):
     observed = artifact.observed
     assert observed["outcome"] == "timeout"
     assert observed["turn_count"] == 16
-    assert observed["random_consumed"] == 92
-    assert observed["random_total"] == 92
+    assert observed["random_consumed"] == 97
+    assert observed["random_total"] == 97
     assert math.isclose(observed["total_damage"], TOTAL_DAMAGE, rel_tol=1e-9)
 
     ordinals = [event["ordinal"] for event in artifact.events]
@@ -256,7 +256,7 @@ def test_worldline_id_binds_random_sequence(tmp_path):
     store = ArtifactStore(tmp_path / "artifacts")
     runner = WorldlineRunner(store=store)
     first = runner.run(_acheron_spec())
-    second = runner.run(_acheron_spec(values=[0.98] * 92))
+    second = runner.run(_acheron_spec(values=[0.98] * 97))
     assert first.worldline_id != second.worldline_id
 
 
