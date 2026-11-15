@@ -37,8 +37,8 @@ class Action:
     skill_point_cost: int = 0  # 战技点消耗（普攻=-1回复，战技=1消耗）
     skill_point_gain: int = 0  # 战技点获取（普攻默认+1）
 
-    # 削韧值（击破系统核心参数）
-    toughness_dmg: int = 0     # 削韧值（普攻10, 战技20, 终结技30）
+    # 削韧值（击破系统核心参数；多段 SPHitRatio 可产生小数，编译不做 int 截断）
+    toughness_dmg: float = 0.0  # 削韧值（普攻10, 战技20, 终结技30）
     # 削韧作用域（乱破/波提欧"无视弱点属性削减韧性"族）：""=默认闸
     # （攻击属性 ∈ 目标有效弱点才可削，植入弱点计入）；"all"=无视弱点任意属性可削；
     # 元素列表=这些元素无视弱点可削（静闸；modifier 携带的动态闸未落地，见 03_actor §3.8 注）
@@ -46,7 +46,7 @@ class Action:
 
     # 扩散副目标（Blast：主目标 + 相邻；数值锚点 docs/mechanics/04_break_system.md 基线 10/20/10）
     scaling_blast: Optional[List[Dict[str, float]]] = None  # 相邻目标倍率表（按等级）；None=与主目标相同
-    toughness_dmg_blast: Optional[int] = None  # 相邻目标削韧；None=主目标一半
+    toughness_dmg_blast: Optional[float] = None  # 相邻目标削韧；None=主目标一半
 
     # 多段（本字段即引擎层表达）：scaling/toughness_dmg 均为**每段**数值
     instances: int = 1  # 段数；>1 时逐段结算，段间目标死亡则后续段落空（鞭尸损失）
@@ -85,11 +85,15 @@ class Action:
     # 施放后挂身 modifier（dict 声明→引擎物化；v1 仅 self 目标：buff 类技能通道）
     apply_modifiers: List[Dict[str, Any]] = field(default_factory=list)
 
-    # 资源驱动段数（毁伤族，白厄 140811）：非空时段数 = 该资源当前值 × instances_per_point（消耗前读）
+    # 资源驱动段数（毁伤族，白厄 140811）：非空时段数 = instances_base + 资源当前值 × per_point（消耗前读）
     instances_from_resource: str = ""
+    instances_base: int = 0           # 资源外固定段数（Obscure Blaze 族：基础 1 击 + 每层 1 击）
     instances_per_point: float = 1.0  # 每 1 点资源对应几段（140811：每毁伤 4 段）
     instances_cap: int = 0            # 段数上限（140811：总倍率上限换算 26 段；0=无上限）
-    consume_all_resource: str = ""    # 非空时施放后消耗该资源全部当前值（段数已先读）
+    # 资源驱动 ATK 倍率增量（长右（错误）族）：消耗前读，atk 倍率 += 资源值 × per_point
+    scaling_from_resource: str = ""
+    scaling_per_point: float = 0.0
+    consume_all_resource: str = ""    # 非空时施放后消耗该资源全部当前值（段数/倍率增量已先读）
 
     # 净化（解除自身所有可驱散负面，140811 族）
     cleanse_self: bool = False
@@ -98,8 +102,9 @@ class Action:
     level_key: str = ""
 
     # 机制级优先目标（03_actor §3.8.1）：非空时目标解析先按词表求值——
-    # "owner_last_target"=召唤物"优先召唤者最后攻击的敌人"族（长夜月 Evey 1141301 首实例）；
-    # 无法解析（无记录/目标已离场/非召唤物）回落统一决策链（手动 > policy > 缺省首个）
+    # "owner_last_target"=召唤物优先召唤者最后攻击的敌人（长夜月 Evey 1141301 族）；
+    # "dot:<kind>"=优先持有指定 DoT 的目标（kind 词表同 DOT_KIND_ELEMENTS，炽燃徘徊者族）；
+    # 无法解析时回落各侧既有目标链（我方手动/policy/缺省，敌方嘲讽与锁定）。
     prefer_target: str = ""
 
     # 行动级可用条件（03_actor §3.8.1，合法性表达式）：非空时进合法行动集前现场求值——

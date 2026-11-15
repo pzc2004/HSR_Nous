@@ -134,6 +134,36 @@ class TestClient:
         with pytest.raises(LLMError, match="越界"):
             client.chat([{"role": "user", "content": "x"}], key_index=5)
 
+    def test_direct_chat_per_key_cap(self):
+        """非 POOL 直连：每个 key 各自 cap=1，双 key 可并行但同 key 不重叠."""
+        cfg = _cfg(api_keys=("k1", "k2"), concurrency=1)
+        active = {0: 0, 1: 0}
+        max_seen = {0: 0, 1: 0}
+        used = set()
+        lock = threading.Lock()
+
+        def transport(url, payload, headers):
+            key = 0 if headers["Authorization"] == "Bearer k1" else 1
+            with lock:
+                active[key] += 1
+                max_seen[key] = max(max_seen[key], active[key])
+                used.add(key)
+            time.sleep(0.02)
+            with lock:
+                active[key] -= 1
+            return _Resp()
+
+        client = LLMClient(cfg, transport=transport)
+        threads = [threading.Thread(
+            target=lambda: client.chat([{"role": "user", "content": "x"}])) for _ in range(6)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=5)
+        assert not any(thread.is_alive() for thread in threads), "直连调用应全部结束"
+        assert all(value <= 1 for value in max_seen.values()), f"同 key 超帽：{max_seen}"
+        assert used == {0, 1}, "两个 key 都应被用到"
+
     def test_transport_retry_then_success(self, monkeypatch):
         monkeypatch.setattr("hsr_nous.llm.client.time.sleep", lambda s: None)
         calls = []
@@ -230,22 +260,28 @@ class TestScheduler:
         client = LLMClient(_cfg(api_keys=("k1", "k2"), concurrency=1))
         sch = Scheduler(client, per_key_concurrency=1)
         marks = {}
+        c_completed = threading.Event()
 
         def timed(name, dur):
             def task():
                 time.sleep(dur)
                 marks[name] = time.monotonic()
+                if name == "C_fast":
+                    c_completed.set()
                 return name
             return task
 
-        t0 = time.monotonic()
-        marks["A_start"] = t0
-        sch.submit(timed("A_slow", 0.20), label="A")   # key#1 慢任务
+        def slow():
+            # 正确补位时由 C 释放；若调度器分批等待，则超时后 A 先完成，断言失败。
+            c_completed.wait(timeout=2.0)
+            marks["A_slow"] = time.monotonic()
+            return "A_slow"
+
+        sch.submit(slow, label="A")                     # key#1 等待 C 的慢任务
         sch.submit(timed("B_fast", 0.02), label="B")   # key#2 快任务
         sch.submit(timed("C_fast", 0.02), label="C")   # 排队——B 完成即补到 key#2
         sch.run()
-        assert marks["C_fast"] < marks["A_slow"], (
-            "C 应在 B 完成后立刻补位（≈0.04s），不等 A（≈0.20s）——若成立则非分批等待")
+        assert marks["C_fast"] < marks["A_slow"], "C 应在 B 完成后补位，不等 A 结束"
 
     def test_retry_then_success(self):
         client = LLMClient(_cfg())
@@ -465,6 +501,16 @@ class TestSchedulerLive:
             runner.join(timeout=30)
         assert not runner.is_alive()
         assert [f.result() for f in futs] == list(range(12))
+
+    def test_executor_capacity_matches_per_key_and_resizes(self, tmp_path):
+        """自持线程池容量 = per_key × key_count，热更时按新额度重建."""
+        cfg = _cfg(api_keys=("k1", "k2"), concurrency=3)
+        live = LiveConfig.materialize(tmp_path / "live.json", cfg)
+        sch = Scheduler(LLMClient(cfg), live=live, live_poll_interval=0.02)
+        assert sch._executor._max_workers == 6, "初始容量 3×2=6"
+        _write_live(live.path, concurrency=4)
+        sch._poll_live()
+        assert sch._executor._max_workers == 8, "热更 3→4 后容量 4×2=8"
 
     def test_concurrency_shrink_does_not_kill_inflight(self, tmp_path):
         cfg = _cfg(concurrency=3)

@@ -237,6 +237,25 @@ class TestJsonRoundTrip:
                                      template_roots=TEST_TEMPLATE_ROOTS)
         _assert_worldline(compiled, mode=MODE_ROLL, seed=42, via_json=True)
 
+    def test_on_remove_effects_survive_json(self):
+        compiled = compile_encounter(_pela_build(), _pela_stage(),
+                                     template_roots=TEST_TEMPLATE_ROOTS)
+        eng = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+        eng.setup()
+        eng._apply_modifier_spec(eng.state.actors["ally"], {
+            "modifier_id": "LIFECYCLE", "modifier_type": "buff",
+            "on_remove": [{
+                "effect_type": "apply_modifier", "target": "self",
+                "modifier": {"modifier_id": "AFTER_REMOVE", "modifier_type": "buff"},
+            }],
+        }, None)
+        restored = CombatEngine.load_state(
+            compiled, json.loads(json.dumps(eng.save_state())))
+        target = restored.state.actors["ally"]
+        restored._remove_modifier(target, "LIFECYCLE", "expire")
+        assert "LIFECYCLE" not in target.modifiers
+        assert "AFTER_REMOVE" in target.modifiers
+
 
 class TestWaveSave:
     def test_save_after_wave_transition(self):
@@ -326,6 +345,7 @@ class TestCompletenessGate:
         "initial_sp": "setup 注入件（_init_state 不重跑，恢复后无消费点）",
         "initial_energy_ratio": "setup 注入件（同上）",
         "wave_enemies": "编译产物（未来波次敌人——登场时刻才经 _advance_wave 布场）",
+        "_enemy_policies": "编译产物（敌人序列/冷却规则；运行态在 _enemy_policy_state 存档）",
         "state_configs_by_actor": "编译产物（形态注册表；state_config 按名回挂同件）",
         "_initial_modifiers": "编译产物（初始挂载属历史，已在存档的 modifiers 里）",
         "_compiled_hooks": "编译产物（恢复时按列表序编号重挂订阅与累积队列）",
@@ -333,6 +353,8 @@ class TestCompletenessGate:
         "_resource_decls": "编译产物",
         "state_entry_actions": "编译产物",
         "_trigger_order": "编译产物",
+        "_frame_stack": "执行帧栈（瞬态——随 _execute_action 调用栈生灭，行动结算完恒空；"
+                        "档间恒静息零值，同 bus._depth 口径；帧语义见 sim/frame.py）",
     }
 
     def test_engine_attrs_partitioned(self):
@@ -461,3 +483,23 @@ class TestGuards:
         _steps(ctrl, 5)
         assert restored.state.snapshot() == ctrl.state.snapshot(), (
             "seed 被忽略后世界线仍须与原线一致（RNG 流位置走存档）")
+
+
+def test_level_blackboard_roundtrip():
+    """关卡黑板（决策卡 #31）随存档往返：动态值与关卡 modifier 不丢."""
+    compiled = compile_encounter(_elation_build(), _elation_stage(),
+                                 template_roots=TEST_TEMPLATE_ROOTS)
+    eng = CombatEngine.from_compiled(compiled, mode=MODE_ROLL, seed=42)
+    _steps(eng, 10)
+    st = next(iter(eng.state.actors.values()))
+    eng._hooks._run_hook_effect(st, {"effect_type": "set_dynamic_value", "target": "$level",
+                                     "dynamic_key": "SoldierCount01", "amount": 3}, {})
+    eng._hooks._run_hook_effect(st, {"effect_type": "apply_modifier", "target": "$level",
+                                     "modifier": {"modifier_id": "WeatherPhase01Flag",
+                                                  "name": "天气一阶段", "modifier_type": "buff",
+                                                  "duration": 0, "max_stack": 1}}, {})
+    save = json.loads(json.dumps(eng.save_state()))
+    restored = CombatEngine.load_state(compiled, save)
+    assert restored._level_state_obj is not None
+    assert restored._enemy_policy_state["$level"]["dynamic_values"]["SoldierCount01"] == 3
+    assert "WeatherPhase01Flag" in restored._level_state_obj.modifiers

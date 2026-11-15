@@ -26,7 +26,11 @@
 ### 11.2 控制效果
 
 - 冻结/禁锢等控制效果：见 [04_break_system.md](04_break_system.md) §4.2-4.3（冻结/残梅绽真跳过+锁恢复，纠缠/禁锢仅延后）
+- **支配（Dominated）**：携带者失去正常操控，回合改用普攻随机攻击其一名其他同阵营友方。
+- **暴怒（Outrage）**：携带者失去正常操控，回合自动攻击随机对立阵营目标；攻击方向与支配相反，不能混用同一目标池。
 - 场地效果与多波次切换：待确认，见文末"待确认事项"
+
+> 支配/暴怒定义来源：[Fandom - Status Effect](https://honkai-star-rail.fandom.com/wiki/Status_Effect)，并由 Kafka 的 Spirit Whisper 与 Nebula Devourer 的敌方技能文本交叉核对。
 
 ### 11.3 HP 变化事件 vs 伤害事件
 
@@ -116,6 +120,40 @@ v3.0 引入，忆师和忆灵在**同一行动中**各自发动攻击。
 
 - **代放技能（trigger_action）**：机制让一个单位替另一个单位放技能——如刻律德菈复制队友战技（来源：游戏内文本；schema 见 `05_effects.md` trigger_action）。
 - **来源/类别改写**：事件在传播中被改写归属——姬子•启行助战技**视为姬子施放战技**（来源重归因）；飞霄行迹使终结技伤害**视为追加攻击**（行动类别改写）；千冶•刃/貊泽/黄泉有同类重标记。影响"施放 X 时"类触发判定与增伤命中（来源：游戏内文本；schema 见 `23_event_hook_system.md` §23.6 modify_event 白名单）。
+
+### 11.9 噬命（Prana-Siphon / Dirty HP）
+
+噬命降低的是**可回复生命上限**，不是直接扣减有效生命上限，也不是治疗量乘区：
+
+```
+recoverable_hp_cap = effective_max_hp × (1 - min(variant_cap, initial_ratio + accumulated_hit_ratio))
+# variant_cap ≤ 0.99；基础实例为 0.99，The Ascended (Bug) 为 0.50
+```
+
+- 施加时记录初始比例（承露天人 Black Prana's Snare 为 30%，持续 2 回合）；当前 HP 不因此改变。重复施放可继续提高初始比例（Bug 每次 +20%，与受击累计合并后共享 50% 上限、持续 3 回合）。
+- 攻击处于噬命状态的目标时，把该次攻击伤害换算为 `damage / effective_max_hp` 累积到 `accumulated_hit_ratio`，并刷新持续时间；Vitals Drained 变体按攻击前后 `current_hp / effective_max_hp` 差值累计，且只接受指定来源的攻击。
+- 治疗只能把当前 HP 恢复到 `recoverable_hp_cap`；当前 HP 已高于该上限时不压低当前 HP，治疗实际量为 0，拟治疗量与实际量之差仍按溢出记账。解除噬命后上限恢复，不清空当前 HP。
+- DoT 跳伤不是攻击命中，不走本条的攻击累计；多段攻击按每个实际命中段分别累计并刷新。
+
+来源：Fandom `The Ascended` / `The Ascended (Bug)` 的 Black Prana's Snare 与 Vitals Drained 文本、TBGD `MCommon_BlackBlood` 的 `MDF_DirtyHPRatio` 参数链；基础实例 99% 上限另见 [Honey Hunter 状态说明](https://starrail.honeyhunterworld.com/vitals-drained-monster_skill-2/?lang=CN)。
+
+### 11.10 一次性免伤 Barrier
+
+Barrier 不是按数值吸收的 HP 护盾，而是**一次性免伤状态**：携带者下一次受击时，该次命中的伤害变为 0，随后 Barrier 被消耗。多段攻击逐段判定；存在多件时同次命中全部消耗。
+
+- 结算在 `before_take_damage` 的目标侧完成，**不依赖 Barrier 施加者存活**。因此主动施放与“受到致命攻击时给击杀者”共用同一语义，不能只在施加者 hook 中实现。
+- 与 HP 护盾、锁血不同：Barrier 无剩余数值，不是减伤乘区，也不是致命时留 1 HP。
+- 实例：The Shield 的 Diadem of the Stale / Imitation of Alacritous Desire（TBGD `MMonster_W2_Beast02_00_BlockDamage`）；sim_schema 对应 modifier 字段 `block_damage`（见 `04_modifier.md` 生存字段表）。
+
+### 11.11 侵蚀 (Corrosion)
+
+侵蚀是与噬命不同的独立 HP 资源账，**不降低可回复生命上限**：
+
+- 黑潮蚀刃 Fated End 把命中目标**实际 HP 减少量的 50%** 记为侵蚀；实际减少量按受击前后 HP 差计算，不能用过量伤害或护盾吸收量替代。
+- 持有侵蚀者每次行动命中不同目标时，按**初始侵蚀量 × 20% × 不同目标数**恢复 HP，并以实际治疗量扣减剩余侵蚀；恢复至零时解除侵蚀并获得 Renewal，使下一次攻击伤害提高 50%（TBGD `SkillP01[3]` 优先于公开机制页的 30% 候选）。
+- 多段攻击的受击目标按首现序去重；Renewal 在对应攻击结算后消耗。
+
+来源：TBGD `Monster_AML_Minion02_01_Skill01_Phase02` / `MMonster_AML_Minion02_01_RallyHP*` 参数链，以及 [Fandom Corrosion](https://honkai-star-rail.fandom.com/wiki/Corrosion)。
 
 ---
 

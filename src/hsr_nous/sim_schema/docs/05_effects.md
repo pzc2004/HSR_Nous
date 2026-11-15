@@ -121,9 +121,16 @@ hooks:
 
 | effect_type | 状态 |
 |-------------|------|
-| `deal_damage` / `apply_modifier` / `remove_modifier` / `gain_energy` / `gain_skill_point` / `gain_resource` / `set_hp_to_percent` / `grant_extra_turn` / `immediate_action` / `delay_action` / `trigger_action` | **已实现**（hook 通道） |
+| `deal_damage` / `apply_modifier` / `remove_modifier` / `gain_energy` / `consume_energy` / `gain_skill_point` / `gain_resource` / `set_hp_to_percent` / `grant_extra_turn` / `immediate_action` / `delay_action` / `trigger_action` | **已实现**（hook 通道） |
+| `barrage_damage` | **已实现**（hook 通道——右侧优先每目标一次的连续攻击；重复目标追加一段，见本节 Barrage 伤害） |
+| `random_choice` | **已实现**（hook 通道——`options` 中随机执行一个 effect；expected 取首项，roll 均匀随机） |
 | `break_damage` / `cancel_event` / `set_resource` / `heal_self` / `adjust_stacks` | **已实现**（hook 通道；原引擎暗原语，本节补登，见下） |
-| `heal` / `summon` / `dismiss_summon` / `trigger_dot` / `adjust_duration` / `add_toughness_bar` | **已实现**（hook 通道——2026-09 收编：heal=任意目标治疗；summon/dismiss=召唤物入离场；trigger_dot=强制结算目标 DoT 不耗 duration（scope/dot_element 选择性过滤 + ratio 引爆比例可选，缺省全结全额）；adjust_duration=时长 ±N ≠ refresh；add_toughness_bar=追加韧性条（虚韧性族，`03_actor.md` §3.10 条序模型）） |
+| `set_dynamic_value` | **已实现**（hook 通道——ConfigAI 动态值设值，`dynamic_key` + `amount`，见下） |
+| `bind_roll` | **已实现**（hook 通道——执行帧共享掷骰绑定锚，`roll_key` + 可选 `scale`（表达式槽）；编译器概率分支翻译的前置绑定，帧语义与分域规则见 `23_event_hook_system.md` §23.15） |
+| `absorb_modifier` | **已实现**（hook 通道——按名称吸收可驱散 modifier，累计层数入持有者资源，见下） |
+| `once_per_battle` | **已实现**（hook 通道——战斗级 latch；同 `latch_id` 后续 hook 效果不再执行，见下） |
+| `heal` / `summon` / `dismiss_summon` / `trigger_dot` / `adjust_duration` / `add_toughness_bar` / `restore_toughness` / `reduce_toughness` | **已实现**（hook 通道——2026-09 收编：heal=任意目标治疗；summon/dismiss=召唤物入离场；trigger_dot=强制结算目标 DoT 不耗 duration（scope/dot_element 选择性过滤 + ratio 引爆比例可选，缺省全结全额）；adjust_duration=时长 ±N ≠ refresh；add_toughness_bar=追加韧性条（虚韧性族，`03_actor.md` §3.10 条序模型）；restore_toughness=恢复韧性并解除击破态；reduce_toughness=固定削韧并支持 floor 保底） |
+| `leave_battle` | **已实现**（hook 通道——非击杀离场/逃跑，`actor_exit` 默认 `reason: "flee"`，不走死亡检查、不发 `on_kill`） |
 | `advance_action` | **已实现**（hook 通道——2026-09-07 收编：amount 百分数拉条，剩余距离 ≤ 0 时无效；风堇 1140906 小伊卡消失拉忆师族） |
 | `drain_hp` | **已实现**（hook 通道——2026-09-07 收编：生命流失/汲取，发 `on_hp_decrease`（reason='drain'）不触发伤害类 hook；遐蝶 140702/140709 耗全队当前生命、死龙 1140702 耗自身生命族，见 §生命汲取/生命流失） |
 | `activate_ultimate` | **已实现**（hook 通道——2026-09-07 收编：目标终结技立即作为插入行动发动、不耗充能；昔涟 141503"激活全体队友的终结技"族，见 §激活终结技） |
@@ -156,12 +163,27 @@ split: "even"               # 可选：总量按结算时存活目标均分（�
 | `amount` | hook 语境**已收编**（2026-09-07）：基数区直写——`ability_multiplier` 由 amount 表达式喂入（`01_formula.md` §1.1 source 注），与 `scaling_atk`/`scaling_hp` **互斥**（同写编译期炸）；tally×比例族"资源值即基数"的落点（风堇 1140901、23042 光锥，`16_custom_resources.md` §16.8）。**逐目标 `$target` 求值**（2026-09-24 收编——`heal`/`gain_energy` 同槽：池选目标在数值槽经 `$target` 引用，桑博 1108 E4「命中目标的风化层数」首实例；不引用 `$target` 的表达式逐目标同值，与一次性求值等价）。action 语境仍走 Action `scaling` 等级档表（写了编译期炸） |
 | `damage_type` | hook 语境收（**二态**，2026-09-10 动态元素族收编——丹恒•腾荒 1414 同袍「相应属性」附加伤害首实例）：元素字面量直用（词表 `sim_schema/action.py` `ELEMENTS`）；词表外字符串按**白名单表达式**编译期预编译 + 运行期现场求值（`element_of` / `who_has` 宿主——"属性随动态目标"族），求值结果词表闸（非合法元素运行期炸——`element_of` 目标未声明 `element` 时得 `""`）；`category: "true"` 的真伤可写伪属性字面量 `"true"`（运行期真伤分支不读 `damage_type`） |
 | `action_type` | hook 语境收（**伪行动类别声明槽**，2026-09-14——飞霄 1220 终结技子击标 `ultimate` 首实例）：缺省 `follow_up`（`category: "additional"` 归 `additional`）——"终结技伤害"身份族（E6 穿透 scoped/「终结技视为追加攻击」反向族）经本槽声明；`"dot"` = DoT 路由（2026-09-22 收编——hook 承载 DoT tick 声明后走通用 deal_damage 路径，增伤区读 `dot_dmg_boost` 桶（「持续伤害提高」——`f"{action_type}_dmg_boost"` 开放命名空间命中，攻击侧池与声明式 `dot_tick` 增伤合成同口径）；命中域 `event_ctx` 携带 `"dot"` 与声明式 DoT 通道同字面值（目标侧「受到的持续伤害提高」承伤 scoped 件同命中）。**边界**：暴击口径不变（事件承载含期望暴击——R-KF3 在案结构差；官方 DoT 不暴击——**声明式通道迁移已收官（2026-09-22）**：虎克 1109/艾丝妲 1009/桂乃芬 1210/桑博 1108/希露瓦 1103/卡芙卡 1005/椒丘 1218 已迁（R-SV1/R-AS2/R-HK1/R-SA1 转三方全等）；黑天鹅 1307（奥迹 dot_ratio 跳伤时求值——仿射叠层 base+inc×($modifier.stacks−1)）/海瑟音 1410（裂伤 HP 帽跳伤时求值 min(20%×$self.max_hp, 25%×$snapshot.atk)+Zone hook 触发声明式载荷）随 `dot_ratio_expr` 落地迁入（`04_modifier.md` dot 字段节）——hook 承载 DoT tick 全灭）；一次性结算读现值（非施加-跳伤模型，快照切分不适用）。枚举 = `ACTION_TYPES` ∪ `{"dot"}`（`dot` 非行动类别——`03_actor.md` §3.8「dot 触发不属于 action_type」同口径，声明槽扩展词表 `_HOOK_DMG_ACTION_TYPES` 闸）；action 语境写在编译期炸 |
-| `category` | hook 语境收（`"additional"` = 附加伤害；`"true"` = 真实伤害——2026-09-07 收编：走 rulebook `true_damage` 式（`amount` = `fixed_value` 直写，**须配 amount 且与 scaling 互斥**），防御/抗性/增伤/暴击/易伤/减伤/虚弱等常规乘区全不命中，护盾吸收层同走（mechanics 02 §2.8）；发射的 `on_hp_decrease` 带 `damage_type: "true"`——昔涟结界"原伤害 %"族防递归闸，见 `23_event_hook_system.md` §23.4）；`"elation"` = 欢愉伤害（2026-09-15 收编：走 rulebook `elation_damage` 式——`amount` = **纯倍率表达式**（比例量纲不基于角色属性，mechanics 02 §2.14 abilityMultiplier 口径，须配 amount）；不吃通用增伤/独立增伤/weaken，可暴击，防御/抗性/易伤/减伤/韧性减伤/最终伤害正常生效；`toughness_dmg` **已开闸**（2026-10-11——火花 150104 天赋附伤 stance [15,0,0]÷3=5 米游社/tbgd 双源实证，原「口径待实测」互斥闸退役）：与直伤同走 `_apply_toughness_damage` 单漏斗（own_element 默认闸/双效率池/击破判定/多韧性条/超击破转化全同口径，逐目标各削） |
+| `category` | hook 语境收（`"additional"` = 附加伤害；`"true"` = 真实伤害——2026-09-07 收编：走 rulebook `true_damage` 式（`amount` = `fixed_value` 直写，**须配 amount 且与 scaling 互斥**），防御/抗性/增伤/暴击/易伤/减伤/虚弱等常规乘区全不命中，护盾吸收层同走（mechanics 02 §2.8）；发射的 `on_hp_decrease` 带 `damage_type: "true"`——昔涟结界"原伤害 %"族防递归闸，见 `23_event_hook_system.md` §23.4）；`"atrophy"` = Atrophy 固定伤害（沿用 `true_damage` 固定值路由，但保留声明元素以参与削韧，可配 `ignore_shield` / `energy_grant` / `toughness_dmg`，与无属性真伤分轨）；`"elation"` = 欢愉伤害（2026-09-15 收编：走 rulebook `elation_damage` 式——`amount` = **纯倍率表达式**（比例量纲不基于角色属性，mechanics 02 §2.14 abilityMultiplier 口径，须配 amount）；不吃通用增伤/独立增伤/weaken，可暴击，防御/抗性/易伤/减伤/韧性减伤/最终伤害正常生效；`toughness_dmg` **已开闸**（2026-10-11——火花 150104 天赋附伤 stance [15,0,0]÷3=5 米游社/tbgd 双源实证，原「口径待实测」互斥闸退役）：与直伤同走 `_apply_toughness_damage` 单漏斗（own_element 默认闸/双效率池/击破判定/多韧性条/超击破转化全同口径，逐目标各削） |
+| `ignore_shield` | hook `deal_damage` 可选布尔（缺省 `false`）：为 `true` 时跳过护盾吸收，按结算伤害直扣 HP；用于 Atrophy DMG 等“不可被护盾抵消”的固定伤害，不影响其他伤害路径 |
+| `energy_grant` | hook `deal_damage` 可选受击回能（缺省 `0`）：与 action 同键同语义，命中存活目标时按其能量恢复效率回能；固定伤害与随机目标共用同一目标选择，不另发 `after_being_hit` |
 | `punchline_source` | hook `category: "elation"` 专属表达式槽——笑点乘区取数源定槽（21_elation.md §21.2）：**缺省 = 持有者好活当赏合并值**（`certified_banger`——其他欢愉伤害）；欢愉技段族写 `"res_punchline"`（阿哈笑点池实时值；**覆写域内读取点拦截**（2026-10-11——`_aha_pool_override` 非 None 时 `res_punchline` 的一切读取（复合表达式/`resource_of`/钩条件）在 `engine._resource_value` 单点同锚，无覆写域逐比特不变——字面值特判退役）；「触发角色无好活用爻光的算」族写 `resource_of('1502', 'certified_banger')` |
 | `elation` | hook `category: "elation"` 专属表达式槽（2026-10-11——大吉大利择优族）：**欢愉度输入覆写**——缺省读攻击者面板（rulebook `elation_multi` 输入 `override_param: elation` 承接）；爻光「攻击者欢愉度低于爻光时用爻光的算」族写 `max(elation_of($event.actor), $self.elation)`（`elation_of` 宿主见 `22_syntax_reference.md` §22.4） |
 | `toughness_dmg` | hook 语境**已收编**（2026-09-07）：削韧值（缺省 0 = 不削；常量/表达式同 `_hook_amount` 通道）——与 action 层**同键同语义**：走 `_apply_toughness_damage` 单漏斗（own_element 默认闸——攻击属性 ∈ 目标有效弱点才削、`01_formula.md` §1.5 双效率池、击破判定、多韧性条全同口径，见 `03_actor.md` §3.4），仅对怪物生效；**逐目标逐 effect 各削**——多段伤害的多段削韧 = 多个 `deal_damage` effect 各声明各削（mechanics 04"削韧值按比例分布在每一段"同构）；与 `category: "true"` **互斥**（真伤无属性不削韧，mechanics 02 §2.8——同写编译期炸）；`category: "elation"` **已开闸**（2026-10-11——火花 150104 双源实证，同单漏斗同口径）；`toughness_scope` 同键在案（2026-09-15 接线——无视弱点削韧族：`"all"`/元素列表，hook 层首实例 130807 黄泉秘技） |
 | `split` | **action 语境**（Action 顶层键，已实现 `even` 均分，见下）；hook 语境写了编译期炸 |
 | `instances` | **action 语境**（Action 顶层键，已实现多段展开；`instances_from_resource` 族同）；hook 语境写了编译期炸 |
+
+**Barrage 伤害（`barrage_damage`）**：hook 专用复合效果，逐击复用 `deal_damage` 的完整伤害、
+削韧、回能与受击事件链。字段为 `scaling_atk` / `repeat_scaling_atk` / `instances_expr` /
+`damage_type` / `toughness_dmg` / `energy_grant` / `action_type`；`instances_expr` 是段数表达式，
+须求值为正整数。每击先从编队右侧选择一个尚未被本效果命中的存活目标；所有在场目标均已被
+优先命中后，剩余击数随机选择目标（expected 取编队首个）。同一目标再次被命中时，追加一段
+`repeat_scaling_atk`；基础段与追加段分别结算。当前仅支持从右侧优先，其他方向不收。
+
+**随机选择（`random_choice`）**：`options` 为 effect dict 列表，非空；expected 执行首项，
+roll 缺省用 zagreus 均匀随机执行一项。每个选项可写非负 `weight`，存在时按权重随机，
+缺省权重为 1，全部权重之和必须大于 0。当前嵌套项支持 `apply_modifier`、`advance_action` 与
+`summon`（Team Building 随机召唤 Grunt 首实例），其他 effect_type 编译期拒绝；嵌套项的目标、
+modifier、数值字段沿用被复用原语的校验与执行链。
 
 **类别与段数**：`category: "additional"` 声明附加伤害（写入事件 payload `tags: [additional]`——不吃类型限定增伤、不再触发命中类监听，见 `03_actor.md` §3.8 tags 登记）；`instances: <expr>` 声明多段/动态段数——DSL 禁循环，循环只存在于编译期：按表达式展开为 N 段独立结算（`target: "random_each"` 时逐段独立随机），并注入 `$seg.index` 段序号（"第 N 段起生效"类条件可读）。
 
@@ -306,18 +328,33 @@ modifier_id: "MOD_XXX"
 modifier: { ... }            # 可内联完整 modifier 定义
 target: "self"
 duration: 3
-chance: 1.0                  # 基础概率，受效果命中/抵抗影响
+apply_chance: 1.0            # 基础概率，受效果命中/抵抗影响
 ```
 
-**字段语境对账**（hook 语境只收 `modifier` 块 + `target`，平铺字段写了编译期炸）：
+**字段语境对账**（hook 语境只收 `modifier` 块 + `target` + `apply_chance`，其他平铺字段写了编译期炸）：
 
 | 字段 | 语境 |
 |------|------|
 | `modifier` 块 | hook 语境**唯一通道**（内联完整 modifier 定义；块内合法键 = `sim/compile/build_compiler.py` `_MODIFIER_SPEC_KEYS`，含 `modifier_id` / `duration`） |
 | 平铺 `modifier_id` | **未实现**（写了编译期炸——ID 写进 `modifier` 块内） |
 | 平铺 `duration` | **未实现**（写了编译期炸——时长写进 `modifier` 块 `duration` 键） |
-| `chance` | **未实现**（写了编译期炸——施加概率/EHR 结算未接） |
+| `apply_chance` | hook 语境收（缺省 `1.0`；施加时走统一效果命中/抵抗判定） |
 | `target` | hook 语境收（缺省 `self`） |
+| `source` | 可选施加者覆盖：字面 actor_id、`$event.<字段>` 或 `modifier:<modifier_id>`（读取当前生命周期事件携带者身上该件的原施加者；`before_actor_exit` 取 `$event.actor`，其余缺省 hook 携带者）；缺省为 hook 携带者。生命周期转移用 `$event.source` / `modifier:<id>` 保留原施加者 |
+
+`modifier.on_apply` 复用本章 effects 词表，只在 modifier 成功施加后执行；携带者为
+`$self`，并继承原 hook 事件语境。概率抵抗时不执行，可与控制 modifier 组成原子附加效果。
+
+`modifier.on_remove` 是其摘除侧对偶：实例已从携带者移除后、`after_remove_modifier`
+总线事件发射前执行，覆盖过期、驱散、替换与死亡等所有 `_remove_modifier` 路径；`$self`
+仍为携带者，`$event` 使用 `after_remove_modifier` 的 `modifier_id` / `reason` / `source` /
+`target` 载荷。效果定义随 modifier 进入存档，恢复后摘除不得丢失行为。
+
+上游 `OnBeforeDying` 不内联成递归 modifier 定义，而是编译为 `before_actor_exit` hook：
+条件为持有该 modifier 且 `reason == "death"`，效果中的 `source: "modifier:<modifier_id>"`
+读取被触发现有件的原施加者，因此标记可跨目标连续转移而不递归展开定义。
+`on_apply` / `on_remove` 的效果均可写可选 `condition`，在实际执行时按同一 `$self` /
+`$event` 语境逐条判定；条件不成立的条目不执行，不影响同槽后续效果。
 
 > **弱点植入不新增 effect_type**：用 `apply_modifier` + 弱点操作类 modifier（`weakness_add` 字段，见 `04_modifier.md` §4.11）表达；已挂 modifier 的时长增减用 `adjust_duration` 结算原子（同节）。
 
@@ -336,12 +373,17 @@ order: "newest"              # 可选：移除顺序 newest（默认，LIFO）| 
 |------|------|
 | `modifier_id` | hook 语境与 `filter` **至少其一**（都写 = 交集；都不写编译期炸） |
 | `target` | hook 语境收（缺省 `self`；示例的 `enemy_single` 不在 hook 选择器词表） |
-| `filter`（`$mod` 绑定） | **已实现**（2026-09-07）——`$mod` 绑定待审 modifier（字段：`modifier_id` / `modifier_type` / `debuff_kind` / `control_kind` / `dispellable` + 合成 `kind`——免疫判定同口径 `debuff_kind or (control if control_kind else modifier_type)`，`"$mod.kind == 'control'"` 一把罩住两写法）；命中的仍仅限 `dispellable: true` 实例（见 `04_modifier.md` §4.6），按 LIFO 逐个摘除 |
+| `filter`（`$mod` 绑定） | **已实现**（2026-09-07）——`$mod` 绑定待审 modifier（字段：`modifier_id` / `modifier_type` / `debuff_kind` / `control_kind` / `dot_element` / `prevent_action` / `dispellable` / `source` + 合成 `kind`——免疫判定同口径 `debuff_kind or (control if control_kind else modifier_type)`，`"$mod.kind == 'control'"` 一把罩住两写法；`dot_element` 可按 DoT 属性精确摘除，炽燃徘徊者 Dancing Cinders 解除灼烧首实例；DoT 类可用 `$mod.kind == 'dot'`，禁行动旗标可用 `$mod.prevent_action`；`source` 为施加者 actor_id，可写 `$mod.source == $self.actor_id` 对应上游 OnlyRemoveCasterAdded）；命中的仍仅限 `dispellable: true` 实例（见 `04_modifier.md` §4.6），按 LIFO 逐个摘除 |
 | `max_count` | **已实现**（2026-09-08）——逐目标截断：命中清单（LIFO 序）只摘前 N 个，须为 ≥1 整数（编译期闸）；仅配 `filter` 路径有意义（`modifier_id` 定点摘除本就一次一件，写上不改变语义） |
 | `order` | **未实现**（写了编译期炸） |
 | `reason` | hook 语境收（缺省 `"remove"`，进移除日志/事件载荷） |
 
 三个可选字段的组合对应常见净化/驱散族：流萤类"驱散全部" = 无 `filter`；知更鸟类/长夜月类"净化控制" = `filter: "$mod.kind == 'control'"`（已落地）；灵砂类/丹恒•腾荒龙灵类按个数 = `filter` + `max_count`（已落地——"解除 N 个负面"= `filter: "$mod.modifier_type == 'debuff'"` + `max_count: N`，debuff 全子类型含 dot/control 一把罩）。当前 hook 通道支持按 `modifier_id` 定点摘除 + 按 `filter` 成类摘除 + `max_count` 逐目标按数截断。
+
+每次 `remove_modifier` 还把本效果实际摘除总数写入 `$last.removed_count`（跨目标合计，
+无命中时为 0）。后续 `set_dynamic_value.amount` 与 effect `condition` 可引用该值；
+此类条件在各效果执行时判定，不提前到 hook 条件快照。上游 `DispelStatus` 的
+`DispelCountKey` 走这一通道，不再把写入后的读取误判为旧事件快照。
 
 #### 调整层数（adjust_stacks）【已实现•补登】
 
@@ -451,6 +493,18 @@ amount: 30
 - `amount`：数值或表达式；表达式可引用 `$target` 命名空间（**按目标面板逐目标求值**——`0.2 * $target.max_energy` = 恢复目标能量上限 20%，星期日终结技 131303 实例）
 - `err_exempt: true` 时该笔回能为具名豁免（mechanics 05 §5.3 清单：停云终结技/秘技、藿藿终结技、白露星魂 1、光锥「镜中故我」等），**不乘能量恢复效率**；缺省 `false` 吃 ERR
 - 发射点：本原语与行动回能、受击回能一样经 `on_gain_energy` waterfall 发射（载荷与契约见 `23_event_hook_system.md` §23.4）；进战初始能量同经此通道（2026-10-11 事件化——引擎 `_grant_initial_energy` 补发，source/reason=`"initial_energy"`、err_exempt=True）
+
+#### 消耗能量（consume_energy）【已实现】
+
+```yaml
+effect_type: "consume_energy"
+target: "all_allies"
+amount: 0.2 * $target.max_energy   # 逐目标扣减各自能量上限的 20%
+```
+
+- `target` 与 `amount` 语境同 `gain_energy`；`amount` 必须非负，实际扣量 = `min(amount, 当前能量)`，因此当前能量最低为 0。
+- 走既有 `pipeline.consume_energy` 管线，不乘 ERR，也不经 `on_gain_energy`（扣能不是获得）；放逐目标跳过。
+- 首实例：敌方 Startling Broadcast 对我方全体扣减各自 20% Max Energy。
 
 #### 激活终结技（activate_ultimate）
 
@@ -663,7 +717,9 @@ hooks:
 > caster 缺省 `self`=hook 持有者）；`caster`（2026-09-15 落地）= 代放执行者
 > （选择器字符串/目标代数 dict，须解析为单一目标，否则大声炸）；`action_type`
 > （同批）= 按类索引选择子（欢愉技代放族——各角色欢愉技 id 不同，恰取 1 件，
-> 0/>1 大声炸；与 `action_id` 互斥）。`pool_override`（同批补口，欢愉代放固定
+> 0/>1 大声炸；与 `action_id` 互斥）。`target`（可选）= 强制本次代放的主目标
+> （选择器字符串/目标代数 dict，须解析为单一目标；空候选 = 不代放，绝不回落默认目标，
+> 供递归施放自然终止）。`pool_override`（同批补口，欢愉代放固定
 > 笑点档——欢愉主终结技「固定计入 #5=20 笑点」结算口径：覆写阿哈笑点池读值
 > （凡读池处同锚——行动层与 hook 段一致结算），非发放不落 gain_resource；表达式
 > 槽现场求值）。`cost`/`attribution`/`timing` 仍为目标设计
@@ -679,9 +735,10 @@ hooks:
 effect_type: "delay_action"
 target: "primary_target"
 amount: 30                  # 延后 30% 行动条
+apply_chance: 1.0           # 可选：基础概率，受效果命中/抵抗影响
 ```
 
-行动延后增加目标当前 AV：`new_av = current_av + 10000/speed * amount%`；999 仅为显示层封顶，内部值不钳（社区实测 B站 BV1rp4y1T7wG，旁证 BV1dqZyYBEya；单一来源，未独立复现）。
+行动延后增加目标当前 AV：`new_av = current_av + 10000/speed * amount%`；999 仅为显示层封顶，内部值不钳（社区实测 B站 BV1rp4y1T7wG，旁证 BV1dqZyYBEya；单一来源，未独立复现）。`apply_chance < 1` 时先走统一效果命中/抵抗判定，抵抗则不推条。
 
 #### 追加韧性条（add_toughness_bar）
 
@@ -704,6 +761,30 @@ modifier:
 - 追加条按加入顺序排在主条之后，**按序扣除**（前条未归零不扣后条）
 - 每条归零经总线发射 `on_break`（payload 带 `bar_index`，主条 = 0）——二次击破用普通触发器 + `condition` 过滤，不加事件人头税
 - modifier 施加的条登记来源：modifier 移除/过期时其挂载的条一并移除（无需 remove 原语）
+
+#### 韧性恢复（restore_toughness）
+
+```yaml
+- effect_type: "restore_toughness"
+  target: "other_allies"      # 目标选择器同其他 hook effect
+```
+
+将目标韧性恢复至其面板上限并解除弱点击破状态，`bar_index` 回主条；追加条保留，语义与敌方回合开始的自然韧性恢复一致。未处于击破态时仅补足当前韧性，不产生额外事件。
+
+#### 固定削韧（reduce_toughness）
+
+```yaml
+- effect_type: "reduce_toughness"
+  target: "self"
+  amount: 60                 # 固定削韧量，表达式槽同其他 effect
+  floor: 1                   # 可选：当前韧性下限；达到下限即停止，不触发击破
+  damage_type: "imaginary"  # 可选：触发击破时的属性，缺省 physical
+```
+
+按声明值直接扣减目标当前韧性，不经攻击倍率/效率池放大；`toughness_lock` 与
+`bars_exhausted` 同既有削韧闸。`amount` 为实际扣减量（受 floor 截断），发
+`on_toughness_damage`；归零下限为 0 时复用 `_trigger_break`，`damage_type` 决定击破属性。
+`floor > 0` 时只钳到下限，不触发击破。
 
 #### 随机抽取（random_pick）
 
@@ -805,6 +886,17 @@ effect_type: "dismiss_summon"
 summon_id: "hyacine_memosprite"
 ```
 
+#### 非击杀离场（leave_battle）
+
+```yaml
+effect_type: "leave_battle"
+target: "self"
+reason: "flee"             # 可选，缺省 flee
+```
+
+用于逃跑/主动离场，不走 `_check_death`，不发 `on_kill`；仍按 `before_actor_exit` →
+`actor_exit` 顺序留痕，未在场或已离场为 no-op。
+
 #### 召唤物行动【待收编】
 
 > `summon_action` 未实现——v1 压缩裁决：召唤物代打复用 `trigger_action`（召唤物自身
@@ -878,6 +970,76 @@ on_insufficient: "fail"      # "fail" | "clamp" | "consume_all"
   逐各设值（通道与 `gain_resource` 同；风堇 1140901 忆灵侧清 tally——账挂忆师——首实例）
 - 设值 = 差量走 `_gain_resource` 统一入口（同拿 clamp/provenance 口径，`on_resource_gain`
   与负向 `after_consume` 照发——银行返还 `refund_bank` 的防回流由 `from_bank` 专道承担）
+
+#### `set_dynamic_value`【已实现】
+
+把目标敌人的 ConfigAI `dynamic_values` 直接设为 `amount`（支持表达式），用于 modifier
+挂载/摘除驱动 AI 阶段键；与 `set_resource` 的自定义资源账不是同一命名空间：
+
+```yaml
+- effect_type: "set_dynamic_value"
+  target: "self"               # 可选，缺省 self；逐目标写入
+  dynamic_key: "Phase_Flag"   # 必填，非空字符串
+  amount: 2                    # 必填，目标值
+  amount_target: {"pool": "allies"}  # 可选：仅决定 amount 的 $target 求值语境
+```
+
+`amount_target` 不改变写入目标；每个读取目标依次触发一次求值与写入，空候选不写，
+多候选按目标代数结果顺序写入，后者覆盖前者，对应上游 Retarget TaskList 的逐目标执行。
+缺省该槽时仍沿用原语义，以当前写入目标作为 `$target`。
+
+目标必须已有敌方 policy 运行态，否则运行期报错；写入值随 `dynamic_values` 进入存档。
+保留键 `current_phase` 改写敌方 `runtime.current_phase`（不写入 `dynamic_values`），供
+`ByCompareMonsterPhase` / 阶段门控读取；其余键仍写动态值表。
+外宇宙之冰的 `XP_Ice_Elite_Powerful_Modifier` 在 `OnStack/OnDestroy` 把 `Phase_Flag`
+设为 2/1，是首个实例。
+
+#### `bind_roll`【已实现】
+
+执行帧共享掷骰绑定锚（23_event_hook_system.md §23.15）——编译器概率分支翻译
+（`ByRandomChance`/`RandomConfig`）的前置绑定：
+
+```yaml
+- effect_type: "bind_roll"
+  roll_key: "Skill02_OnStart_1"   # 必填，帧级绑定键（编译器按节点路径生成稳定键）
+  scale: "0.5 + 0.3"             # 可选表达式槽，缺省 1——绑定值 = roll(roll_key) × scale
+```
+
+绑定后同键 `roll('<键>')` 读取零消耗返回绑定值；roll 模式采 `pipeline.rng`（消耗主流一次），
+expected 模式绑 `0.5 的下邻浮点`（与 `mechanic_chance` 的 `p>=0.5` 期望口径逐比特一致）。
+守卫示例（`ByRandomChance` 翻译）：Success 效果 `condition: "roll('k') < 0.5"`、
+Failed 效果 `condition: "roll('k') >= 0.5"`。帧外调用显式报错（同 `roll` 分域规则）；
+`RandomConfig` 翻译用 `scale=Σ权重` + 累计权重区间守卫（14_policy.md 概率分支节）。
+
+#### `once_per_battle`【已实现】
+
+战斗级 latch，放在 hook 效果列表首位。首次执行时把 `latch_id` 写入 `BattleState.once_latches`
+并继续后续效果；之后同 `latch_id` 的效果直接终止当前 hook 的剩余效果，不再执行。
+latch 不隶属于任一 actor，死亡/换波/存档恢复均保留，适合“全队同类天赋只能触发一次”：
+
+```yaml
+- effect_type: "once_per_battle"
+  latch_id: "bitter_fracture"
+```
+
+Black Tide's Corroded Axe 的 `Bitter Fracture` 是首个实例：多个同类在场时也只发动一次
+Fire of Vengeance。`latch_id` 必填且必须是非空字符串。
+
+#### `absorb_modifier`【已实现】
+
+按 `Modifier.name` 吸收目标集合中的可驱散 modifier：逐个累计 `max(1, stacks)`，摘除后把
+总层数写入 **hook 持有者**的 `resource_id`；目标集合只是被吸收者，不接收资源。总数为 0 时不
+写账。`modifier_name` 与 `resource_id` 均为必填非空字符串。
+
+```yaml
+- effect_type: "absorb_modifier"
+  target: "all_allies"
+  modifier_name: "Enkindle"
+  resource_id: "absorbed_enkindle"
+```
+
+Blaze Out of Space (Bug) 的 Bomb Warning 是首个实例；下一次 Bomb en Masse 按累计层数
+增伤，并在当次伤害结算后清零。
 
 ### 5.4 形态相关 effect_type
 

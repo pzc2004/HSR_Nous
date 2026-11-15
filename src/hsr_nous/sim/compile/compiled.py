@@ -120,8 +120,27 @@ class CompiledHook:
 
 
 @dataclass(frozen=True)
+class CompiledEnemyPolicy:
+    """敌人的序列/冷却/阶段门控策略（最终语义由真实 golden 验证）."""
+
+    sequence: tuple[str, ...] = ()
+    cooldown: Mapping[str, int] = field(default_factory=dict)
+    initial_cooldown: Mapping[str, int] = field(default_factory=dict)
+    skill_ids: Mapping[str, str] = field(default_factory=dict)
+    skill_phases: Mapping[str, tuple[int, ...]] = field(default_factory=dict)
+    monster_rank: str = ""
+    config: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        _freeze_containers(
+            self, ("cooldown", "initial_cooldown", "skill_ids", "skill_phases", "config"), ())
+
+    __deepcopy__ = _frozen_deepcopy
+
+
+@dataclass(frozen=True)
 class CompiledStage:
-    """编译好的关卡：初始阵容 + 波次敌人 + 环境（waves/enemy_actions 顶层只读映射视图）."""
+    """编译好的关卡：阵容 + 波次 + 敌方行动/策略（映射字段均为顶层只读视图）."""
 
     stage_id: str
     enemies: tuple[Actor, ...]                              # 初始阵容（第 1 波）
@@ -129,10 +148,18 @@ class CompiledStage:
     termination_mode: str = "fixed_av"
     max_action_value: float = 450.0
     enemy_actions: Mapping[str, List[Action]] = field(default_factory=dict)  # 敌人模板自带的行动表
+    enemy_policies: Mapping[str, CompiledEnemyPolicy] = field(default_factory=dict)
+    enemy_hooks: tuple = ()  # 敌人模板 hooks 块的编译产物（on_action/heal 等）
+    enemy_summon_defs: Mapping[str, SummonDef] = field(default_factory=dict)
+    # 敌人模板 custom_resources 编译产物；compile_encounter 与我方声明按 actor_id 合并
+    enemy_resource_decls: Mapping[str, Dict[str, Any]] = field(default_factory=dict)
     cycle: Any = None  # sim_schema.encounter.Cycle（玩法模式轮次配置；stage.yaml mode → rulebook modes 查得，无 mode 则 None）
 
     def __post_init__(self) -> None:
-        _freeze_containers(self, ("waves", "enemy_actions"), ())
+        _freeze_containers(
+            self, ("waves", "enemy_actions", "enemy_policies", "enemy_summon_defs",
+                   "enemy_resource_decls"),
+            ("enemy_hooks",))
 
     __deepcopy__ = _frozen_deepcopy
 

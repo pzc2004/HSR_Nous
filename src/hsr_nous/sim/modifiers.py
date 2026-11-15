@@ -61,7 +61,7 @@ class ModifierBook:
     # modifier 基础层
     # ------------------------------------------------------------------
 
-    def _apply_modifier(self, target: ActorState, mod: Modifier, *, apply_chance: float = 1.0) -> bool:
+    def _apply_modifier(self, target: ActorState, mod: Modifier, *, apply_chance: Optional[float] = None) -> bool:
         """施加 modifier：硬免疫判定 → 效果命中判定（debuff 系）→ singleton_group → stack_mode 语义.
 
         返回是否成功挂上（免疫/抵抗则失败）.
@@ -77,16 +77,12 @@ class ModifierBook:
                     self._engine.bus.emit("on_immune", {"modifier_id": mod.modifier_id,
                                                 "target": target.actor.actor_id}, self._engine.state)
                     return False
-        # 效果命中判定（§4.7：debuff/dot/control 且 chance<1 时掷/判）
-        if mod.modifier_type in ("debuff", "dot", "control") and apply_chance < 1.0:
+        # 效果命中判定（§4.7：debuff/dot/control 统一按基础概率×EHR×抵抗结算）
+        if mod.modifier_type in ("debuff", "dot", "control"):
             src_state = self._engine.state.actors.get(mod.source_id)
-            se = self._engine.pipeline.effective_stats(src_state) if src_state else {}
-            te = self._engine.pipeline.effective_stats(target)
-            chance = self._engine.pipeline.hit_chance(se, te, apply_chance,
-                                              effect_res_pen=se.get("effect_res_pen", 0.0))
-            if not self._engine.pipeline.roll_debuff_apply(chance):
-                self._engine.bus.emit("on_resist", {"modifier_id": mod.modifier_id, "target": target.actor.actor_id, "chance": chance}, self._engine.state)
-                self._engine.state.log.append(f"AV{self._engine.state.clock:.1f}: {target.actor.name} 抵抗了 {mod.name}（命中率 {chance:.0%}）")
+            if not self._engine._effect_application_succeeded(
+                    src_state, target, apply_chance,
+                    modifier_id=mod.modifier_id, label=mod.name):
                 return False
 
         # singleton_group：同组先摘旧
@@ -173,9 +169,16 @@ class ModifierBook:
         if removed is not None:
             # 反向摘盾：modifier 消失（过期/驱散/净化/破盾级联），其护盾实例一并移除
             target.shields = [s for s in target.shields if s.modifier_id != modifier_id]
-            self._engine.bus.emit("after_remove_modifier", {
+            payload = {
                 "modifier_id": modifier_id, "reason": reason, "target": target.actor.actor_id,
                 # 被摘件原施加者（$modifier.source 寻址——昔涟"标记消耗后回源追忆"族）
+                "source": removed.source_id,
+            }
+            # OnDestroy：实例已摘除，携带者即使已死亡也必须完成清理/转移；先于公开事件。
+            for eff in removed.on_remove:
+                self._engine._run_hook_effect(target, eff, payload)
+            self._engine.bus.emit("after_remove_modifier", {
+                "modifier_id": modifier_id, "reason": reason, "target": target.actor.actor_id,
                 "source": removed.source_id}, self._engine.state)
             self._sync_speed(target)
 
@@ -316,14 +319,23 @@ class ModifierBook:
         duration, anchor_override = _parse_duration_spec(spec)
         hit_condition = spec.get("hit_condition")
         enable_if = spec.get("enable_if")
-        # dot_ratio 两态：静态数值（float，施加时快照/跳伤 ×stacks）或跳伤时求值表达式
-        # （编译期已分类并预编译为 PreparedExpression 存件——值即当跳基数，不再 ×atk/×stacks）
+        # dot_ratio：静态数值/施加时烘焙；dot_ratio_expr：显式跳伤时求值（编译期预编译）。
+        # 旧 dot_ratio 中含 $snapshot/$modifier 的表达式仍按既有分类兼容。
         dot_ratio_raw = spec.get("dot_ratio", 0.0)
-        dot_ratio_expr = dot_ratio_raw if isinstance(dot_ratio_raw, PreparedExpression) else None
+        explicit_expr = spec.get("dot_ratio_expr")
+        if explicit_expr is not None and "dot_ratio" in spec:
+            raise ValueError("dot_ratio 与 dot_ratio_expr 互斥")
+        if explicit_expr is not None:
+            dot_ratio_expr = (explicit_expr if isinstance(explicit_expr, PreparedExpression)
+                              else parse(str(explicit_expr), layer="effect"))
+        else:
+            dot_ratio_expr = dot_ratio_raw if isinstance(dot_ratio_raw, PreparedExpression) else None
         return Modifier(
             modifier_id=spec["modifier_id"],
             name=spec.get("name", spec["modifier_id"]),
             modifier_type=spec.get("modifier_type", "buff"),
+            debuff_kind=str(spec.get("debuff_kind", "")),
+            control_kind=str(spec.get("control_kind", "")),
             duration=duration,
             stacks=int(spec.get("stacks", 1)),
             max_stack=int(spec.get("max_stack", 99)),
@@ -355,10 +367,17 @@ class ModifierBook:
             dot_ratio_expr=dot_ratio_expr,
             dot_base_chance=float(spec.get("dot_base_chance", 1.0)),
             hp_lock=bool(spec.get("hp_lock", False)),
+            block_damage=bool(spec.get("block_damage", False)),
+            fixed_hp_bars=int(spec.get("fixed_hp_bars", 0)),
             revive_percent=float(spec.get("revive_percent", 0.0)),
             moon_cocoon=bool(spec.get("moon_cocoon", False)),
             forced_taunt=bool(spec.get("forced_taunt", False)),
+            toughness_lock=bool(spec.get("toughness_lock", False)),
+            lock_on=bool(spec.get("lock_on", False)),
+            prevent_action=bool(spec.get("prevent_action", False)),
             remove_on_source_death=bool(spec.get("remove_on_source_death", False)),
+            remove_on_source_exit=bool(spec.get("remove_on_source_exit", False)),
+            on_remove=[dict(effect) for effect in spec.get("on_remove") or []],
             target_resource=str(spec.get("target_resource", "")),
             max_override=float(spec.get("max_override", 0.0)),
             # B3 呈现层留底：shield 声明块原文（状态行公式展示；物化在 _attach_shield）
@@ -367,10 +386,14 @@ class ModifierBook:
 
     def _apply_modifier_spec(self, target: ActorState, spec: Dict[str, Any],
                              source: Optional[ActorState], *,
-                             source_kind: str = "", source_ref: str = "") -> bool:
+                             source_kind: str = "", source_ref: str = "",
+                             apply_chance: Optional[float] = None,
+                             payload: Optional[Dict[str, Any]] = None) -> bool:
         """dict 声明 → modifier 挂载；声明带 shield 块时同时物化护盾实例.
 
         source_kind/source_ref：F2 呈现层来源记账（附加式，调用方不传 = 空串零差异）。
+        apply_chance：基础施加概率；None=直接调用方强制施加，显式值走统一命中/抵抗。
+        on_apply 只在成功挂载后执行，携带者为 $self，并继承原 hook 事件语境。
         """
         mod = self._modifier_from_spec(spec)
         if source is not None and not mod.source_id:
@@ -398,10 +421,12 @@ class ModifierBook:
         if source_kind:
             mod.source_kind = source_kind
             mod.source_ref = source_ref
-        if not self._apply_modifier(target, mod):
+        if not self._apply_modifier(target, mod, apply_chance=apply_chance):
             return False
         if spec.get("shield"):
             self._attach_shield(target, mod, spec["shield"], source)
+        for eff in spec.get("on_apply") or []:
+            self._engine._run_hook_effect(target, eff, payload or {})
         return True
 
     # ------------------------------------------------------------------

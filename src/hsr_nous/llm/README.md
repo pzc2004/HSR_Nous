@@ -36,7 +36,7 @@ HSR_NOUS_LLM_<USE>_POOL=[{...},{...}]  # 号池：端点优先级链（JSON 数�
 - **auth/quota 判死出池**（HTTP 401/402/403 或报文含 quota/balance/insufficient/额度）
   → 该槽标记出池不再分配，本调用落下一个活槽重发；活槽全灭抛 `LLMError`
 - 429/5xx 传输族 → 槽内指数退避重试；400/空 content 等确定性错误 → 当场抛（不换槽）
-- 空 `POOL` = 单端点旧径（行为与引入号池前逐比特一致）
+- 空 `POOL` = 单端点每 key 一把帽（调用起点轮转；Scheduler 已配 key 时本层 cap=0，避免双闸）
 - v1 只走 env 配置（live config 热更不接 pool——换槽需求重起进程读 env 即生效，
   与 runs_root 断点续跑同节奏）
 

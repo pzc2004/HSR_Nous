@@ -22,7 +22,7 @@ import yaml
 
 from hsr_nous.sim.compile.compiled import CompiledPolicy, CompiledPolicyRule
 from hsr_nous.sim.compile.expr_compiler import ExprCompiler
-from hsr_nous.sim_schema.action import ELEMENTS, Action
+from hsr_nous.sim_schema.action import DOT_KIND_ELEMENTS, ELEMENTS, Action
 from hsr_nous.sim_schema.actor import (
     PATH_ALIASES, PATHS, SPEED_RULES, SYSTEM_UNIT_FLAGS, TURN_HANDLERS, Actor, StatBlock,
 )
@@ -109,8 +109,9 @@ _ACTION_KEYS = frozenset({
     "resource_gain", "ult_cost_resource", "ult_cost_amount", "ult_quick_cast",
     "ult_consume_amount",
     "split", "act_now_targets", "apply_modifiers", "assist_cost_resource",
-    "instances_from_resource", "instances_per_point", "instances_cap",
-    "consume_all_resource", "cleanse_self", "level_key", "prefer_target",
+    "instances_from_resource", "instances_base", "instances_per_point", "instances_cap",
+    "scaling_from_resource", "scaling_per_point", "consume_all_resource",
+    "cleanse_self", "level_key", "prefer_target",
     "available_if", "manual_trigger",
 })
 
@@ -144,10 +145,10 @@ _MODIFIER_SPEC_KEYS = frozenset({
     "enable_if", "stat_exprs",  # 条件光环（04_modifier §4.16 已落地原语）
     "hit_stat_exprs",  # 命中域表达式值（04_modifier §hit_condition——per-hit 值槽）
     "weakness_add", "grants_immune",
-    "tick_anchor", "effect_scope", "hp_lock", "revive_percent", "moon_cocoon",
-    "forced_taunt", "remove_on_source_death", "shield", "target", "target_resource",
-    "max_override",
-    "dot_element", "dot_ratio", "dot_base_chance",  # DoT 运行时载体（modifier_type=="dot"——dot_source_atk/dot_snapshot_ctx 由引擎施加时结算，不经声明；dot_ratio/dot_base_chance 字符串值走 param() 取档，hook 侧现场求值烘焙）
+    "tick_anchor", "effect_scope", "hp_lock", "block_damage", "fixed_hp_bars", "revive_percent", "moon_cocoon",
+    "forced_taunt", "toughness_lock", "lock_on", "prevent_action", "remove_on_source_death", "remove_on_source_exit", "shield", "target", "target_resource",
+    "max_override", "debuff_kind", "control_kind", "on_apply", "on_remove",
+    "dot_element", "dot_ratio", "dot_ratio_expr", "dot_base_chance",  # DoT 运行时载体（modifier_type=="dot"——dot_source_atk/dot_snapshot_ctx 由引擎施加时结算，不经声明；dot_ratio/dot_base_chance 字符串值走 param() 取档，hook 侧现场求值烘焙）
 })
 
 #: hook 合法键（模板 hooks 块 / 秘技 hooks 共用）
@@ -268,22 +269,33 @@ _APPLY_MODIFIER_TARGETS = frozenset({"self", "all_enemies"})
 _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "cancel_event": frozenset(),
     "gain_resource": frozenset({"resource_id", "amount", "source"}),
+    "absorb_modifier": frozenset({"modifier_name", "resource_id"}),
     "set_resource": frozenset({"resource_id", "amount"}),
+    "set_dynamic_value": frozenset({"dynamic_key", "amount", "amount_target"}),
+    "set_dynamic_target": frozenset({"dynamic_key", "target"}),
+    "bind_roll": frozenset({"roll_key", "scale"}),
+    "once_per_battle": frozenset({"latch_id"}),
     "refund_bank": frozenset({"resource_id"}),
     "gain_skill_point": frozenset({"amount", "overflow_to"}),
     "set_sp_max": frozenset({"amount"}),
     "refill_skill_point": frozenset({"from_resource"}),
     "gain_energy": frozenset({"amount", "err_exempt"}),
+    "consume_energy": frozenset({"amount"}),
     "heal_self": frozenset({"ratio"}),
     "heal": frozenset({"ratio", "amount"}),
     "set_hp_to_percent": frozenset({"percent", "amount"}),
     "drain_hp": frozenset({"amount", "drain_ratio", "heal_target", "floor", "into_resource"}),
-    "summon": frozenset({"summon_id"}),
+    "summon": frozenset({"summon_id", "position"}),
     "dismiss_summon": frozenset({"summon_id"}),
-    "apply_modifier": frozenset({"modifier"}),
+    "leave_battle": frozenset({"reason"}),
+    "remove_shield": frozenset({"target"}),
+    "apply_modifier": frozenset({"modifier", "apply_chance", "source"}),
     "deal_damage": frozenset({"scaling_atk", "scaling_hp", "amount", "category", "damage_type",
                               "toughness_dmg", "toughness_scope", "action_type",
-                              "punchline_source", "elation"}),
+                              "punchline_source", "elation", "ignore_shield", "energy_grant"}),
+    "barrage_damage": frozenset({"scaling_atk", "repeat_scaling_atk", "instances_expr",
+                                 "damage_type", "toughness_dmg", "energy_grant", "action_type"}),
+    "random_choice": frozenset({"options"}),
     "trigger_action": frozenset({"action_id", "scaling_atk", "caster", "action_type",
                                  "pool_override"}),
     "remove_modifier": frozenset({"modifier_id", "reason", "filter", "max_count"}),
@@ -291,9 +303,11 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "trigger_dot": frozenset({"scope", "dot_element", "ratio"}),
     "adjust_duration": frozenset({"modifier_id", "delta"}),
     "add_toughness_bar": frozenset({"amount"}),
+    "restore_toughness": frozenset(),
+    "reduce_toughness": frozenset({"amount", "floor", "damage_type"}),
     "grant_extra_turn": frozenset(),
     "immediate_action": frozenset(),
-    "delay_action": frozenset({"amount"}),
+    "delay_action": frozenset({"amount", "apply_chance"}),
     "advance_action": frozenset({"amount"}),
     "adjust_stacks": frozenset({"modifier_id", "delta"}),
     "modify_amount": frozenset({"amount"}),
@@ -301,7 +315,7 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "aha_instant": frozenset({"amount"}),
     "exit_state": frozenset({"reason"}),
 }
-_EFFECT_COMMON_KEYS = frozenset({"effect_type", "target", "name"})
+_EFFECT_COMMON_KEYS = frozenset({"effect_type", "target", "name", "condition"})
 
 
 def _check_self_ns_fields(expr_src: Any, *, where: str, extra: Sequence[str] = ()) -> None:
@@ -474,7 +488,7 @@ def _check_res_refs(expr_src: Any, decls: Dict[str, Any], *, where: str,
 
 #: 资源写账 effect 族（res_ 对账闸的"本块有写账"判定集——与收尾存在性闸同口径）
 _RESOURCE_WRITE_TYPES = frozenset({"gain_resource", "set_resource", "adjust_stacks",
-                                   "refund_bank"})
+                                   "refund_bank", "absorb_modifier"})
 
 
 # --- 枚举词表（拼错编译期炸；历史案例：ult_timing "after_actoin" 终结技永远不开零提示） ---
@@ -498,7 +512,9 @@ _ENGINE_NATIVE_RESOURCES = frozenset({"punchline", "certified_banger"})
 
 #: target_type 合法值（引擎 _resolve_targets 实现集——其余写法落入默认单体=静默错，冻结拒绝；
 #: 文档示例里的 enemy_single/enemy_aoe 引擎未实现，不在词表）
-TARGET_TYPES = frozenset({"single", "blast", "aoe", "bounce", "self", "ally_single", "ally_aoe"})
+TARGET_TYPES = frozenset({
+    "single", "blast", "aoe", "bounce", "bounce_blast", "self", "ally_single", "ally_aoe",
+})
 
 #: ult_timing 合法值（自动前/后窗口、禁用，或 ultimate_script 严格窗口回放）
 ULT_TIMINGS = frozenset({"before_action", "after_action", "never", "scripted"})
@@ -511,8 +527,9 @@ TICK_ANCHORS = frozenset({"owner_turn_end", "owner_turn_start", "on_action", "so
 EFFECT_SCOPES = frozenset({"self", "team"})
 
 #: action prefer_target 词表（机制级优先目标，03_actor §3.8.1——
-#: owner_last_target = 召唤物"优先召唤者最后攻击的敌人"族，长夜月 Evey 1141301 首实例）
-PREFER_TARGETS = frozenset({"owner_last_target"})
+#: owner_last_target = 召唤物优先召唤者末目标；dot:<kind> = 优先对应 DoT 携带者）
+PREFER_TARGETS = frozenset(
+    {"owner_last_target"} | {f"dot:{kind}" for kind in DOT_KIND_ELEMENTS})
 
 #: duration dict 糖（04_modifier §4.14）：合法键 + tick_on 词表
 #: （词表镜像：modifiers._DURATION_TICK_ON——按引擎实现冻结，改一边同步另一边；
@@ -543,6 +560,40 @@ def _check_enum(value: Any, legal: frozenset, *, where: str, field: str) -> None
         raise ValueError(
             f"{where} 的 {field} 非法值 {value!r}（合法集合：{sorted(legal)}）"
         )
+
+
+def _check_weakness(ws: Any, *, where: str) -> None:
+    """weakness 列表逐元素词表闸（单一装配 helper，build/stage 四通道共用）。
+
+    lightning≠thunder 死弱点案（2026-10-18）：非 canonical 键引擎精确匹配永不命中——
+    伤害吃 non_weakness_res 暗抗 + 前端词表回退首字母（"l"糊成 I）双料事故，
+    编译期炸而非运行期沉默。
+    """
+    for w in (ws or []):
+        _check_enum(w, _ELEMENTS, where=where, field="weakness")
+
+
+def _check_resistance(res: Any, *, where: str) -> None:
+    """resistance 键（元素词表）闸——与 weakness 同词表对称面：_base_res 按 damage_type
+    精确查键，错键静默查不中落 non_weakness_res，同 weakness 的静默错类。"""
+    for k in (res or {}):
+        _check_enum(k, _ELEMENTS, where=where, field="resistance")
+
+
+#: 行动 damage_type 词表 = 元素 ∪ 无元素哨兵（"none"=纯支援技无伤害段、"true"=真实
+#: 伤害段——模板既有惯例，真伤语义由结算管线消费）∪ element_of( 动态元素族表达式
+#: （编译期放行，运行期求值对 ELEMENTS 同一事实源终审）
+_DAMAGE_TYPES = _ELEMENTS | {"none", "true"}
+
+
+def _check_damage_type(value: Any, *, where: str) -> None:
+    """action/variant 声明层 damage_type 词表闸（动态元素表达式跳过——表达式层终审）。"""
+    if value is None:
+        return
+    v = str(value)
+    if v.startswith("element_of("):
+        return
+    _check_enum(v, _DAMAGE_TYPES, where=where, field="damage_type")
 
 
 def _check_mapping(value: Any, *, where: str, field: str) -> None:
@@ -1281,7 +1332,9 @@ class BuildCompiler:
         for k, v in (base.get("dmg_bonus") or {}).items():
             stats.dmg_bonus[k] = float(v)
         stats.weakness = list(base.get("weakness") or [])
+        _check_weakness(stats.weakness, where=aid_desc)
         stats.resistance = {k: float(v) for k, v in (base.get("resistance") or {}).items()}
+        _check_resistance(stats.resistance, where=aid_desc)
 
         actor = Actor(
             actor_id=spec["actor_id"],
@@ -1339,6 +1392,8 @@ class BuildCompiler:
             _check_keys(a, _ACTION_KEYS, where=a_desc)
             _check_enum(a.get("action_type"), ACTION_TYPES, where=a_desc, field="action_type")
             _check_enum(a.get("target_type"), TARGET_TYPES, where=a_desc, field="target_type")
+            if a.get("damage_type"):
+                _check_damage_type(a["damage_type"], where=a_desc)
             # 病族闸（warn）：target_type 'single'（敌方池）但无伤害段——我方增益/治疗/净化
             # 技应为 ally_single（1101/1105/1110/1202/1203/1215/1217 八次实证）；
             # 敌方 debuff 植入技合法，故仅 warn
@@ -1374,6 +1429,9 @@ class BuildCompiler:
                     if iv.get("target_type") is not None:
                         _check_enum(iv["target_type"], TARGET_TYPES,
                                     where=f"{a_desc} instance_variants", field="target_type")
+                    if iv.get("damage_type"):
+                        _check_damage_type(iv["damage_type"],
+                                           where=f"{a_desc} instance_variants")
                     _check_mapping_list(iv.get("scaling"), where=f"{a_desc} instance_variants",
                                         field="scaling")
             ts = a.get("toughness_scope")
@@ -1410,13 +1468,13 @@ class BuildCompiler:
                 energy_grant=float(a.get("energy_grant", 0.0)),
                 skill_point_cost=int(a.get("skill_point_cost", 0)),
                 skill_point_gain=int(a.get("skill_point_gain", 0)),
-                toughness_dmg=int(a.get("toughness_dmg", 0)),
+                toughness_dmg=float(a.get("toughness_dmg", 0.0)),
                 toughness_scope=([str(e).lower() for e in a["toughness_scope"]]
                                  if isinstance(a.get("toughness_scope"), list)
                                  else str(a.get("toughness_scope", "")).lower()),
                 scaling_blast=([{k: float(v) for k, v in s.items()} for s in sb]
                                if (sb := a.get("scaling_blast")) else None),
-                toughness_dmg_blast=(int(v) if (v := a.get("toughness_dmg_blast")) is not None else None),
+                toughness_dmg_blast=(float(v) if (v := a.get("toughness_dmg_blast")) is not None else None),
                 instances=int(a.get("instances", 1)),
                 segment_confirm=bool(a.get("segment_confirm", False)),  # 逐段确认
                 # 段级变体 + 逐击选招：变体键闸 + target_type 枚举闸（词表外拼错编译期炸）
@@ -1435,8 +1493,11 @@ class BuildCompiler:
                 assist_cost_resource=str(a.get("assist_cost_resource", "")),  # 助战技额度资源
                 apply_modifiers=[dict(m) for m in a.get("apply_modifiers") or []],
                 instances_from_resource=str(a.get("instances_from_resource", "")),
+                instances_base=int(a.get("instances_base", 0)),
                 instances_per_point=float(a.get("instances_per_point", 1.0)),
                 instances_cap=int(a.get("instances_cap", 0)),
+                scaling_from_resource=str(a.get("scaling_from_resource", "")),
+                scaling_per_point=float(a.get("scaling_per_point", 0.0)),
                 consume_all_resource=str(a.get("consume_all_resource", "")),
                 cleanse_self=bool(a.get("cleanse_self", False)),
                 level_key=str(a.get("level_key", "")),  # 倍率取档键（曾静默丢失——白厄模板族）
@@ -1518,7 +1579,9 @@ class BuildCompiler:
             for k, v in (base.get("dmg_bonus") or {}).items():
                 stats.dmg_bonus[k] = float(v)
             stats.weakness = list(base.get("weakness") or [])
+            _check_weakness(stats.weakness, where=s_desc)
             stats.resistance = {k: float(v) for k, v in (base.get("resistance") or {}).items()}
+            _check_resistance(stats.resistance, where=s_desc)
             summon_actor = Actor(
                 actor_id=str(sid),
                 name=str(s.get("name", sid)),
@@ -1588,6 +1651,9 @@ class BuildCompiler:
             v = spec.get(k)
             if v is not None and not isinstance(v, (list, tuple)):
                 raise ValueError(f"{where} 的 {k} 须为 list，实得 {type(v).__name__}")
+        _check_weakness(spec.get("weakness_add"), where=f"{where} weakness_add")
+        if spec.get("dot_element"):
+            _check_enum(spec["dot_element"], _ELEMENTS, where=where, field="dot_element")
         _check_grants_immune_literal(spec.get("grants_immune"), where)
         # shield 数值块（04_modifier §4.15）：键 diff + accumulate/cap 配对与形状闸
         sh = spec.get("shield")
@@ -1657,6 +1723,16 @@ class BuildCompiler:
                     spec[k] = v2
                     _check_no_hook_chance(v2, f"{where} {k}")
                     self.expr.compile(v2, layer="effect")
+        explicit_tick_expr = spec.get("dot_ratio_expr")
+        if explicit_tick_expr is not None:
+            if "dot_ratio" in spec:
+                raise ValueError(f"{where} 的 dot_ratio 与 dot_ratio_expr 互斥")
+            if not isinstance(explicit_tick_expr, str):
+                raise ValueError(f"{where} 的 dot_ratio_expr 须为表达式字符串")
+            expr_src = sub(explicit_tick_expr, where=f"{where} dot_ratio_expr")
+            prepared = self.expr.compile(expr_src, layer="effect")
+            _check_dot_tick_expr(prepared, where=f"{where} dot_ratio_expr")
+            spec["dot_ratio_expr"] = prepared
         # stacks 数值槽（计数驱动载荷族——海瑟音 Zone 追加「min(实例数,cap−trigs) 层」/
         # 黄泉集真赤转移「stacks($event.actor,…)」）：param() 取档后字面量回 int 主通道；
         # 残留表达式=hook 侧现场求值烘焙族（hooks apply_modifier _hook_amount 烘焙成
@@ -1818,6 +1894,19 @@ class BuildCompiler:
                 self.expr.compile(str(v), layer="effect")
             except Exception as e:
                 raise ValueError(f"{where} hit_stat_exprs[{stat!r}] 表达式非法：{e}") from e
+        on_apply = spec.get("on_apply")
+        if on_apply is not None:
+            if not isinstance(on_apply, list):
+                raise ValueError(f"{where} 的 on_apply 须为 effects 数组")
+            self._validate_effects(on_apply, f"{where} on_apply",
+                                   extra_self_fields=extra_self_fields, param_ctx=param_ctx)
+        on_remove = spec.get("on_remove")
+        if on_remove is not None:
+            if not isinstance(on_remove, list):
+                raise ValueError(f"{where} 的 on_remove 须为 effects 数组")
+            self._validate_effects(on_remove, f"{where} on_remove",
+                                   extra_self_fields=extra_self_fields, param_ctx=param_ctx,
+                                   event_ns="after_remove_modifier")
 
     def _validate_effects(self, effects: List[Dict[str, Any]], source_desc: str,
                           extra_self_fields: Sequence[str] = (),
@@ -1834,7 +1923,7 @@ class BuildCompiler:
         sub = (param_ctx or _NO_PARAMS).substitute
         for i, eff in enumerate(effects):
             e_desc = f"{source_desc} effects[{i}]"
-            for slot in EFFECT_EXPR_SLOTS:
+            for slot in (*EFFECT_EXPR_SLOTS, "condition"):
                 v = eff.get(slot)
                 if isinstance(v, str):
                     v2 = sub(v, where=f"{e_desc} 的 {slot}")
@@ -1859,6 +1948,29 @@ class BuildCompiler:
                     f"子块键（enable_if/stat_exprs/stat_effects/duration/grants_immune 等）一律"
                     f"写进 modifier: {{...}} 内，写在 effect 层必被键闸打回（1001 打标实证）")
             _check_keys(eff, _eff_allowed, where=e_desc)
+            if t == "random_choice":
+                options = eff.get("options") or []
+                if not options:
+                    raise ValueError(f"{e_desc} random_choice 的 options 不能为空")
+                weights = []
+                for option in options:
+                    if not isinstance(option, dict):
+                        raise ValueError(f"{e_desc} random_choice 的 option 必须是 effect dict")
+                    option_type = option.get("effect_type")
+                    if option_type not in {"apply_modifier", "advance_action", "summon"}:
+                        raise ValueError(
+                            f"{e_desc} random_choice 当前仅支持 apply_modifier/advance_action/summon，"
+                            f"实得 {option_type!r}")
+                    _check_keys(
+                        option, _EFFECT_COMMON_KEYS | _EFFECT_PARAM_KEYS[option_type] | {"weight"},
+                        where=e_desc)
+                    weight = option.get("weight", 1.0)
+                    if (isinstance(weight, bool) or not isinstance(weight, (int, float))
+                            or not 0 <= weight < float("inf")):
+                        raise ValueError(f"{e_desc} random_choice 的 weight 须为有限非负数")
+                    weights.append(float(weight))
+                if sum(weights) <= 0:
+                    raise ValueError(f"{e_desc} random_choice 的 weight 总和须大于 0")
             if t == "deal_damage" and eff.get("amount") is not None and (
                     eff.get("scaling_atk") is not None or eff.get("scaling_hp") is not None):
                 # 基数区二态互斥（05_effects §造成伤害）：amount = ability_multiplier 直写
@@ -1904,7 +2016,9 @@ class BuildCompiler:
                 if isinstance(eff.get("dot_element"), str):
                     eff["dot_element"] = eff["dot_element"].lower()
                 _check_enum(eff.get("dot_element"), _ELEMENTS, where=e_desc, field="dot_element")
-            if t == "deal_damage" and eff.get("action_type") is not None:
+            if t == "reduce_toughness":
+                _check_enum(eff.get("damage_type"), _ELEMENTS, where=e_desc, field="damage_type")
+            if t in {"deal_damage", "barrage_damage"} and eff.get("action_type") is not None:
                 # 伪行动类别声明槽（2026-09-14——飞霄 1220 终结技子击标 ultimate 首实例）：
                 # hook 伤害缺省归 follow_up/additional——"终结技伤害"身份族（E6 穿透
                 # scoped/Formshift「终结技视为追加攻击」反向族）须经本槽声明；
@@ -1922,7 +2036,7 @@ class BuildCompiler:
                 raise ValueError(
                     f"{e_desc} deal_damage 的 category 'true' 与 toughness_dmg 互斥"
                     f"（真伤无属性不削韧——要削韧请去掉 category）")
-            if t == "deal_damage":
+            if t in {"deal_damage", "barrage_damage"}:
                 # damage_type 二态（05_effects §造成伤害——动态元素族，丹恒•腾荒 1414 同袍
                 # "相应属性"附加伤害首实例）：元素字面量直用；词表外按白名单表达式预编译
                 #（element_of/who_has 宿主——求值结果运行期校验须为合法元素）；
@@ -1974,38 +2088,61 @@ class BuildCompiler:
                     f"（合法集合：['all_allies', 'self'] + '$event.<字段>' + 代数 dict，"
                     f"见 05_effects §回复能量）"
                 )
-            if t in ("gain_resource", "set_resource") \
+            if t == "set_dynamic_value":
+                if not str(eff.get("dynamic_key", "")).strip():
+                    raise ValueError(f"{e_desc} set_dynamic_value 的 dynamic_key 不能为空")
+                if eff.get("amount") is None:
+                    raise ValueError(f"{e_desc} set_dynamic_value 缺 amount（目标值必填）")
+            if t == "once_per_battle" and not str(eff.get("latch_id", "")).strip():
+                raise ValueError(f"{e_desc} once_per_battle 的 latch_id 不能为空")
+            if t == "absorb_modifier":
+                if not str(eff.get("modifier_name", "")).strip():
+                    raise ValueError(f"{e_desc} absorb_modifier 的 modifier_name 不能为空")
+                if not str(eff.get("resource_id", "")).strip():
+                    raise ValueError(f"{e_desc} absorb_modifier 的 resource_id 不能为空")
+            if t in ("gain_resource", "set_resource", "absorb_modifier") \
                     and str(eff.get("resource_id", "")) == "energy":
                 # 病族闸：energy 是内建资源——custom_resources/gain_resource 只装自定义资源
                 #（1210 桂乃芬 E4 实证）；能量机制走 gain_energy 钩 / action energy_gain
                 raise ValueError(
                     f"{e_desc} 的 resource_id 'energy' 是内建资源——能量走 gain_energy 钩"
                     f" / action 层 energy_gain（1210 桂乃芬实证——1004/1103 同口径）")
-            if sel is not None and isinstance(sel, dict):
-                # 目标代数 dict：键 diff + pool/take/mode 词表 + where/order_by 预编译
-                # （where/order_by 先过 param() 取档就地写回——藿藿 1217 加强版阈值实证：
-                # 未替换会被白名单当未知函数拒，槽同 EFFECT_EXPR_SLOTS 口径，shield param 槽同族）；
-                # `$self.<字段>`/`$event.<字段>` 对账（2026-09-16 接线——运行期已注入
-                # （hook 持有者/hook payload 同 hook condition 口径）：错拼/越界字段
-                # 编译期炸，不再放到运行期 ExpressionError（打标稿实证四处）
-                from hsr_nous.sim.target_algebra import validate_algebra
-                for _ak in ("where", "order_by"):
-                    if isinstance(sel.get(_ak), str):
-                        sel[_ak] = sub(sel[_ak], where=f"{e_desc} target {_ak}")
-                        _check_self_ns_fields(sel[_ak], where=f"{e_desc} 的 target {_ak}")
-                        if event_ns is not None:
-                            _check_event_ns_fields(sel[_ak], event_ns,
-                                                   where=f"{e_desc} 的 target {_ak}")
-                validate_algebra(sel, where=f"{e_desc} target", expr=self.expr, allow_pool=True)
-            elif sel is not None and str(sel).startswith("$event."):
-                if event_ns is not None:
-                    _check_event_ns_fields(str(sel), event_ns, where=f"{e_desc} 的 target")
-            elif sel is not None and str(sel) not in HOOK_TARGET_SELECTORS:
-                raise ValueError(
-                    f"{e_desc} 未知 target 选择器 {sel!r}（合法集合："
-                    f"{sorted(HOOK_TARGET_SELECTORS)} + '$event.<字段>' + 代数 dict）"
-                )
+            for target_slot in ("target", "amount_target"):
+                target_sel = eff.get(target_slot)
+                if target_sel is None:
+                    continue
+                if isinstance(target_sel, dict):
+                    # 目标代数 dict：键 diff + pool/take/mode 词表 + where/order_by/take 预编译；
+                    # `$self`/`$event` 字段对账与 hook condition 同口径。
+                    from hsr_nous.sim.target_algebra import validate_algebra
+                    for _ak in ("where", "order_by", "take"):
+                        if isinstance(target_sel.get(_ak), str):
+                            target_sel[_ak] = sub(
+                                target_sel[_ak], where=f"{e_desc} {target_slot} {_ak}")
+                            _check_self_ns_fields(
+                                target_sel[_ak], where=f"{e_desc} 的 {target_slot} {_ak}")
+                            if event_ns is not None:
+                                _check_event_ns_fields(
+                                    target_sel[_ak], event_ns,
+                                    where=f"{e_desc} 的 {target_slot} {_ak}")
+                    validate_algebra(
+                        target_sel, where=f"{e_desc} {target_slot}", expr=self.expr, allow_pool=True)
+                elif str(target_sel).startswith("$event."):
+                    if event_ns is not None:
+                        _check_event_ns_fields(
+                            str(target_sel), event_ns, where=f"{e_desc} 的 {target_slot}")
+                elif str(target_sel) not in HOOK_TARGET_SELECTORS:
+                    raise ValueError(
+                        f"{e_desc} 未知 {target_slot} 选择器 {target_sel!r}（合法集合："
+                        f"{sorted(HOOK_TARGET_SELECTORS)} + '$event.<字段>' + 代数 dict）"
+                    )
             if t == "apply_modifier":
+                source_ref = eff.get("source")
+                if source_ref is not None:
+                    if not isinstance(source_ref, str) or not source_ref.strip():
+                        raise ValueError(f"{e_desc} apply_modifier 的 source 须为非空 actor 引用")
+                    if event_ns is not None and source_ref.startswith("$event."):
+                        _check_event_ns_fields(source_ref, event_ns, where=f"{e_desc} 的 source")
                 mod_spec = dict(eff.get("modifier") or {})
                 self._validate_modifier_spec(
                     mod_spec, f"{e_desc} modifier",
@@ -2013,7 +2150,7 @@ class BuildCompiler:
                     dot_expr_ok=True)
                 # param() 替换就地写回——产物随 eff 进 CompiledHook（05_effects §5.1）
                 eff["modifier"] = mod_spec
-            for slot in EFFECT_EXPR_SLOTS:
+            for slot in (*EFFECT_EXPR_SLOTS, "condition"):
                 v = eff.get(slot)
                 if isinstance(v, str):
                     try:
@@ -2901,7 +3038,7 @@ class BuildCompiler:
         for aid, acts in actions_by_actor.items():
             for a in acts:
                 for rid in (*a.resource_gain.keys(), a.consume_all_resource,
-                            a.instances_from_resource, a.ult_cost_resource,
+                            a.instances_from_resource, a.scaling_from_resource, a.ult_cost_resource,
                             a.assist_cost_resource):
                     if rid and not _rid_ok(rid):
                         raise ValueError(
@@ -2910,6 +3047,14 @@ class BuildCompiler:
         for h in hooks:
             for eff in h.effects:
                 t = eff.get("effect_type")
+                if t == "absorb_modifier":
+                    # target 是被吸收者集合；资源始终长在 hook 持有者身上，不走跨 actor 豁免。
+                    rid = str(eff.get("resource_id", ""))
+                    if rid and not _rid_ok(rid):
+                        raise ValueError(
+                            f"{h.owner_id} hook({h.event}) 的 {t} 引用未声明资源 {rid!r}"
+                            f"（已声明：{sorted(known)}）")
+                    continue
                 if t in ("gain_resource", "set_resource", "refund_bank"):
                     sel = eff.get("target")
                     if sel is not None and sel != "self":

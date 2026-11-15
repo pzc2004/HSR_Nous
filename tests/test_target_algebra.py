@@ -73,6 +73,18 @@ class TestHookAlgebraDirect:
             hero, {})
         assert [s.actor.actor_id for s in picked] == ["e2", "e3"], "过滤 e1 后按 hp 升序取前 2"
 
+    def test_order_by_formation_and_reverse(self):
+        """编队特殊键：formation 保持池序，-formation 反转，均可过编译闸."""
+        eng = _mk_engine()
+        hero = eng.state.actors["hero"]
+        for order, expected in (("formation", ["e1", "e2"]), ("-formation", ["e3", "e2"])):
+            spec = {"pool": "enemies", "order_by": order, "take": 2}
+            picked = eng._hooks._hook_target_states(spec, hero, {})
+            assert [s.actor.actor_id for s in picked] == expected
+            BuildCompiler()._validate_effects([{
+                "effect_type": "deal_damage", "scaling_atk": 1.0, "target": spec,
+            }], "模板 X")
+
     def test_take_int_random_targets(self):
         """实例垫底（敌方 "Deals … to 3 random targets"）：take 3 + mode random——
         roll 同 seed 复现；expected 按序取前 N 不掷骰（确定化口径）."""
@@ -99,6 +111,84 @@ class TestHookAlgebraDirect:
             {"pool": "enemies", "where": "has_modifier($it, 'MARK')", "take": 1}, hero, {})
         assert [s.actor.actor_id for s in picked] == ["e2"]
 
+    def test_where_monster_rank_uses_enemy_policy(self):
+        from types import SimpleNamespace
+        eng = _mk_engine()
+        eng._enemy_policies["e2"] = SimpleNamespace(monster_rank="Elite")
+        eng._enemy_policies["e3"] = SimpleNamespace(monster_rank="LittleBoss")
+        picked = eng._hooks._hook_target_states(
+            {"pool": "enemies", "where": "monster_rank($it) >= 3"}, eng.state.actors["hero"], {})
+        assert [s.actor.actor_id for s in picked] == ["e2", "e3"]
+        eng._enemy_policies["e2"].monster_rank = "Minion"
+        picked = eng._hooks._hook_target_states(
+            {"pool": "enemies", "where": "monster_rank($it) < 4"}, eng.state.actors["hero"], {})
+        assert [s.actor.actor_id for s in picked] == ["e1", "e2"]
+
+    def test_where_monster_id_strips_stage_suffix(self):
+        eng = _mk_engine()
+        st = eng.state.actors.pop("e2")
+        st.actor.actor_id = "2004023__stage_x"
+        eng.state.actors[st.actor.actor_id] = st
+        picked = eng._hooks._hook_target_states(
+            {"pool": "enemies", "where": "monster_id($it) == '2004023'"},
+            eng.state.actors["hero"], {})
+        assert [s.actor.actor_id for s in picked] == ["2004023__stage_x"]
+
+    def test_where_character_id_strips_stage_suffix(self):
+        eng = _mk_engine()
+        st = eng.state.actors.pop("hero")
+        st.actor.actor_id = "1220__stage_x"
+        eng.state.actors[st.actor.actor_id] = st
+        picked = eng._hooks._hook_target_states(
+            {"pool": "allies", "where": "character_id($it) == '1220'"}, st, {})
+        assert [s.actor.actor_id for s in picked] == ["1220__stage_x"]
+
+    def test_where_is_adjacent_excludes_primary_and_far_targets(self):
+        eng = _mk_engine()
+        picked = eng._hooks._hook_target_states({
+            "pool": "allies", "where": "is_adjacent($it, $event.target)",
+        }, eng.state.actors["hero"], {"target": "a1"})
+        assert [s.actor.actor_id for s in picked] == ["hero", "a2"]
+
+    def test_where_primary_and_caster_adjacent_targets(self):
+        eng = _mk_engine()
+        picked = eng._hooks._hook_target_states({
+            "pool": "allies",
+            "where": "($it.actor_id == $event.target or is_adjacent($it, $event.target))",
+        }, eng.state.actors["hero"], {"target": "hero"})
+        assert [s.actor.actor_id for s in picked] == ["hero", "a1"]
+        picked = eng._hooks._hook_target_states({
+            "pool": "enemies", "where": "is_adjacent($it, $self.actor_id)",
+        }, eng.state.actors["e2"], {})
+        assert [s.actor.actor_id for s in picked] == ["e1", "e3"]
+
+    def test_where_action_disabled_reads_prevent_action_not_controlled(self):
+        eng = _mk_engine()
+        hero = eng.state.actors["hero"]
+        eng._apply_modifier(hero, Modifier(
+            modifier_id="STOP", name="禁行", modifier_type="buff",
+            prevent_action=True, duration=1))
+        picked = eng._hooks._hook_target_states({
+            "pool": "allies", "where": "action_disabled($it) and not controlled($it)",
+        }, hero, {})
+        assert [s.actor.actor_id for s in picked] == ["hero"]
+
+    def test_where_actor_type_excludes_summons(self):
+        eng = _mk_engine()
+        eng.state.actors["a1"].actor.actor_type = "summon"
+        picked = eng._hooks._hook_target_states({
+            "pool": "allies", "where": "actor_type_of($it) != 'summon'",
+        }, eng.state.actors["hero"], {})
+        assert [s.actor.actor_id for s in picked] == ["hero", "a2"]
+
+    def test_where_remove_servant_uses_summoner_id(self):
+        eng = _mk_engine()
+        eng.state.actors["a1"].actor.summoner_id = "hero"
+        picked = eng._hooks._hook_target_states({
+            "pool": "allies", "where": "not $it.summoner_id",
+        }, eng.state.actors["hero"], {})
+        assert [s.actor.actor_id for s in picked] == ["hero", "a2"]
+
     def test_order_by_shield_lowest(self):
         """$it.shield（当前护盾值=栈剩余合计——峥嵘"护盾值最低的我方目标"族，2026-09-08）：
         order_by 升序 + take 1 取最低；无盾=0 参与排序."""
@@ -120,6 +210,39 @@ class TestHookAlgebraDirect:
             hero, {})
         assert [s.actor.actor_id for s in picked] == ["a2", "a1"], (
             "有盾者按剩余合计升序（a2=150 < a1=500）")
+
+
+class TestNestedCountAndDynamicTake:
+    def test_nested_count_keeps_outer_owner_and_event(self):
+        eng = _mk_engine()
+        hero = eng.state.actors["hero"]
+        picked = eng._hooks._hook_target_states({
+            "pool": "allies",
+            "where": ("count_selected('self', "
+                      "'$it.actor_id == $self.actor_id and $it.actor_id == $event.target') == 1"),
+        }, hero, {"target": "hero"})
+        assert [s.actor.actor_id for s in picked] == ["hero", "a1", "a2"]
+
+    def test_dynamic_take_evaluates_once_with_hook_owner(self):
+        spec = {"pool": "allies", "take": "1 + count_selected('self', 'true')"}
+        BuildCompiler()._validate_effects([{
+            "effect_type": "deal_damage", "scaling_atk": 1.0, "target": spec,
+        }], "模板 X")
+        eng = _mk_engine()
+        picked = eng._hooks._hook_target_states(spec, eng.state.actors["hero"], {})
+        assert [s.actor.actor_id for s in picked] == ["hero", "a1"]
+
+    @pytest.mark.parametrize(("take", "message"), [
+        ("$it.hp", r"take.*\$it"),
+        ("$self.atkk", "atkk"),
+        ("$event.not_a_payload", "not_a_payload"),
+    ])
+    def test_dynamic_take_namespace_gates(self, take, message):
+        with pytest.raises(ValueError, match=message):
+            BuildCompiler()._validate_effects([{
+                "effect_type": "deal_damage", "scaling_atk": 1.0,
+                "target": {"pool": "allies", "take": take},
+            }], "模板 X", event_ns="on_action")
 
 
 class TestPolicyAlgebra:
