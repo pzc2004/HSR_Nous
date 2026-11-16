@@ -64,6 +64,7 @@ from hsr_nous.sim.compile import compile_encounter_yaml
 from hsr_nous.sim.debug import DebugController
 from hsr_nous.sim.pipeline import MODE_EXPECTED, MODE_ROLL
 from hsr_nous.sim.resources import ultimate_available
+from hsr_nous.sim.scripted import ScriptedRandom
 
 _STATIC = Path(__file__).parent / "web_static" / "index.html"
 
@@ -237,14 +238,33 @@ class WebSession:
     # 开局 / 模式
     # ------------------------------------------------------------------
 
-    def load(self, build_yaml: str, stage_yaml: str, mode: str, seed: Optional[int]) -> None:
-        """编译 YAML 重开一局（默认手动决策，对齐 CLI debug 的 REPL 默认）。"""
+    def load(
+        self,
+        build_yaml: str,
+        stage_yaml: str,
+        mode: str,
+        seed: Optional[int],
+        *,
+        random_values: Optional[Any] = None,
+        initial_sp: Optional[int] = None,
+        initial_energy_ratio: Optional[float] = None,
+        auto: bool = False,
+    ) -> None:
+        """编译 YAML 重开一局；可注入世界线随机脚本并交还自动策略。"""
         if mode not in (MODE_EXPECTED, MODE_ROLL):
             raise ValueError(f"未知仿真模式 {mode!r}（{MODE_EXPECTED}/{MODE_ROLL}）")
         self._release_pending()  # 旧局若卡在决策点：先放行旧引擎线程（None=退回默认/缺省）
         # 模板根查找链惰性读取（battles 唯一事实源）：--templates 注入的附加根在此生效
         compiled = compile_encounter_yaml(build_yaml, stage_yaml, template_roots=template_roots())
-        self.ctl = DebugController.from_compiled(compiled, mode=mode, seed=seed)
+        self.ctl = DebugController.from_compiled(
+            compiled, mode=mode, seed=seed,
+            initial_sp=initial_sp, initial_energy_ratio=initial_energy_ratio,
+        )
+        self._random_values = tuple(random_values) if random_values is not None else None
+        self._initial_sp = initial_sp
+        self._initial_energy_ratio = initial_energy_ratio
+        if self._random_values is not None:
+            self.ctl.engine.pipeline.rng = ScriptedRandom(self._random_values)
         self.mode, self.seed = mode, seed
         self.build_yaml, self.stage_yaml = build_yaml, stage_yaml  # 原文留底（unit_sheet 取 LC/遗器/星魂配置）
         self.pending = None
@@ -263,6 +283,8 @@ class WebSession:
         self._av_fx = {}     # 换局重扫 AV 变动效果（同上，模板可能重新生成）
         self._scope_cache = {}  # 换局重扫有效范围（同上）
         self.set_manual()
+        if auto:
+            self.set_auto()
 
     def set_manual(self) -> None:
         ctl = self._require_ctl()
@@ -1336,17 +1358,27 @@ def create_app(
     mode: str = MODE_EXPECTED,
     seed: Optional[int] = None,
     extra_template_roots: Optional[List[str]] = None,
+    random_values: Optional[Any] = None,
+    initial_sp: Optional[int] = None,
+    initial_energy_ratio: Optional[float] = None,
+    auto: bool = False,
 ) -> FastAPI:
     """建 app：YAML 可空（空会话启动，稍后 /api/load 开局）。
 
     extra_template_roots：附加模板根（有序，优先于默认 data/sim_templates，逐实体
     first-hit-wins）——battles 查找链（preview/catalog/旁车）与引擎编译链共用同组根；
-    空/None = 只查默认根（历史行为）。
+    空/None = 只查默认根（历史行为）。random_values/初始资源/auto 供世界线内存回放。
     """
     set_extra_template_roots(extra_template_roots or [])
     session = WebSession()
     if build_yaml is not None and stage_yaml is not None:
-        session.load(build_yaml, stage_yaml, mode, seed)
+        session.load(
+            build_yaml, stage_yaml, mode, seed,
+            random_values=random_values,
+            initial_sp=initial_sp,
+            initial_energy_ratio=initial_energy_ratio,
+            auto=auto,
+        )
     app = FastAPI(title="翁法罗斯 · HSR_Nous 战斗调试台")
 
     def _busy_guard() -> None:
@@ -1467,6 +1499,10 @@ def create_app(
                 session.stage_yaml,
                 session.mode,
                 session.seed,
+                random_values=session._random_values,
+                initial_sp=session._initial_sp,
+                initial_energy_ratio=session._initial_energy_ratio,
+                auto=not session.manual,
             )
         except (ValueError, KeyError, RuntimeError) as e:
             raise HTTPException(400, str(e))
