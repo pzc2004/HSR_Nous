@@ -63,7 +63,33 @@
 
 > **核实注记（2026-08-22）**：本节初稿据外部调研文本录入，复核后修正三处——SRSim 行数口径（"~1300 行"→源码数千行全量）、hsr-sim 校准分级（"L0-L3 四级"→**calibration.md 实为 L0-L2 三级**，"机制状态机"是我方自补的第四级）、LoranAndos 条目（repo 名/角色数/命途数均按 GitHub 实测改正）。此核查过程本身即 AGENTS.md"外部输入核查三关"的实例。
 
-## 重新克隆
+## 理论参照
+
+## Algebraic World Model（AWM，arXiv:2610.40503）
+
+- 论文：*Algebraic World Model: From Exploration to Proofs*（Guancheng Pan、Qixin Tan、Yang Yuan、Andrew Chi-Chih Yao，v2），[arXiv:2610.40503](https://arxiv.org/abs/2610.40503)，[项目页与模型/证明](https://ephemeral6.github.io/awm-site/)，[GitHub 仓库与逐游戏归档](https://github.com/Ephemeral6/awm-site) → `external/awm-site/`；PDF → `external/awm/2610.40503.pdf`。仓库主要公开网站、逐游戏 Lean 专案和实验产物，不是可直接导入的通用 AWM 库，且未声明 LICENSE，只读方法不搬代码
+- **三段链路**：Explore & Prototype 把环境交互写成可执行 Python 假设并用观测持续复核；Structure & Simplify 抽取 typed objects/shared rules，以范畴论极限引导分解、组合、泛化和特化；Formalize & Prove 在 Lean 4 中重放轨迹，并对全部合法行动序列证明可达或不可达（§2）
+- **与本项目同向且可直接借鉴的纪律**：
+  - 假设的 checker 一旦与观测冲突，必须先修正或撤回，不能带着 FALSE/ERR 继续探索——对应我们 rejected/inconclusive 不得靠换 seed、改口径或删失败样本强行通过
+  - 泛化/压缩不能只追求更短：变换必须保持已记录转移的判定，并用扰动反例确保原有拒绝不丢失（§2.3）——这是我方「压缩优先」与「共享源必验」的同类约束；golden case、失败保留和反例集应成为机制合并的硬闸
+  - typed objects、命名规则、轨迹重放与证明依赖让错误可以沿结论反向定位到具体规则（§4.3）——对应 worldline artifact、只读 lineage 和证据下钻；后续展示 claim/证明依赖时，应优先服务反例定位，而不是只展示结论
+- **对全局 Memory / EEG 的直接启示**：
+  - **概念书 ↔ 结构化 Memory**：保存的是机制的适用范围、支持观测、checker 和证据引用，而不是自然语言聊天摘要；冲突知识应经 rejected/stale/supersession 失效并保留历史，不能继续冒充最新事实
+  - **分解/组合/泛化/特化 ↔ 全局知识合并与重构**：相似机制可以归纳成共享规则，特殊情况也可重新拆开，但合并后必须保留原观测判定和反例。EEG 本来允许共享证据、反事实分支与修订回边，不是单纯 DAG；AWM 为这种可检验的知识演化提供了同构参照
+  - **证明依赖 ↔ claim 证据—推导图**：从结论可回溯依赖的规则、实验、版本与推导步骤；新证据推翻规则时，也能正向找出哪些旧结论需重算或标 stale。知识体系自身必须持续接受验证，不能只负责存储结果
+- **落地时必须按结论类型分流**：资源非负、能量不足不能开大、速度阈值、固定轨迹可达/不可达等封闭性质，可借鉴 Lean 做形式验证；「辅助最好都带风套/翁瓦克」这类配装偏好则是条件化统计结论，必须绑定队伍、关卡、策略、指标和候选集，由 paired dev/holdout 证据支撑。全局 Memory 不得把这种经验偏好保存成无条件最优或普遍定理
+- **不能混同的能力边界**：AWM 的不可达结论是在学习模型的显式前提下，经 Lean kernel 对全部合法序列成立的形式证明；转移到真实环境还需 sufficient cover 等条件（§2.4、§4.4）。我方 paired-v1 是固定协议下的统计比较，worldline-v1 是单条轨迹证据，当前可信内核是重算/完整性校验而非 Lean 形式证明——单条回放成功或若干 seed 未胜均不能升级为全局不可达证明。全局 Memory 目前仍是目标设计，规划保存的是统计与模拟证据，不是全局形式证明
+- **共同校准问题**：论文同样把「模型内证明正确」与「模型是否覆盖真实环境」分开，交互核验负责后者（§6）。这与我方区分确定性重放和真实游戏校准一致；AWM 可借鉴之处是进一步显式记录结论依赖哪些规则与前提，而不是把 accepted 当作现实真值
+
+## Hyra 2.0（从解题到造工具）
+
+- 官方发布：[Hyra 2.0 研究页](https://hy.tencent.com/research/hyra2) / [微信推送](https://mp.weixin.qq.com/s/WnIFZYIRLdk7tw7cJIVpJA)；[Hyra 1.0 架构说明](https://www.tencentcloud.com/techpedia/144774?lang=en)；成果仓库：[Tencent-Hunyuan/hyra-results](https://github.com/Tencent-Hunyuan/hyra-results) → `external/hyra-results/`（Apache-2.0，含模型、报告、验证工具和复现脚本，不是通用 harness 源码）
+- **可继续核对的公开资料**：[Petty 五维等距点论文（HyProver 生成 + 人类核验改写）](https://arxiv.org/abs/2610.39967)、[HyInv 技术报告](https://github.com/Tencent-Hunyuan/Hyra-results/blob/main/AI4Science/hyinv/HyInv_Technical_Report.pdf)、[HyPLM-Flash 技术报告](https://github.com/Tencent-Hunyuan/Hyra-results/blob/main/AI4Science/hyplm_flash/HyPLM_Technical_Report.pdf)、[HyFF 技术报告](https://github.com/Tencent-Hunyuan/Hyra-results/blob/main/AI4Science/hyff/paper/HyFF_Technical_Report.pdf)、[Yau 圆周作用猜想结果](https://github.com/Tencent-Hunyuan/Hyra-results/blob/main/AI4Science/yau_circle_action_conjecture/yau_circle-action_conjecture.pdf)。Research Board、Books、Mission/Worker 暂无单独公开技术白皮书或 harness 实现可考
+- **范式变化**：1.0 用轻量循环寻找更优答案；2.0 让 Agent 研发可复用的模型、工作流、验证工具和 skill，使一次研究投入能由后续任务反复受益——与 AWM 的形式模型证明不同，它主攻长期科研项目管理和工具复利
+- **Harness 的关键件**：Overall 管目标/资源，Mission 长期负责研究问题，Worker 探索/实验/质疑；持久化队列与 Research Board 保存协作状态；独立 Review Worker 重新接触原始问题和证据，可要求缩小结论范围；高算力或影响共享知识的操作需人工审批
+- **Books 与 skill 的分层**：Books 分「观察 / 已验证 / 约定」，记录做法、理由、适用条件和原始证据，新证据到来可修正；可迁移方法再整理为 skill。观察可供参考，独立复现后才成为可靠依据，影响团队行为的约定需人类确认
+- **对本项目的映射**：Research Board ↔ Investigation/Execution 的结构化状态而非聊天历史；独立 Review ↔ 可信内核与宿主复核；Books ↔ 全局 Memory / EEG 的认识论分层和 stale/supersession；skill ↔ 把经验固化成 checker、验证流程、DSL 模板与自动化工具，而不只是保存一段自然语言总结
+- **借鉴边界**：只在长任务调度、独立复核和工具复用出现真实需求时引入 Mission/Worker 分工，不照搬成角色扮演式多 Agent。AWM 提供 Lean 形式化参照，Hyra 2.0 提供知识分层与工具化参照；二者都不能替代确定性执行、固定协议统计和真实游戏校准
 
 ### Cordis（时空可组合性编程范式）
 
@@ -84,6 +110,8 @@ git clone --depth 1 git@github.com:genshinsim/gcsim.git
 git clone --depth 1 git@github.com:fribbels/hsr-optimizer.git
 mkdir -p starbench && curl -sL "https://arxiv.org/pdf/2510.18483" -o starbench/2510.18483.pdf
 mkdir -p cordis && curl -sL "https://raw.githubusercontent.com/cordiverse/paper/main/paper.pdf" -o cordis/paper.pdf
+mkdir -p awm && curl -sL "https://arxiv.org/pdf/2610.40503" -o awm/2610.40503.pdf
+git clone --depth 1 git@github.com:Tencent-Hunyuan/hyra-results.git
 ```
 
 StarBench 官方代码（检测 checkpoint、LightRAG checkpoint）论文承诺发布但截至本笔记写入时未放出，arxiv 页面无代码链接；放出后克隆至 `external/starbench/` 同级。

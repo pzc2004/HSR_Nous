@@ -372,7 +372,10 @@ def test_write_character_template_cleans_legacy_filename(tmp_path, monkeypatch):
     monkeypatch.setattr(tg, "DEFAULT_TEMPLATE_ROOTS", [str(tmp_path)])
     legacy = tmp_path / "1001_March 7th.yaml"
     legacy.write_text("legacy\n", encoding="utf-8")
+    partially_sanitized = tmp_path / "1001_March•7th.yaml"
+    partially_sanitized.write_text("legacy\n", encoding="utf-8")
     path = Path(tg.write_character_template("1001", out_dir=str(tmp_path), lang="en"))
     assert path == tmp_path / "1001_March_7th.yaml"
     assert path.is_file()
     assert not legacy.exists()
+    assert not partially_sanitized.exists()
