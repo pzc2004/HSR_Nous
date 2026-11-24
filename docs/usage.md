@@ -4,6 +4,9 @@
 
 ## 安装
 
+完整开发环境（数据、`external/`、DSH、Playwright 与 Agent）见
+[development_environment.md](development_environment.md)。
+
 ```bash
 # 核心 + dev
 uv pip install -e ".[dev]"

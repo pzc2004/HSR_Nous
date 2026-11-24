@@ -8,6 +8,7 @@
 docs/
 ├── README.md              # 本文档
 ├── usage.md               # 使用指南（安装/数据更新/hsr-sim CLI/网页调试台/输入格式/数据查询/LLM 配置）
+├── development_environment.md # 开发环境配置（系统依赖/测试快照/external/DSH/Playwright/LLM）
 ├── engine_design.md       # 引擎设计（翁法罗斯：编译器+VM 分层、红黑树调度、VM 指令集边界、对拍验收）
 ├── game_rules.md          # 崩铁核心战斗规则总纲（公式、机制、触发时机）
 ├── integrations.md        # 外部集成指南（Mihoyo 账号 API 的风险、配置、测试——§1.8 风控处置序/§1.9 展柜降级源）
