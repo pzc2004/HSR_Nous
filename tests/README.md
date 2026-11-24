@@ -15,6 +15,8 @@ uv pip install -e ".[dev]"
 
 ### 全量回归
 
+完整配置步骤与常见问题见 [`docs/development_environment.md`](../docs/development_environment.md)。
+
 本地与 CI 共用同一个环境准备脚本。它会安装项目依赖、从 GitHub Release 恢复固定数据快照、生成模板、安装 pinned optimizer、DSH 和 Playwright：
 
 ```bash

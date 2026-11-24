@@ -230,6 +230,9 @@ policy:
 
 ## 安装
 
+新机器的完整开发环境配置（数据、`external/`、DSH、Playwright 与故障排查）见
+[`docs/development_environment.md`](docs/development_environment.md)。
+
 使用 `uv`（全 extras——`web` 组的 fastapi/uvicorn 是 web 测试的硬依赖；`ops` 组的 ddgs 是打标流水线（ops/annotator）社区搜索层依赖；各 extras 的可选面见 `pyproject.toml`）：
 
 ```bash
