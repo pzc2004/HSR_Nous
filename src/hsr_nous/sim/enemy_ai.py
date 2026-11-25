@@ -43,7 +43,7 @@ def _compare(actual: float, expected: float, compare_type: str) -> bool:
 
 
 def config_ai_dynamic_value(engine: Any, actor_id: str, key: str) -> float:
-    """按执行帧覆盖层、ConfigAI 运行态、已核初值与缺省规则读取动态值.
+    """按执行帧覆盖层、任意单位运行态、已核 ConfigAI 初值与缺省规则读取动态值.
 
     读取链四层优先级（23_event_hook_system.md §23.15）：① 当前帧覆盖层（执行内
     未提交写入，仅帧内读者可见——写后读）→ ② 已提交态 → ③ 核定初值 → ④ 缺省。
@@ -200,6 +200,11 @@ class ConfigAIInterpreter:
             return bool(owner.broken)
         if flag == "STAT_DOT":
             return any(mod.modifier_type == "dot" for mod in owner.modifiers.values())
+        if flag == "STAT_DOT_Electric":
+            return any(mod.modifier_type == "dot" and mod.dot_element == "thunder"
+                       for mod in owner.modifiers.values())
+        if flag == "Stealth":
+            return any("Stealth" in mod.behavior_flags for mod in owner.modifiers.values())
         if flag == "STAT_CTRL":
             return any(mod.debuff_kind == "control" or mod.control_kind
                        for mod in owner.modifiers.values())

@@ -140,7 +140,8 @@ class SettlementPipeline:
         held = list(actor_state.modifiers.values())
         if self._aura_provider is not None and not _skip_aura:
             held = held + list(self._aura_provider(actor_state))
-        cond_ids = {id(m) for m in held if m.enable_if_expr is not None or m.stat_exprs}
+        cond_ids = {id(m) for m in held
+                    if m.enable_if_expr is not None or m.stat_exprs or m.override_exprs}
         if _skip_cond or not cond_ids or self._cond_runtime is None:
             if _skip_cond and cond_ids:
                 held = [m for m in held if id(m) not in cond_ids]
@@ -154,9 +155,13 @@ class SettlementPipeline:
                 panel_cache[id(st)] = self.effective_stats(st, _skip_cond=True)
             return panel_cache[id(st)]
 
-        active = [m for m in held if id(m) not in cond_ids]
+        active = []
         extra: List[tuple] = []
-        for m in (m for m in held if id(m) in cond_ids):
+        override_extra: List[tuple] = []
+        for m in held:
+            if id(m) not in cond_ids:
+                active.append(m)
+                continue
             try:
                 ctx, functions = self._cond_runtime(actor_state, m, panel_of)
                 ok = True
@@ -170,11 +175,15 @@ class SettlementPipeline:
                     val = float(evaluate(expr, context=ctx, functions=functions,
                                          trace=False).value)
                     extra.append((stat, val))
+                for stat, expr in m.override_exprs.items():
+                    val = float(evaluate(expr, context=ctx, functions=functions,
+                                         trace=False).value)
+                    override_extra.append((m, stat, val))
             except Exception as e:
                 # B8 同口径：求值失败按不生效 + ⚠ 留痕（编译期预编译闸已拦语法错）
                 if self._cond_warn is not None:
                     self._cond_warn(f"⚠ 条件光环 {m.modifier_id} 求值失败按不生效处理：{e!r}")
-        return self._compute(actor_state, active, extra)
+        return self._compute(actor_state, active, extra, override_extra)
 
     def modifier_enabled(self, actor_state: ActorState, m: Any) -> bool:
         """条件件启用判定（enable_if 现场求值）——stat 贡献外的即时判定通道复用
@@ -192,7 +201,7 @@ class SettlementPipeline:
             return False
 
     def _compute(self, actor_state: ActorState, held: List[Any],
-                 extra: List[tuple]) -> Dict[str, Any]:
+                 extra: List[tuple], override_extra: Optional[List[tuple]] = None) -> Dict[str, Any]:
         """面板求值本体：held = 生效 modifier 列表（含光环件）；extra = stat_exprs 现场求值产物."""
         st = actor_state.actor.stats
         l1: Dict[str, Any] = {
@@ -205,6 +214,7 @@ class SettlementPipeline:
             "elation": st.elation,   # 欢愉度（21_elation §21.1，elation_multi=1+elation）
             "break_efficiency_boost": st.break_efficiency_boost,
             "weakness_break_efficiency_boost": st.weakness_break_efficiency_boost,
+            "toughness_taken": st.toughness_taken,
             "effect_hit": st.effect_hit, "effect_res": st.effect_res,
             "taunt": self._base_taunt(actor_state.actor),
             "heal_bonus": st.heal_bonus, "shield_bonus": st.shield_bonus,
@@ -254,10 +264,15 @@ class SettlementPipeline:
                 if src in l1:
                     out[stat] = out.get(stat, 0.0) + l1[src] * ratio
         # Layer 2b：覆写（override_effects：stat = value）
+        dynamic_overrides: Dict[int, List[tuple]] = {}
+        for mod, stat, val in override_extra or ():
+            dynamic_overrides.setdefault(id(mod), []).append((stat, val))
         for mod in held:
             if id(mod) not in own_ids:
                 continue
             for stat, val in mod.override_effects.items():
+                out[stat] = val
+            for stat, val in dynamic_overrides.get(id(mod), ()):
                 out[stat] = val
         # 嘲讽派生（mechanics 10）：taunt_eff = base × (1 + Σ aggro_boost 池)（rulebook zones 求值）
         out["taunt_eff"] = self._zone("taunt_eff", {
@@ -308,7 +323,8 @@ class SettlementPipeline:
     # ------------------------------------------------------------------
 
     def _scoped_boost(self, source: ActorState, event_ctx: Dict[str, Any],
-                      accept: Any, *, target: Optional[ActorState] = None) -> float:
+                      accept: Any, *, target: Optional[ActorState] = None,
+                      aggregate: str = "sum") -> float:
         """hit_condition scoped 加成：命中域条件命中才计入（04_modifier §hit_condition 组合原语）.
 
         命中域 `$event` 命名空间按结算类型由调用方注入（伤害：action_type/damage_type/
@@ -325,37 +341,56 @@ class SettlementPipeline:
         现场求值计入当次命中（per-hit 按目标状态/层数伸缩值，静态 stat_effects 是
         烘焙定值）；携带件与 hit_condition 件同纪律面板不读（_compute 同闸）。
         只扫携带者自身持有件（scope=team 光环不辐射——全队族双件各挂）；求值失败静默不计。
+        aggregate=multiply_complement 时返回各命中值的 ∏(1-value)，供减伤与既有乘算桶合并；
+        override 时无命中返回 None，唯一命中返回其值，不同固定值冲突显式报错。
         """
-        total = 0.0
+        if aggregate not in {"sum", "multiply_complement", "override"}:
+            raise ValueError(f"未知 scoped 聚合方式：{aggregate!r}")
+        total = (None if aggregate == "override"
+                 else 1.0 if aggregate == "multiply_complement" else 0.0)
+
+        def fold(value: float) -> None:
+            nonlocal total
+            if aggregate == "override":
+                if total is not None and total != value:
+                    raise ValueError(f"scoped_override 存在冲突值：{total!r} / {value!r}")
+                total = value
+            elif aggregate == "multiply_complement":
+                total *= 1.0 - value
+            else:
+                total += value
+
         if target is not None:
             event_ctx = {**event_ctx, "target": target}
         ctx = {"event": types.SimpleNamespace(**event_ctx)}
         if self._hit_self_ns is not None:
             ctx["self"] = self._hit_self_ns(source)   # $self=携带者（04_modifier §hit_condition）
-        functions = self._hit_functions(source) if self._hit_functions is not None else None
+        functions = self._hit_functions(source, event_ctx) if self._hit_functions is not None else None
         for mod in source.modifiers.values():
             if mod.hit_condition_expr is None and not mod.hit_stat_exprs:
                 continue
+            mod_ctx = {**ctx, "modifier": mod}
             ok = True
             if mod.hit_condition_expr is not None:
                 ok = False
                 try:
-                    ok = bool(self.expr_evaluate(mod.hit_condition_expr, ctx, functions=functions))
+                    ok = bool(self.expr_evaluate(mod.hit_condition_expr, mod_ctx, functions=functions))
                 except Exception:
                     ok = False
             if ok:
                 for stat, val in mod.stat_effects.items():
                     if accept(stat):
-                        total += val
+                        fold(val)
                 # 命中域表达式值（hit_stat_exprs——按目标状态伸缩的 per-hit 值槽，
                 # 与 hit_condition 同语境现场求值；失败静默不计，B8 同口径）
                 for stat, expr in mod.hit_stat_exprs.items():
                     if not accept(stat):
                         continue
                     try:
-                        total += float(self.expr_evaluate(expr, ctx, functions=functions))
+                        value = float(self.expr_evaluate(expr, mod_ctx, functions=functions))
                     except Exception:
                         continue
+                    fold(value)
         return total
 
     def expr_evaluate(self, prepared: Any, ctx: Dict[str, Any], *,
@@ -366,9 +401,11 @@ class SettlementPipeline:
         return self._expr.evaluate(prepared, ctx, self.rng, functions=functions)
 
     def effective_weakness(self, target: ActorState) -> set:
-        """有效弱点 = 面板弱点 ∪ 挂身 modifier 的 weakness_add（弱点植入 debuff 族）."""
+        """有效弱点 = 面板/最新覆写列表 ∪ 其后的弱点植入；secret 只影响显示."""
         w = set(target.actor.stats.weakness)
         for m in target.modifiers.values():
+            if m.weakness_override is not None:
+                w = set(m.weakness_override)
             w |= set(m.weakness_add)
         return w
 
@@ -394,19 +431,20 @@ class SettlementPipeline:
         target_eff: Dict[str, Any],
         base_chance: float,
         effect_res_pen: float = 0.0,
+        type_res: float = 0.0,
     ) -> float:
         """命中概率：rulebook `ehr_multi` 表达式求值（01_formula dot_damage parameters 同式）.
 
         = min(1, base × (1+效果命中) × (1 − 目标效果抵抗 + 效果抵抗穿透) × (1 − 类型抵抗)).
         effect_res_pen：效果抵抗穿透（独立参数槽——modifier 面板经调用方 se.get("effect_res_pen") 喂入）.
-        类型抵抗（type_res）：公式乘区保留，无实例源——中性 0 喂入（不新造机制）。
+        type_res：目标控制类等特定类型抵抗（控制类经 control_type_res 面板喂入，缺省 0）。
         """
         return self._zone("ehr_multi", {
             "base_chance": base_chance,
             "effect_hit": source_eff.get("effect_hit", 0.0),
             "target_effect_res": target_eff.get("effect_res", 0.0),
             "effect_res_pen": effect_res_pen,
-            "type_res": 0.0,
+            "type_res": type_res,
         })
 
     def roll_debuff_apply(self, chance: float) -> bool:
@@ -459,7 +497,9 @@ class SettlementPipeline:
         heal_bonus = hse.get("heal_bonus", 0.0) + self._scoped_boost(
             hb_src, {"target_hp_ratio": tgt.current_hp / te["hp"] if te["hp"] > 0 else 0.0},
             lambda s: s == "heal_bonus", target=tgt)
-        incoming_heal = te.get("incoming_heal", 0.0)
+        incoming_heal = te.get("incoming_heal", 0.0) + self._scoped_boost(
+            tgt, {"target_hp_ratio": tgt.current_hp / te["hp"] if te["hp"] > 0 else 0.0},
+            lambda s: s == "incoming_heal", target=tgt)
         outcome = evaluate(self._rb.formulas["heal"], context={
             "atk_scaling": atk_scaling, "atk": se["atk"],
             "hp_scaling": hp_scaling, "hp": se["hp"],
@@ -477,7 +517,8 @@ class SettlementPipeline:
         recoverable_ratio = min(
             float(self._rb.constants["recoverable_hp_reduction_cap"]),
             max(0.0, float(te.get("recoverable_hp_reduction", 0.0))))
-        recoverable_cap = te["hp"] * (1.0 - recoverable_ratio)
+        recoverable_delta = float(te.get("recoverable_hp_delta", 0.0))
+        recoverable_cap = max(0.0, te["hp"] * (1.0 - recoverable_ratio) - recoverable_delta)
         new = min(te["hp"], recoverable_cap, old + value)
         actual = max(0.0, new - old)
         tgt.current_hp = max(old, new)
@@ -500,7 +541,9 @@ class SettlementPipeline:
             "amount": amount, "energy_regen": regen,
         }, rng=self.rng).value
         old = target.current_energy
-        target.current_energy = min(st.max_energy, target.current_energy + value)
+        target.current_energy = (target.current_energy + value
+                                 if target.actor.actor_type == "battle_event"
+                                 else min(st.max_energy, target.current_energy + value))
         return SettleResult(value=value, node={
             "formula": "gain_energy", "amount": amount, "regenMulti": regen,
             "actualAmount": target.current_energy - old,
@@ -520,10 +563,11 @@ class SettlementPipeline:
     # ------------------------------------------------------------------
 
     def toughness_damage_amount(self, source: Optional[ActorState], base_toughness: float,
-                                *, action_type: str = "", damage_type: str = "") -> float:
+                                *, action_type: str = "", damage_type: str = "",
+                                target: Optional[ActorState] = None) -> float:
         """实际削韧量 = rulebook toughness_damage 公式求值（调用点在 engine._apply_toughness_damage）.
 
-        spec 双池乘算：(1 + break_efficiency_boost) × (1 + weakness_break_efficiency_boost)
+        攻击侧双池乘算后，再乘目标侧 (1 + toughness_taken)；缺省目标槽为 0。
         （01_formula §1.5；池结构实测待确认）。
         fixed_toughness_dmg：引擎/模板尚无固定削韧概念，中性 0 喂入（不新造机制）。
         含光环辐射（effective_stats 统一生效面）；source=None 时双池取 0。
@@ -532,17 +576,19 @@ class SettlementPipeline:
         scoped 值并入 break_efficiency_boost 池，weakness_break 池的 scoped 待实例）。
         """
         se = self.effective_stats(source) if source is not None else {}
+        target_se = self.effective_stats(target) if target is not None else {}
         scoped_eff = 0.0
         if source is not None and action_type:
             scoped_eff = self._scoped_boost(
                 source,
                 {"action_type": action_type, "damage_type": damage_type,
                  "target_broken": False, "target_controlled": False},
-                lambda s: s == "break_efficiency_boost")
+                lambda s: s == "break_efficiency_boost", target=target)
         return evaluate(self._rb.formulas["toughness_damage"], context={
             "base_toughness": base_toughness,
             "break_efficiency_boost": se.get("break_efficiency_boost", 0.0) + scoped_eff,
             "weakness_break_efficiency_boost": se.get("weakness_break_efficiency_boost", 0.0),
+            "toughness_taken": target_se.get("toughness_taken", 0.0),
             "fixed_toughness_dmg": 0.0,  # 固定削韧：无实例，中性喂入
         }, rng=self.rng).value
 
@@ -660,6 +706,7 @@ class SettlementPipeline:
           01_formula dot_damage 注；type_res 无实例源中性 0，与 hit_chance 同口径）
         - be_multi：施加者击破特攻区（裂伤专用——cap 外乘区，01_formula §1.4 裂伤特例）
         - source_level / def_pen / res_pen：防御/抗性乘区内的攻击侧输入（随攻击侧快照）
+        - max_hp：施加者有效生命上限（HP 缩放/封顶型 DoT 的跳伤表达式读取）
         """
         src = self._as_state(source)
         tgt = self._as_state(target)
@@ -668,6 +715,7 @@ class SettlementPipeline:
         b = se["dmg_bonus"]
         ctx = {
             "source_level": float(src.actor.level),
+            "max_hp": float(se["hp"]),
             "def_pen": float(se["def_pen"]),
             "res_pen": float(se["res_pen"]),
             "dmg_boost_multi": self._zone("dmg_boost_multi", {
@@ -708,7 +756,7 @@ class SettlementPipeline:
           energy/max_energy/state/actor_id/summoner_id）+ 有效面板（max_hp/atk/def_/
           spd/... 同 _HookSelfNS 面板通道，effective_stats 全键）+ weakness/resistance/
           toughness_bars/summon_flags（actor.stats 直读，_SELF_NS_FIELDS 白名单全量背书）
-        - `snapshot`：施加者攻击侧快照包（dot_snapshot_ctx 全键 + atk=dot_source_atk）——
+        - `snapshot`：施加者攻击侧快照包（dot_snapshot_ctx 全键 + atk=dot_source_atk + max_hp）——
           施加时刻存件，跳伤时只读（施加者可能已离场，读现值无意义）
         - `modifier`：modifier 自身实例（stacks/duration/max_stack/modifier_id/dot_element）
         """
@@ -967,7 +1015,7 @@ def _zone_const_eligible(merged_inputs: Dict[str, Dict[str, Any]], decl: Mapping
     if name in scoped_set or decl.get("scoped_post"):
         return False
     for in_decl in merged_inputs.values():
-        if in_decl.get("scoped"):
+        if in_decl.get("scoped") or in_decl.get("scoped_override"):
             return False
         if "resolve" in in_decl:   # target_def / base_res = 目标侧解析
             return False
@@ -1113,9 +1161,7 @@ class _SettleCtx:
                 # 拆解/roll_check 读取源；随机流消耗序 = 本循环序）
                 for in_name, in_decl in comp.merged_inputs[ident].items():
                     val = self._read(in_decl)
-                    sd = in_decl.get("scoped")
-                    if sd and comp.scoped_active[ident]:
-                        val = val + self._scoped_total(sd)
+                    val = self._merge_scoped_input(val, in_decl, comp.scoped_active[ident])
                     if in_decl.get("wrap") == "list":
                         val = [val]
                     ctx[in_name] = val
@@ -1158,9 +1204,7 @@ class _SettleCtx:
         zctx: Dict[str, Any] = {}
         for in_name, in_decl in merged.items():
             val = self._read(in_decl)
-            sd = in_decl.get("scoped")
-            if sd and active:
-                val = val + self._scoped_total(sd)
+            val = self._merge_scoped_input(val, in_decl, active)
             if in_decl.get("wrap") == "list":
                 val = [val]
             zctx[in_name] = val
@@ -1294,10 +1338,48 @@ class _SettleCtx:
     # ---- scoped 聚合（通用原语——_scoped_boost 复用；携带侧声明驱动） ----
 
     def _scoped_total(self, sd: Dict[str, Any]) -> float:
-        carrier = self.tgt if sd.get("from") == "target" else self._scoped_attacker()
-        if carrier is None:
-            return 0.0   # DoT 族施加者反查未命中（裸件直调路径）——scoped 不计
-        return self.pipe._scoped_boost(carrier, self.event, _settle_accept(sd), target=self.tgt)
+        side = sd.get("from")
+        if side == "target_or_attacker":
+            carriers = [self.tgt, self._scoped_attacker()]
+        else:
+            carriers = [self.tgt if side == "target" else self._scoped_attacker()]
+        aggregate = str(sd.get("aggregate") or "sum")
+        total = (None if aggregate == "override"
+                 else 1.0 if aggregate == "multiply_complement" else 0.0)
+        seen: set[int] = set()
+        for carrier in carriers:
+            if carrier is None or id(carrier) in seen:
+                continue
+            seen.add(id(carrier))
+            value = self.pipe._scoped_boost(
+                carrier, self.event, _settle_accept(sd), target=self.tgt, aggregate=aggregate)
+            if aggregate == "override":
+                if value is not None and total is not None and total != value:
+                    raise ValueError(f"scoped_override 存在冲突值：{total!r} / {value!r}")
+                if value is not None:
+                    total = value
+            else:
+                total = total * value if aggregate == "multiply_complement" else total + value
+        return total
+
+    def _merge_scoped(self, value: float, sd: Dict[str, Any]) -> float:
+        scoped = self._scoped_total(sd)
+        if sd.get("aggregate") == "override":
+            return value if scoped is None else scoped
+        if sd.get("aggregate") == "multiply_complement":
+            return 1.0 - (1.0 - value) * scoped
+        return value + scoped
+
+    def _merge_scoped_input(self, value: float, in_decl: Dict[str, Any], active: bool) -> float:
+        if not active:
+            return value
+        scoped = in_decl.get("scoped")
+        if scoped:
+            value = self._merge_scoped(value, scoped)
+        override = in_decl.get("scoped_override")
+        if override:
+            value = self._merge_scoped(value, override)
+        return value
 
     def _scoped_attacker(self) -> Optional[ActorState]:
         if self.dot_family:
@@ -1327,6 +1409,8 @@ class _SettleCtx:
             if token == "dot_element":
                 return self.mod.dot_element
             return token
+        if field == "damage_custom_name":
+            return self.action.damage_custom_name if self.action is not None else ""
         if field == "target_broken":
             return True if token == "const" else self.tgt.broken
         if field == "target_controlled":

@@ -95,6 +95,7 @@ FIELD_CODECS: Dict[type, Dict[str, str]] = {
         "hit_condition_expr": _CODEC_EXPR,
         "enable_if_expr": _CODEC_EXPR,
         "stat_exprs": _CODEC_EXPR_DICT,
+        "override_exprs": _CODEC_EXPR_DICT,
         "hit_stat_exprs": _CODEC_EXPR_DICT,
         "dot_element": _CODEC_PLAIN,
         "dot_ratio": _CODEC_PLAIN,
@@ -103,21 +104,29 @@ FIELD_CODECS: Dict[type, Dict[str, str]] = {
         "dot_source_atk": _CODEC_PLAIN,
         "dot_snapshot_ctx": _CODEC_PLAIN,
         "control_kind": _CODEC_PLAIN,
+        "behavior_flags": _CODEC_PLAIN,
         "weakness_add": _CODEC_PLAIN,
+        "weakness_override": _CODEC_PLAIN,
+        "secret_weakness": _CODEC_PLAIN,
+        "protected_weakness": _CODEC_PLAIN,
         "grants_immune": _CODEC_PLAIN,
         "tick_anchor": _CODEC_PLAIN,
         "effect_scope": _CODEC_PLAIN,
         "hp_lock": _CODEC_PLAIN,
+        "allow_negative_hp": _CODEC_PLAIN,
         "block_damage": _CODEC_PLAIN,
         "fixed_hp_bars": _CODEC_PLAIN,
         "revive_percent": _CODEC_PLAIN,
         "moon_cocoon": _CODEC_PLAIN,
         "forced_taunt": _CODEC_PLAIN,
         "toughness_lock": _CODEC_PLAIN,
+        "custom_unselectable": _CODEC_PLAIN,
         "lock_on": _CODEC_PLAIN,
         "prevent_action": _CODEC_PLAIN,
+        "locked_action_types": _CODEC_PLAIN,
         "target_resource": _CODEC_PLAIN,
         "max_override": _CODEC_PLAIN,
+        "dynamic_values": _CODEC_PLAIN,
     },
     ShieldInstance: {
         "shield_id": _CODEC_PLAIN,
@@ -126,6 +135,7 @@ FIELD_CODECS: Dict[type, Dict[str, str]] = {
         "source_id": _CODEC_PLAIN,
         "modifier_id": _CODEC_PLAIN,
         "pool": _CODEC_PLAIN,
+        "max_value": _CODEC_PLAIN,
     },
     StateConfig: {
         "state": _CODEC_PLAIN,
@@ -153,12 +163,14 @@ FIELD_CODECS: Dict[type, Dict[str, str]] = {
         "elation": _CODEC_PLAIN,
         "break_efficiency_boost": _CODEC_PLAIN,
         "weakness_break_efficiency_boost": _CODEC_PLAIN,
+        "toughness_taken": _CODEC_PLAIN,
         "effect_hit": _CODEC_PLAIN,
         "effect_res": _CODEC_PLAIN,
         "def_pen": _CODEC_PLAIN,
         "res_pen": _CODEC_PLAIN,
         "vulnerability": _CODEC_PLAIN,
         "max_energy": _CODEC_PLAIN,
+        "max_special_sp": _CODEC_PLAIN,
         "energy_regen": _CODEC_PLAIN,
         "heal_bonus": _CODEC_PLAIN,
         "shield_bonus": _CODEC_PLAIN,
@@ -185,12 +197,14 @@ FIELD_CODECS: Dict[type, Dict[str, str]] = {
         "elation_number": _CODEC_PLAIN,
         "system_flags": _CODEC_FROZENSET,
         "speed_rule": _CODEC_PLAIN,
+        "initial_special_sp": _CODEC_PLAIN,
         "turn_handler": _CODEC_PLAIN,
     },
     ActorState: {
         "actor": _CODEC_ACTOR,
         "current_hp": _CODEC_PLAIN,
         "current_energy": _CODEC_PLAIN,
+        "special_sp": _CODEC_PLAIN,
         "alive": _CODEC_PLAIN,
         "banished": _CODEC_PLAIN,
         "broken": _CODEC_PLAIN,
@@ -202,6 +216,7 @@ FIELD_CODECS: Dict[type, Dict[str, str]] = {
         "banger_entries": _CODEC_PLAIN,
         "state_config": _CODEC_STATE_CONFIG,
         "shields": _CODEC_SHIELDS,
+        "action_delay_locks": _CODEC_PLAIN,
     },
     BattleState: {
         "actors": _CODEC_ACTOR_STATES,
@@ -218,6 +233,8 @@ FIELD_CODECS: Dict[type, Dict[str, str]] = {
         "log": _CODEC_PLAIN,
         "moon_cocoon_used": _CODEC_PLAIN,
         "once_latches": _CODEC_FROZENSET,
+        "last_summon_group": _CODEC_PLAIN,
+        "last_summon_ids": _CODEC_PLAIN,
     },
 }
 
@@ -231,9 +248,11 @@ _ENGINE_RUNTIME_FIELDS = (
     "_last_target_by_actor",
     "_last_sp_consumed",
     "_auto_target_ctx",
+    "_elation_time_active",
     "_aha_pool_override",
     "_banished_by_state",
     "_turn_consumed",
+    "_turn_owner_action_phase_end",
     "_cocoon_event_counter",
     "_cocoon_event_seq",
     "_cocoon_saved_event",
@@ -242,6 +261,8 @@ _ENGINE_RUNTIME_FIELDS = (
     "_battle_end_emitted",
     "_current_turn_actor_id",  # 当前回合归属者（turn_owner_of 直译通道）
     "_level_state_obj",  # 关卡黑板（决策卡 #31）：伪 ActorState（modifier 池）进存档
+    "_light_team_state_obj",  # LightTeamEntity 队伍载体与共享盾
+    "_dark_team_state_obj",  # DarkTeamEntity 队伍载体
 )
 
 
@@ -411,12 +432,26 @@ def _restore_scheduler(d: Dict[str, Any], actors_by_id: Dict[str, Actor]) -> Sch
 # 引擎运行期字段（清单见 _ENGINE_RUNTIME_FIELDS；编译产物由 from_compiled 重带）
 # ---------------------------------------------------------------------------
 
+def _save_battle_event(payload: Dict[str, Any]) -> Dict[str, Any]:
+    out = {key: copy.deepcopy(value) for key, value in payload.items() if key != "actor_state"}
+    if "actor_state" in payload:
+        out["actor_state"] = _encode(ActorState, payload["actor_state"])
+    return out
+
+
+def _restore_battle_event(payload: Dict[str, Any], expr: Any) -> Dict[str, Any]:
+    out = {key: copy.deepcopy(value) for key, value in payload.items() if key != "actor_state"}
+    if "actor_state" in payload:
+        out["actor_state"] = _decode(ActorState, payload["actor_state"], expr)
+    return out
+
+
 def _save_engine_fields(engine: Any) -> Dict[str, Any]:
     out: Dict[str, Any] = {}
     for fname in _ENGINE_RUNTIME_FIELDS:
         if fname == "battle_events":
             # EventID 是 int 键；列表编码避免 JSON 对象往返把键变成字符串。
-            out[fname] = [[int(event_id), copy.deepcopy(payload)]
+            out[fname] = [[int(event_id), _save_battle_event(payload)]
                           for event_id, payload in sorted(engine.battle_events.items())]
         elif fname == "_resource_provenance":
             # 键是 tuple(actor_id, rid)、值是来源集合——JSON 化转 [aid, rid, sorted(srcs)]
@@ -425,8 +460,8 @@ def _save_engine_fields(engine: Any) -> Dict[str, Any]:
         elif fname == "_battle_end_emitted":
             # 惰性字段（首次 _emit_battle_end 才落实例）——getattr 缺省 False
             out[fname] = bool(getattr(engine, "_battle_end_emitted", False))
-        elif fname == "_level_state_obj":
-            st = engine._level_state_obj
+        elif fname in {"_level_state_obj", "_light_team_state_obj", "_dark_team_state_obj"}:
+            st = getattr(engine, fname)
             out[fname] = None if st is None else _encode(ActorState, st)
         else:
             out[fname] = copy.deepcopy(getattr(engine, fname, "") if fname == "_current_turn_actor_id"
@@ -437,15 +472,16 @@ def _save_engine_fields(engine: Any) -> Dict[str, Any]:
 def _restore_engine_fields(engine: Any, d: Dict[str, Any]) -> None:
     for fname in _ENGINE_RUNTIME_FIELDS:
         if fname == "battle_events":
-            engine.battle_events = {int(event_id): copy.deepcopy(payload)
-                                    for event_id, payload in d[fname]}
+            engine.battle_events = {
+                int(event_id): _restore_battle_event(payload, engine._expr)
+                for event_id, payload in d[fname]}
         elif fname == "_resource_provenance":
             engine._resource_provenance = {(aid, rid): set(srcs)
                                            for aid, rid, srcs in d[fname]}
-        elif fname == "_level_state_obj":
+        elif fname in {"_level_state_obj", "_light_team_state_obj", "_dark_team_state_obj"}:
             saved = d[fname]
-            engine._level_state_obj = (None if saved is None
-                                       else _decode(ActorState, saved, engine._expr))
+            setattr(engine, fname, None if saved is None
+                    else _decode(ActorState, saved, engine._expr))
         else:
             setattr(engine, fname, copy.deepcopy(d[fname]))
 
