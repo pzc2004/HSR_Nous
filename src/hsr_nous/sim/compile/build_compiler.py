@@ -540,7 +540,7 @@ TARGET_TYPES = frozenset({
 ULT_TIMINGS = frozenset({"before_action", "after_action", "never"})
 
 #: modifier 枚举字段（引擎 stack_mode/tick_anchor/effect_scope 实现集，state.py 注释同口径）
-STACK_MODES = frozenset({"refresh", "independent", "replace", "replace_keep_duration", "set"})
+STACK_MODES = frozenset({"refresh", "independent", "replace", "replace_keep_duration", "set", "multiple"})
 TICK_ANCHORS = frozenset({"owner_turn_end", "owner_turn_start", "on_action", "source_turn_end",
                           "source_turn_start"})
 EFFECT_SCOPES = frozenset({"self", "team"})

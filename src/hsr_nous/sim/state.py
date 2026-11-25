@@ -145,6 +145,9 @@ class Modifier:
     target_resource: str = ""
     max_override: float = 0.0
     dynamic_values: Dict[str, Any] = field(default_factory=dict)
+    # stack_mode="multiple" 的额外同名实例（主实例仍在 ActorState.modifiers 字典）。
+    # 每实例独立 duration/stacks/dynamic_values/生命周期；统一迭代走 all_modifiers。
+    instances: List["Modifier"] = field(default_factory=list)
 
     def snapshot(self) -> Dict[str, Any]:
         return {
@@ -206,8 +209,16 @@ class ActorState:
     # （max= stats.toughness_bars[i-1]，后接 added_bars 机制赋予条）；按序扣除、溢出作废
     bar_index: int = 0
     added_bars: List[float] = field(default_factory=list)  # add_toughness_bar 运行期追加条 max
-    modifiers: Dict[str, Modifier] = field(default_factory=dict)  # modifier_id → 实例
+    modifiers: Dict[str, Modifier] = field(default_factory=dict)  # modifier_id → 主实例
     resources: Dict[str, float] = field(default_factory=dict)  # 自定义资源（trigger_limit 计数器等）
+
+    def all_modifiers(self) -> List[Modifier]:
+        """全部 modifier 实例（主实例 + multiple 额外实例），统一遍历入口."""
+        out: List[Modifier] = []
+        for mod in self.modifiers.values():
+            out.append(mod)
+            out.extend(mod.instances)
+        return out
     # 好活当赏条目列表（21_elation §21.5——逐角色账、带数值载荷、逐条目独立 2 回合计时；
     # 引擎原生第三形态：modifier 无数值载荷槽、custom_resource 单值无逐条计时，两态装不下）
     banger_entries: List[Dict[str, float]] = field(default_factory=list)

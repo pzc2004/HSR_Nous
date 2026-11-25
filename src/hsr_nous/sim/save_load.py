@@ -59,6 +59,8 @@ _CODEC_STAT_BLOCK = "stat_block"
 _CODEC_FROZENSET = "frozenset"
 #: Dict[str, Modifier]（modifier_id → 实例，插入序即挂载序——保序存档）
 _CODEC_MODIFIERS = "modifiers"
+#: List[Modifier]（multiple 额外实例，递归 Modifier codec）
+_CODEC_MODIFIER_LIST = "modifier_list"
 #: List[ShieldInstance]
 _CODEC_SHIELDS = "shields"
 #: StateConfig | None（形态配置——恢复时优先按 state 名回挂引擎注册表同件，
@@ -127,6 +129,7 @@ FIELD_CODECS: Dict[type, Dict[str, str]] = {
         "target_resource": _CODEC_PLAIN,
         "max_override": _CODEC_PLAIN,
         "dynamic_values": _CODEC_PLAIN,
+        "instances": _CODEC_MODIFIER_LIST,
     },
     ShieldInstance: {
         "shield_id": _CODEC_PLAIN,
@@ -253,6 +256,7 @@ _ENGINE_RUNTIME_FIELDS = (
     "_banished_by_state",
     "_turn_consumed",
     "_turn_owner_action_phase_end",
+    "_modifier_phase1_begin",
     "_cocoon_event_counter",
     "_cocoon_event_seq",
     "_cocoon_saved_event",
@@ -293,6 +297,8 @@ def _encode_value(value: Any, codec: str) -> Any:
         return sorted(value)
     if codec == _CODEC_MODIFIERS:
         return {mid: _encode(Modifier, m) for mid, m in value.items()}
+    if codec == _CODEC_MODIFIER_LIST:
+        return [_encode(Modifier, m) for m in value]
     if codec == _CODEC_SHIELDS:
         return [_encode(ShieldInstance, s) for s in value]
     if codec == _CODEC_STATE_CONFIG:
@@ -325,6 +331,8 @@ def _decode_value(value: Any, codec: str, expr: Any) -> Any:
         return frozenset(value)
     if codec == _CODEC_MODIFIERS:
         return {mid: _decode(Modifier, m, expr) for mid, m in value.items()}
+    if codec == _CODEC_MODIFIER_LIST:
+        return [_decode(Modifier, m, expr) for m in value]
     if codec == _CODEC_SHIELDS:
         return [_decode(ShieldInstance, s, expr) for s in value]
     if codec == _CODEC_STATE_CONFIG:

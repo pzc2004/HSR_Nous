@@ -421,3 +421,32 @@ def test_expr_compiler_shared_one_instance():
     assert eng.decision is not None
     assert eng.pipeline._expr is eng._expr
     assert eng.decision.expr is eng._expr
+
+
+def test_multiple_stack_mode_independent_instances():
+    from tests._builders import engine_vs_dummy, make_dummy
+
+    eng = engine_vs_dummy(enemies=[make_dummy("e1")])
+    st = eng.state.actors["e1"]
+    base_atk = eng.pipeline.effective_stats(st)["atk"]
+    m1 = Modifier(modifier_id="M", name="M", modifier_type="buff", duration=2,
+                  stacks=1, stack_mode="multiple", stat_effects={"atk": 100.0},
+                  dynamic_values={"v": 1.0})
+    m2 = Modifier(modifier_id="M", name="M", modifier_type="buff", duration=3,
+                  stacks=1, stack_mode="multiple", stat_effects={"atk": 200.0},
+                  dynamic_values={"v": 2.0})
+    assert eng._apply_modifier(st, m1)
+    assert eng._apply_modifier(st, m2)
+    assert len(st.modifiers["M"].instances) == 1
+    assert eng.pipeline.effective_stats(st)["atk"] == pytest.approx(base_atk + 300.0)
+
+    eng._tick_modifiers(st)
+    eng._tick_modifiers(st)
+    # m1 到期摘除，m2 提升为主实例；额外实例不随 m1 一并消失
+    assert "M" in st.modifiers
+    assert st.modifiers["M"].duration == 1
+    assert not st.modifiers["M"].instances
+    assert eng.pipeline.effective_stats(st)["atk"] == pytest.approx(base_atk + 200.0)
+
+    eng._remove_modifier(st, "M", "test")
+    assert "M" not in st.modifiers

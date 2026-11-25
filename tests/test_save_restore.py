@@ -400,7 +400,7 @@ class TestCompletenessGate:
     def test_known_codec_vocabulary(self):
         """编解码词表闭合（表内只许出现已实现的编解码名——防笔坏死键）."""
         known = {"plain", "expr", "expr_dict", "tuple2_dict", "actor", "stat_block",
-                 "frozenset", "modifiers", "shields", "state_config", "actor_states"}
+                 "frozenset", "modifiers", "modifier_list", "shields", "state_config", "actor_states"}
         for cls, table in FIELD_CODECS.items():
             bad = set(table.values()) - known
             assert not bad, f"{cls.__name__} 存档策略表含未知编解码 {sorted(bad)}"

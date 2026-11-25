@@ -395,7 +395,7 @@ modifier:
 | `"replace"` | 替换旧的 | 同一 modifier 重复施加（注：不同来源护盾的全局共存规则——有效值取最高、受伤同时吸收、低盾破高盾留——见 01_base_stats.md，不由 stack_mode 表达） |
 | `"set"` | 层数**设为**指定值（配 `stacks_value` 表达式；区别于加层/刷新） | 椒丘"层数同步至全场最高"族 |
 
-上游 `Stacking=Merge` 直译为 `refresh`：同名件层数按上限合并，并重挂到较新的完整时长；`Multiple` 要求同名多实例，仍不使用该通道。
+上游 `Stacking=Merge` 直译为 `refresh`：同名件层数按上限合并，并重挂到较新的完整时长；`Multiple` 直译为 `multiple`：同名主实例 + 额外实例共存，每实例独立 duration/stacks/dynamic_values/生命周期，统一遍历走 `ActorState.all_modifiers()`，按名摘除覆盖全部实例，逐实例到期走 `_remove_instance`。
 
 ### 4.6 驱散规则
 

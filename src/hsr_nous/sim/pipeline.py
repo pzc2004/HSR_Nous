@@ -137,7 +137,7 @@ class SettlementPipeline:
         `_skip_aura=True` = 不并光环（德谬歌镜像忆师 HP_P% 专用——忆师池经镜像进忆灵，
         光环直辐射忆灵，两侧不双计，2026-09-23）。
         """
-        held = list(actor_state.modifiers.values())
+        held = actor_state.all_modifiers()
         if self._aura_provider is not None and not _skip_aura:
             held = held + list(self._aura_provider(actor_state))
         cond_ids = {id(m) for m in held
@@ -255,7 +255,7 @@ class SettlementPipeline:
         out.update(pct_pool)
         # Layer 2a/2b（转化/覆写）只扫**自身持有**的生效件——scope=team 光环的
         # scaling/override 不辐射（与旧口径逐比特一致；flat 才走光环辐射）
-        own_ids = {id(m) for m in actor_state.modifiers.values()}
+        own_ids = {id(m) for m in actor_state.all_modifiers()}
         # Layer 2a：转化（scaling_effects：stat += source_L1 × ratio）
         for mod in held:
             if id(mod) not in own_ids:
@@ -366,7 +366,7 @@ class SettlementPipeline:
         if self._hit_self_ns is not None:
             ctx["self"] = self._hit_self_ns(source)   # $self=携带者（04_modifier §hit_condition）
         functions = self._hit_functions(source, event_ctx) if self._hit_functions is not None else None
-        for mod in source.modifiers.values():
+        for mod in source.all_modifiers():
             if mod.hit_condition_expr is None and not mod.hit_stat_exprs:
                 continue
             mod_ctx = {**ctx, "modifier": mod}
@@ -403,7 +403,7 @@ class SettlementPipeline:
     def effective_weakness(self, target: ActorState) -> set:
         """有效弱点 = 面板/最新覆写列表 ∪ 其后的弱点植入；secret 只影响显示."""
         w = set(target.actor.stats.weakness)
-        for m in target.modifiers.values():
+        for m in target.all_modifiers():
             if m.weakness_override is not None:
                 w = set(m.weakness_override)
             w |= set(m.weakness_add)
@@ -882,7 +882,7 @@ class SettlementPipeline:
         result = _SettleCtx(self, category, source, target_state, action=action,
                             skill_level=skill_level, modifier=modifier,
                             element=element, params=params, shared=shared).run()
-        fixed_bars = max((m.fixed_hp_bars for m in target_state.modifiers.values()), default=0)
+        fixed_bars = max((m.fixed_hp_bars for m in target_state.all_modifiers()), default=0)
         if fixed_bars > 0:
             fixed_value = self.effective_stats(target_state)["hp"] / fixed_bars
             if self._rb.route[category]["settle"].get("hp_deduct"):
@@ -1323,7 +1323,7 @@ class _SettleCtx:
         """具名解析原语：target_def（覆写优先/白板兜底）/ base_res（弱点→面板抗性→非弱点默认）."""
         if name == "target_def":
             has_override = any("def_" in m.override_effects
-                               for m in self.tgt.modifiers.values())
+                               for m in self.tgt.all_modifiers())
             if self.te["def_"] > 0 or has_override:
                 return self.te["def_"]
             return self.pipe._rb.constants["default_target_def"]
@@ -1414,9 +1414,9 @@ class _SettleCtx:
         if field == "target_broken":
             return True if token == "const" else self.tgt.broken
         if field == "target_controlled":
-            return any(m.control_kind for m in self.tgt.modifiers.values())
+            return any(m.control_kind for m in self.tgt.all_modifiers())
         if field == "target_control_kinds":
-            return [m.control_kind for m in self.tgt.modifiers.values() if m.control_kind]
+            return [m.control_kind for m in self.tgt.all_modifiers() if m.control_kind]
         if field == "target_hp_ratio":
             return (self.tgt.current_hp / self.te["hp"]) if self.te.get("hp") else 0.0
         raise ValueError(f"通用 settle：未知 event 字段 {field!r}")

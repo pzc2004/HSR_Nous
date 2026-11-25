@@ -409,7 +409,9 @@ class HookRuntime:
             if st2 is None:
                 return 0.0
             m = st2.modifiers.get(str(modifier_id))
-            return float(m.stacks) if m is not None else 0.0
+            if m is None:
+                return 0.0
+            return float(m.stacks + sum(x.stacks for x in m.instances))
 
         def modifier_duration(target: Any, modifier_id: str) -> float:
             # 目标持有的 modifier 剩余时长；目标解析与 stacks/has_modifier 同通道，查无返回 0。
@@ -417,7 +419,9 @@ class HookRuntime:
             if st2 is None:
                 return 0.0
             m = st2.modifiers.get(str(modifier_id))
-            return float(m.duration) if m is not None else 0.0
+            if m is None:
+                return 0.0
+            return float(max([m.duration, *(x.duration for x in m.instances)]))
 
         def modifier_max_stacks(target: Any, modifier_id: str) -> float:
             st2 = _resolve(target)
@@ -446,7 +450,7 @@ class HookRuntime:
                     continue
                 modifier = st2.modifiers.get(str(modifier_id))
                 if modifier is not None:
-                    total += float(modifier.stacks)
+                    total += float(modifier.stacks + sum(x.stacks for x in modifier.instances))
             return total
 
         def enemies_alive() -> float:
@@ -457,7 +461,7 @@ class HookRuntime:
             st2 = _resolve(target)
             if st2 is None:
                 return 0.0
-            return 1.0 if any(m.hp_lock for m in st2.modifiers.values()) else 0.0
+            return 1.0 if any(m.hp_lock for m in st2.all_modifiers()) else 0.0
 
         def damageable_enemies() -> float:
             # 仍可被削减生命值的敌人数（存活且无任何 hp_lock 件——官方"敌方无法被继续削减
@@ -550,7 +554,7 @@ class HookRuntime:
                 return 0.0
             return 1.0 if any(
                 m.modifier_type == "dot" and m.dot_element == elem
-                for m in st2.modifiers.values()) else 0.0
+                for m in st2.all_modifiers()) else 0.0
 
         def has_behavior_flag(target: Any, flag: Any) -> float:
             """目标是否持有携带指定原始行为旗标的 modifier；不从可选性等状态反推。"""
@@ -559,7 +563,7 @@ class HookRuntime:
                 return 0.0
             name = str(flag)
             return 1.0 if any(name in m.behavior_flags
-                              for m in st2.modifiers.values()) else 0.0
+                              for m in st2.all_modifiers()) else 0.0
 
         def has_stat_penalty(target: Any, stat: Any) -> float:
             """目标是否持有指定 stat 的负面修饰（泛化「防御降低/减速」检索原语——
@@ -572,7 +576,7 @@ class HookRuntime:
             if st2 is None:
                 return 0.0
             key = str(stat)
-            for m in st2.modifiers.values():
+            for m in st2.all_modifiers():
                 kind = m.debuff_kind or ("control" if m.control_kind else m.modifier_type)
                 if kind == "buff":
                     continue
@@ -624,7 +628,10 @@ class HookRuntime:
             modifier = st2.modifiers.get(str(modifier_id))
             if modifier is None:
                 return 0.0
-            return 0.0 if source and modifier.source_id != str(source) else 1.0
+            if source:
+                return 1.0 if any(x.source_id == str(source)
+                                  for x in [modifier, *modifier.instances]) else 0.0
+            return 1.0
 
         def modifier_source(target: Any, modifier_id: Any) -> str:
             """目标所持 modifier 的原施加者 id；查无 actor/实例返回空串."""
@@ -653,14 +660,14 @@ class HookRuntime:
             return 1.0 if any(
                 (m.debuff_kind or ("control" if m.control_kind else m.modifier_type)) == "control"
                 and (not kind or m.control_kind == kind)
-                for m in st2.modifiers.values()) else 0.0
+                for m in st2.all_modifiers()) else 0.0
 
         def action_disabled(target: Any) -> float:
             """目标是否持有任一 prevent_action 件（ConfigAI DisableAction 同口径）."""
             st2 = _resolve(target)
             if st2 is None:
                 return 0.0
-            return 1.0 if any(m.prevent_action for m in st2.modifiers.values()) else 0.0
+            return 1.0 if any(m.prevent_action for m in st2.all_modifiers()) else 0.0
 
         def immune_debuff(target: Any) -> float:
             """目标是否持有已启用的全减益免疫件；单独控制免疫不算."""
@@ -671,7 +678,7 @@ class HookRuntime:
             return 1.0 if any(
                 required.issubset(m.grants_immune)
                 and self._engine.pipeline.modifier_enabled(st2, m)
-                for m in st2.modifiers.values()) else 0.0
+                for m in st2.all_modifiers()) else 0.0
 
         def has_debuff(target: Any) -> float:
             # 目标是否持有任一负面状态（§22.4 登记；游戏「负面状态」口径——debuff/dot/
@@ -684,7 +691,7 @@ class HookRuntime:
                 return 0.0
             return 1.0 if any(
                 (m.debuff_kind or ("control" if m.control_kind else m.modifier_type)) != "buff"
-                for m in st2.modifiers.values()) else 0.0
+                for m in st2.all_modifiers()) else 0.0
 
         def debuff_count(target: Any, source: Any = "") -> float:
             # 目标持有的负面状态件数（同 has_debuff 的 new_kind 漏斗——dot/control 子类
@@ -699,7 +706,7 @@ class HookRuntime:
                 return 0.0
             src = str(source)
             return float(sum(
-                1 for m in st2.modifiers.values()
+                1 for m in st2.all_modifiers()
                 if (m.debuff_kind or ("control" if m.control_kind else m.modifier_type)) != "buff"
                 and (not src or str(m.source_id) == src)))
 
@@ -710,7 +717,7 @@ class HookRuntime:
             st2 = _resolve(target)
             if st2 is None:
                 return 0.0
-            return float(sum(1 for m in st2.modifiers.values() if m.modifier_type == "dot"))
+            return float(sum(1 for m in st2.all_modifiers() if m.modifier_type == "dot"))
 
         def dot_value(target: Any, modifier_id: Any) -> float:
             """目标指定 DoT modifier 的当跳基数（跳伤/引爆读数唯一事实源——pipeline
@@ -994,7 +1001,7 @@ class HookRuntime:
                 if (side_name == "ally" and is_enemy) or (side_name == "enemy" and not is_enemy):
                     continue
                 if any(mod.modifier_id in mids or mod.name in mids
-                       for mod in state.modifiers.values()):
+                       for mod in state.all_modifiers()):
                     total += 1
             return float(total)
 
@@ -2135,7 +2142,7 @@ class HookRuntime:
                         "damage_tags": list(pseudo.damage_tags),
                         "damage_custom_name": pseudo.damage_custom_name,
                         "block_damage_triggered": any(
-                            mod.block_damage for mod in t2.modifiers.values())}, self._engine.state)
+                            mod.block_damage for mod in t2.all_modifiers())}, self._engine.state)
                     if wp.get("cancel"):
                         continue
                     final_amount = float(wp.get("amount", result.value))
@@ -2271,7 +2278,7 @@ class HookRuntime:
             resource_id = str(eff["resource_id"])
             absorbed = 0.0
             for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                for mod in list(t2.modifiers.values()):
+                for mod in list(t2.all_modifiers()):
                     if not mod.dispellable or mod.name != modifier_name:
                         continue
                     absorbed += max(1.0, float(mod.stacks))
@@ -2302,7 +2309,7 @@ class HookRuntime:
                     continue
                 prepared = self._engine._expr.compile(str(filt), layer="effect")
                 hit: List[str] = []
-                modifiers = list(t2.modifiers.values())
+                modifiers = list(t2.all_modifiers())
                 if order == "newest":
                     modifiers = list(reversed(modifiers))
                 for mod in modifiers:
@@ -2332,21 +2339,21 @@ class HookRuntime:
         elif t == "clear_protected_weakness":
             removed = {str(element) for element in eff["weak_list"]}
             for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                for mod in t2.modifiers.values():
+                for mod in t2.all_modifiers():
                     if mod.protected_weakness:
                         mod.protected_weakness = [
                             element for element in mod.protected_weakness if element not in removed]
         elif t == "clear_attached_weakness":
             removed = {str(element) for element in eff["weak_list"]}
             for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                for mod in t2.modifiers.values():
+                for mod in t2.all_modifiers():
                     if mod.weakness_add:
                         mod.weakness_add = [
                             element for element in mod.weakness_add if element not in removed]
         elif t == "clear_secret_weakness":
             removed = {str(element) for element in eff["weak_list"]}
             for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                for mod in t2.modifiers.values():
+                for mod in t2.all_modifiers():
                     if mod.secret_weakness:
                         mod.secret_weakness = [
                             element for element in mod.secret_weakness if element not in removed]
@@ -2386,7 +2393,7 @@ class HookRuntime:
             for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
                 if t2.bars_exhausted or (not eff.get("ignore_mute_break", False) and any(
                         "MuteBreak" in modifier.behavior_flags
-                        for modifier in t2.modifiers.values())):
+                        for modifier in t2.all_modifiers())):
                     continue
                 damage_type = str(eff.get("damage_type") or "physical")
                 if damage_type.startswith("$event."):
@@ -2407,7 +2414,7 @@ class HookRuntime:
                 floor = float(self._hook_amount(eff.get("floor", 0), st, payload, target_st=t2))
                 if amount < 0 or floor < 0:
                     raise ValueError("reduce_toughness 的 amount/floor 必须非负")
-                if t2.bars_exhausted or any(mod.toughness_lock for mod in t2.modifiers.values()):
+                if t2.bars_exhausted or any(mod.toughness_lock for mod in t2.all_modifiers()):
                     continue
                 current = float(t2.toughness)
                 actual = min(amount, max(0.0, current - floor))

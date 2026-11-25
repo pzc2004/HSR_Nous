@@ -71,7 +71,7 @@ class ModifierBook:
         # pipeline.modifier_enabled 统一判定，求值失败按不生效同 B8 口径）
         new_kind = mod.debuff_kind or ("control" if mod.control_kind else mod.modifier_type)
         if new_kind != "buff":
-            for held in target.modifiers.values():
+            for held in target.all_modifiers():
                 if (new_kind in held.grants_immune
                         and self._engine.pipeline.modifier_enabled(target, held)):
                     self._engine.bus.emit("on_immune", {"modifier_id": mod.modifier_id,
@@ -87,19 +87,25 @@ class ModifierBook:
 
         if mod.singleton_group.startswith("global:"):
             for other in self._engine.state.actors.values():
-                for old in list(other.modifiers.values()):
+                for old in list(other.all_modifiers()):
                     if (old.singleton_group == mod.singleton_group
                             and (other is not target or old.modifier_id != mod.modifier_id)):
                         self._remove_modifier(other, old.modifier_id, "replace")
 
         # singleton_group：global: 前缀全场互斥；其他组同目标互斥
         if mod.singleton_group:
-            for old in list(target.modifiers.values()):
+            for old in list(target.all_modifiers()):
                 if old.singleton_group == mod.singleton_group and old.modifier_id != mod.modifier_id:
                     self._remove_modifier(target, old.modifier_id, "replace")
 
         existing = target.modifiers.get(mod.modifier_id)
-        if existing is not None:
+        if mod.stack_mode == "multiple":
+            mod.stacks = max(1, min(mod.stacks, mod.max_stack))
+            if existing is None:
+                target.modifiers[mod.modifier_id] = mod
+            else:
+                existing.instances.append(mod)
+        elif existing is not None:
             if mod.stack_mode in {"replace", "replace_keep_duration"}:
                 if mod.stack_mode == "replace_keep_duration":
                     mod.duration = existing.duration
@@ -152,7 +158,7 @@ class ModifierBook:
     def dispel(self, target: ActorState, max_count: int = 1) -> int:
         """驱散（解除敌方增益）：LIFO 摘 dispellable 的 buff 系."""
         removed = 0
-        for mod in reversed(list(target.modifiers.values())):
+        for mod in reversed(list(target.all_modifiers())):
             if removed >= max_count:
                 break
             if mod.modifier_type in ("buff",) and mod.dispellable:
@@ -165,7 +171,7 @@ class ModifierBook:
     def purify(self, target: ActorState, max_count: int = 1) -> int:
         """净化（解除我方负面）：LIFO 摘 dispellable 的 debuff/dot/control 系."""
         removed = 0
-        for mod in reversed(list(target.modifiers.values())):
+        for mod in reversed(list(target.all_modifiers())):
             if removed >= max_count:
                 break
             if mod.modifier_type in ("debuff", "dot", "control") and mod.dispellable:
@@ -180,26 +186,52 @@ class ModifierBook:
         if removed is not None:
             # 反向摘盾：modifier 消失（过期/驱散/净化/破盾级联），其护盾实例一并移除
             target.shields = [s for s in target.shields if s.modifier_id != modifier_id]
-            payload = {
-                "modifier_id": modifier_id, "reason": reason, "target": target.actor.actor_id,
-                # 被摘件原施加者（$modifier.source 寻址——昔涟"标记消耗后回源追忆"族）
-                "source": removed.source_id,
-                "behavior_flags": list(removed.behavior_flags),
-            }
-            # OnDestroy：实例已摘除，携带者即使已死亡也必须完成清理/转移；先于公开事件。
-            for eff in removed.on_remove:
-                self._engine._run_hook_effect(target, eff, payload)
-            self._engine.bus.emit("after_remove_modifier", {
-                "modifier_id": modifier_id, "reason": reason, "target": target.actor.actor_id,
-                "source": removed.source_id,
-                "behavior_flags": list(removed.behavior_flags)}, self._engine.state)
+            # multiple：按名摘除覆盖主实例 + 全部额外实例，逐实例 OnDestroy/事件。
+            for instance in [removed, *removed.instances]:
+                payload = {
+                    "modifier_id": modifier_id, "reason": reason, "target": target.actor.actor_id,
+                    "source": instance.source_id,
+                    "behavior_flags": list(instance.behavior_flags),
+                }
+                for eff in instance.on_remove:
+                    self._engine._run_hook_effect(target, eff, payload)
+                self._engine.bus.emit("after_remove_modifier", {
+                    "modifier_id": modifier_id, "reason": reason, "target": target.actor.actor_id,
+                    "source": instance.source_id,
+                    "behavior_flags": list(instance.behavior_flags)}, self._engine.state)
             self._sync_speed(target)
+
+    def _remove_instance(self, target: ActorState, mod: Modifier, reason: str = "expire") -> None:
+        """摘除单个实例（multiple 逐实例到期）；主实例到期且有额外实例时提升首个额外实例."""
+        primary = target.modifiers.get(mod.modifier_id)
+        if primary is mod:
+            if mod.instances:
+                promoted = mod.instances.pop(0)
+                promoted.instances = mod.instances
+                target.modifiers[mod.modifier_id] = promoted
+            else:
+                target.modifiers.pop(mod.modifier_id, None)
+        elif primary is not None and mod in primary.instances:
+            primary.instances.remove(mod)
+        else:
+            return
+        target.shields = [s for s in target.shields if s.modifier_id != mod.modifier_id]
+        payload = {
+            "modifier_id": mod.modifier_id, "reason": reason, "target": target.actor.actor_id,
+            "source": mod.source_id, "behavior_flags": list(mod.behavior_flags),
+        }
+        for eff in mod.on_remove:
+            self._engine._run_hook_effect(target, eff, payload)
+        self._engine.bus.emit("after_remove_modifier", {
+            "modifier_id": mod.modifier_id, "reason": reason, "target": target.actor.actor_id,
+            "source": mod.source_id, "behavior_flags": list(mod.behavior_flags)}, self._engine.state)
+        self._sync_speed(target)
 
     def _tick_dots(self, actor_state: ActorState) -> None:
         """A 类结算：回合开始 DOT 跳伤."""
         # 同一携带者的整批 DoT 跳伤 = 一次伤害事件（月茧同时致死批处理域）
         with self._engine._damage_event():
-            for mod in list(actor_state.modifiers.values()):
+            for mod in actor_state.all_modifiers():
                 if mod.modifier_type != "dot":
                     continue
                 self._settle_one_dot(actor_state, mod)
@@ -221,7 +253,7 @@ class ModifierBook:
         break_damage 的 ratio 槽同构）
         """
         with self._engine._damage_event():
-            for mod in list(actor_state.modifiers.values()):
+            for mod in actor_state.all_modifiers():
                 if mod.modifier_type != "dot":
                     continue
                 if scope == "self":
@@ -281,7 +313,7 @@ class ModifierBook:
         阮梅弦外音族）/ on_action（每次行动——行动次数型 buff 族）。
         source_turn_end 锚不走这里——见 _tick_source_modifiers（按施加者回合扫全场）。
         """
-        for mod in list(actor_state.modifiers.values()):
+        for mod in actor_state.all_modifiers():
             if mod.duration <= 0 or mod.tick_anchor != anchor:
                 continue
             self._tick_one_modifier(actor_state, mod)
@@ -290,7 +322,7 @@ class ModifierBook:
         """单件走字：duration-1，到期移除（月茧到期真死特判——两锚点共用）."""
         mod.duration -= 1
         if mod.duration == 0:
-            self._remove_modifier(actor_state, mod.modifier_id, "expire")
+            self._remove_instance(actor_state, mod, "expire")
             if mod.moon_cocoon:
                 # 月茧到期未解除（未受治疗/未获护盾）→ 置 0 血走 _check_death 单漏斗
                 # （engine 门面回调，同 _tick_dots 先例）——锁血/复活层照走，形态
@@ -311,7 +343,7 @@ class ModifierBook:
         施加者离场（死亡）后无回合，挂靠自然停止走字，不立即移除。
         """
         for st in self._engine.state.actors.values():
-            for mod in list(st.modifiers.values()):
+            for mod in st.all_modifiers():
                 if mod.duration <= 0 or mod.tick_anchor != anchor:
                     continue
                 if mod.source_id != turn_actor.actor_id:

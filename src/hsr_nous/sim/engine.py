@@ -173,7 +173,7 @@ class CombatEngine:
             m for other in self.state.actors.values()
             if other is not st and other.alive and not other.banished
             and self._is_enemy(other.actor) == self._is_enemy(st.actor)
-            for m in other.modifiers.values() if m.effect_scope == "team"
+            for m in other.all_modifiers() if m.effect_scope == "team"
         ])
         # 条件光环运行时注入（04_modifier §4.16：enable_if/stat_exprs 语境工厂 + ⚠ 告警槽）；
         # _cond_aura_present = 场上存在条件件标记（HP 事件后速度重同步的开销闸，modifiers 挂载时置位）
@@ -458,7 +458,7 @@ class CombatEngine:
         # max_override（16 §16.12——modifier 覆写资源上限，昔涟 1141517 新蕊溢出至 200% 族）：
         # 携带者本资源覆写件取最大（多覆写/基础 cap 同取大——v1 只抬不压，压低实例未到达；
         # 覆写件到期不回收已超限值，下次获得按有效上限截断自然回落）
-        ov = [m.max_override for m in st.modifiers.values()
+        ov = [m.max_override for m in st.all_modifiers()
               if m.target_resource == rid and m.max_override > 0]
         if ov:
             cap = max(cap, max(ov)) if cap is not None else max(ov)
@@ -791,7 +791,7 @@ class CombatEngine:
     def _remove_source_exit_modifiers(self, actor_id: str, *, reason: str) -> None:
         """摘除永久离场施加者的带旗 modifier；临时 banish 不调用本通道."""
         for st in self.state.actors.values():
-            for mod in list(st.modifiers.values()):
+            for mod in list(st.all_modifiers()):
                 if mod.remove_on_source_exit and mod.source_id == str(actor_id):
                     self._remove_modifier(st, mod.modifier_id, reason)
 
@@ -993,7 +993,7 @@ class CombatEngine:
             return
         # 解控（欢愉角色控制类件——dispellable 闸同常规驱散）
         for st in members:
-            for mid in [m.modifier_id for m in st.modifiers.values()
+            for mid in [m.modifier_id for m in st.all_modifiers()
                         if m.control_kind and m.dispellable]:
                 self._remove_modifier(st, mid, "cleanse")
         pool = float(extra_pool) if extra_pool is not None else float(self.state.punchline)
@@ -1342,10 +1342,10 @@ class CombatEngine:
         """
         if target.current_hp > 0 or not target.alive:
             return
-        if any(m.allow_negative_hp for m in target.modifiers.values()):
+        if any(m.allow_negative_hp for m in target.all_modifiers()):
             return
         # 锁血层：致命伤留 1 血
-        if any(m.hp_lock for m in target.modifiers.values()):
+        if any(m.hp_lock for m in target.all_modifiers()):
             target.current_hp = 1.0
             self.bus.emit("on_hp_lock", {
                 "source": source_id, "target": target.actor.actor_id,
@@ -1354,7 +1354,7 @@ class CombatEngine:
             return
         # 月茧层：授予件 + 全队次数可用 → 消耗次数进月茧态（茧中人授予件已消耗、
         # 次数已用，再受致命击自然落不到本层 → 真死，无需特判）
-        cocoon_grant = next((m for m in target.modifiers.values()
+        cocoon_grant = next((m for m in target.all_modifiers()
                              if m.moon_cocoon and m.modifier_id != MOON_COCOON_ID), None)
         if cocoon_grant is not None and self._moon_cocoon_available():
             self._remove_modifier(target, cocoon_grant.modifier_id, "moon_cocoon")
@@ -1370,7 +1370,7 @@ class CombatEngine:
             self.state.log.append(f"AV{self.state.clock:.1f}: {target.actor.name} 进入月茧状态")
             return
         # 复活层：消费复活件，set_hp_to_percent 回拉
-        rev = next((m for m in target.modifiers.values() if m.revive_percent > 0), None)
+        rev = next((m for m in target.all_modifiers() if m.revive_percent > 0), None)
         if rev is not None:
             self._remove_modifier(target, rev.modifier_id, "revive")
             # 茧中人被复活接住：月茧态随之结束（次数不退——进茧时已消耗）——否则到期会误杀
@@ -1397,7 +1397,7 @@ class CombatEngine:
         # 读到摘除后终态；alive 闸使「自己听自己 actor_exit」结构性不触发，本扫描是引擎层
         # 统一通道（dismiss/放逐不经过——只认真死定论）
         for st in self.state.actors.values():
-            for m in list(st.modifiers.values()):
+            for m in list(st.all_modifiers()):
                 if m.remove_on_source_death and m.source_id == target.actor.actor_id:
                     self._remove_modifier(st, m.modifier_id, "source_death")
         self._remove_source_exit_modifiers(target.actor.actor_id, reason="source_exit")
@@ -1436,24 +1436,24 @@ class CombatEngine:
         force_stance_break = False
         if src_state is not None and any(
                 "force_stance_break" in mod.hit_stat_exprs
-                for mod in src_state.modifiers.values()):
+                for mod in src_state.all_modifiers()):
             target_hp = self.pipeline.effective_stats(target)["hp"]
             force_stance_break = self.pipeline._scoped_boost(
                 src_state, {
                     "action_type": action.action_type, "damage_type": action.damage_type or "",
                     "target_broken": target.broken,
-                    "target_controlled": any(mod.control_kind for mod in target.modifiers.values()),
-                    "target_control_kinds": [mod.control_kind for mod in target.modifiers.values()
+                    "target_controlled": any(mod.control_kind for mod in target.all_modifiers()),
+                    "target_control_kinds": [mod.control_kind for mod in target.all_modifiers()
                                              if mod.control_kind],
                     "target_hp_ratio": target.current_hp / target_hp if target_hp > 0 else 0.0,
                 }, lambda stat: stat == "force_stance_break", target=target) > 0
         if force_stance_break:
             can_reduce = True
-        if any(mod.toughness_lock for mod in target.modifiers.values()):
+        if any(mod.toughness_lock for mod in target.all_modifiers()):
             can_reduce = False
         if not action.toughness_scope and not force_stance_break and any(
                 action.damage_type in mod.protected_weakness
-                for mod in target.modifiers.values()):
+                for mod in target.all_modifiers()):
             can_reduce = False
         # 削韧量 = rulebook toughness_damage 表达式求值（双效率池乘算 (1+a)(1+b)——spec 双池，实测待确认；
         # 含光环辐射，pipeline 统一生效面；固定削韧项无实例，公式内中性 0）
@@ -1699,7 +1699,7 @@ class CombatEngine:
         """行动级可用条件（03_actor §3.8.1）：无声明恒真；有声明现场求值——
         `$self`=行动方 + `res_<rid>` 平铺 + hook 函数族（controlled/resource_of 等）。
         求值失败按不可用 + ⚠ 战斗日志（B8 同口径）；手工构造的 Action（无预编译产物）懒解析."""
-        locked = {kind for mod in actor_state.modifiers.values() for kind in mod.locked_action_types}
+        locked = {kind for mod in actor_state.all_modifiers() for kind in mod.locked_action_types}
         if act.action_type in locked:
             return False
         if not act.available_if:
@@ -1739,7 +1739,7 @@ class CombatEngine:
         （owner_turn_start/on_action）本回合末本就不走字，无需补偿
         （"已有增益时长不变"对它们天然成立，+1 反而白送时长）。
         """
-        for mod in actor_state.modifiers.values():
+        for mod in actor_state.all_modifiers():
             if mod.duration > 0 and mod.tick_anchor == "owner_turn_end":
                 mod.duration += 1
         self._tick_modifiers(actor_state)
@@ -1791,13 +1791,13 @@ class CombatEngine:
         if not allies:
             return None
         if attacker is not None:
-            for mod in attacker.modifiers.values():
+            for mod in attacker.all_modifiers():
                 if mod.forced_taunt:
                     src = self.state.actors.get(mod.source_id)
                     if src is not None and any(s is src for s in allies):
                         return src
             for target in allies:
-                for mod in target.modifiers.values():
+                for mod in target.all_modifiers():
                     if mod.lock_on:
                         return target
         if not random_by_aggro:
@@ -1827,7 +1827,7 @@ class CombatEngine:
                 else "dark" if self._is_enemy(source.actor) else "light")
         return not any(
             team in teams and source_modifier in source.modifiers
-            for modifier in target.modifiers.values()
+            for modifier in target.all_modifiers()
             for source_modifier, teams in modifier.custom_unselectable.items())
 
     def _hostile_target_pool(self, actor: Actor) -> List[ActorState]:
@@ -1897,7 +1897,7 @@ class CombatEngine:
         if tt == "aoe":
             return enemies[0], enemies
         forced = next((self.state.actors.get(mod.source_id)
-                       for mod in actor_state.modifiers.values()
+                       for mod in actor_state.all_modifiers()
                        if mod.forced_taunt and self.state.actors.get(mod.source_id) in enemies), None)
         if forced is not None:
             # 被敌方 Taunt 的我方单位强制攻击施加者，覆盖普通目标选择。
@@ -1938,7 +1938,7 @@ class CombatEngine:
                 return None
             return next((s for s in candidates if any(
                 m.modifier_type == "dot" and m.dot_element == element
-                for m in s.modifiers.values())), None)
+                for m in s.all_modifiers())), None)
         if preference != "owner_last_target":
             return None
         sdef = self.summon_defs.get(actor_state.actor.actor_id)
@@ -2163,7 +2163,7 @@ class CombatEngine:
 
         # 净化自身所有可驱散负面（140811"解除自身所有负面效果"族）
         if action.cleanse_self:
-            for mid in [m.modifier_id for m in actor_state.modifiers.values()
+            for mid in [m.modifier_id for m in actor_state.all_modifiers()
                         if m.modifier_type == "debuff" and m.dispellable]:
                 self._remove_modifier(actor_state, mid, "cleanse")
 
@@ -2315,7 +2315,7 @@ class CombatEngine:
                             "damage_tags": list(eff.damage_tags),
                             "damage_custom_name": eff.damage_custom_name,
                             "block_damage_triggered": any(
-                                mod.block_damage for mod in target.modifiers.values()),
+                                mod.block_damage for mod in target.all_modifiers()),
                         }, self.state)
                         if wp.get("cancel"):
                             continue  # 伤害被取消（免死类 hook 侧已自理回血/反击）
@@ -2417,7 +2417,7 @@ class CombatEngine:
         target = self.state.actors.get(str(payload.get("target") or ""))
         if target is None:
             return None
-        blocking = [m for m in target.modifiers.values() if m.block_damage]
+        blocking = [m for m in target.all_modifiers() if m.block_damage]
         if not blocking:
             return None
         for mod in blocking:
@@ -2729,11 +2729,11 @@ class CombatEngine:
 
     def _enemy_turn(self, actor_state: ActorState) -> None:
         actor = actor_state.actor
-        frozen = any(m.control_kind == "freeze" for m in actor_state.modifiers.values())
+        frozen = any(m.control_kind == "freeze" for m in actor_state.all_modifiers())
 
         # 冻结：真正跳过一次行动（不恢复韧性；解冻后下次行动提前——比例读 rulebook constants.freeze_advance，mechanics 03 §3.5）
         if frozen:
-            for mod_id in [m.modifier_id for m in actor_state.modifiers.values() if m.control_kind == "freeze"]:
+            for mod_id in [m.modifier_id for m in actor_state.all_modifiers() if m.control_kind == "freeze"]:
                 self._remove_modifier(actor_state, mod_id, "expire")
             assert self.scheduler is not None
             self.scheduler.advance_action(actor, self.pipeline.freeze_advance())
@@ -2865,7 +2865,7 @@ class CombatEngine:
         """强制普攻回合：暴怒打对立阵营；支配打其他同阵营友方."""
         if control_kind not in {"outrage", "dominate"}:
             raise ValueError(f"未知强制普攻控制类型：{control_kind!r}")
-        if not any(mod.control_kind == control_kind for mod in actor_state.modifiers.values()):
+        if not any(mod.control_kind == control_kind for mod in actor_state.all_modifiers()):
             return False
         actor = actor_state.actor
         if control_kind == "outrage":
@@ -2917,7 +2917,7 @@ class CombatEngine:
             return
 
         # 阶段 2 · 行动（快照回合开始时的形态：本回合内才变身的，当动不计入倒计时）
-        prevent_action = any(mod.prevent_action for mod in actor_state.modifiers.values())
+        prevent_action = any(mod.prevent_action for mod in actor_state.all_modifiers())
         controlled = self._forced_basic_turn(actor_state, "outrage")
         if not controlled:
             controlled = self._forced_basic_turn(actor_state, "dominate")

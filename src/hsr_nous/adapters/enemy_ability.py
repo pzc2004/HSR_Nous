@@ -6287,7 +6287,7 @@ class AbilityCompiler:
         stack_mode = {"Replace": "replace", "ReplaceByCaster": "refresh",
                       "Refresh": "refresh", "Merge": "refresh", "Prolong": "refresh",
                       "ReplaceButKeepLifeTime": "replace_keep_duration",
-                      "RetainGlobalLatestUnique": "replace"}.get(stacking)
+                      "RetainGlobalLatestUnique": "replace", "Multiple": "multiple"}.get(stacking)
         if stack_mode is None:
             self._issue(ctx, path, "ModifierStacking", f"未注册叠加语义：{stacking}")
             return None
