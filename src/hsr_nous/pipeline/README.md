@@ -15,7 +15,8 @@ pipeline/
 ├── enemies/                   # ② 敌人域（turnbasedgamedata 五表为数值权威）
 │   ├── update.py                # tbgd 五表 + 实际引用 ConfigAI 下载（GitLab raw + 红线对齐校验）
 │   ├── loader.py                # tbgd 口径统一查询（面板/弱点/抗性/技能倍率削韧/AI——
-│   │                            #   与 hakushin 链全量对拍见 tests/test_enemy_source_parity.py）
+│   │                            #   与 hakushin 链全量对拍见 tests/test_enemy_source_parity.py；
+│   │                            #   ConfigCharacter 按 ParentConfigPath 递归继承合并）
 │   └── semantic.py              # 敌人语义补充（Fandom 机制描述文本——语义补充非数值权威）
 ├── stages/                    # ③ 期数域（深渊/虚构/末日/异相仲裁）
 │   ├── update.py                # 期数下载（Hakushin + buhflipexplode + 红线过滤）

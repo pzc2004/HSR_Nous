@@ -16046,6 +16046,15 @@ def test_empty_task_config_is_placeholder_but_fields_still_reject():
 
 
 @_need_ability
+def test_character_config_inherits_parent_dynamic_values():
+    from hsr_nous.pipeline.enemies.loader import get_enemy_character_config
+
+    config = get_enemy_character_config("4033023") or {}
+    floats = ((config.get("DynamicValues") or {}).get("Floats") or {})
+    assert "-1089063255" in floats, "变体 Config 应继承父级 DynamicValues.Floats"
+
+
+@_need_ability
 def test_empty_apply_operation_is_placeholder_but_fields_still_reject():
     out = _task_skill({"$type": "RPG.GameCore.ApplyOperation"})
     assert out["ok"] and not out["unsupported"]

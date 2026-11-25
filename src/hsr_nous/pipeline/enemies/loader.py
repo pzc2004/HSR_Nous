@@ -334,17 +334,41 @@ def get_enemy_ai_config(ai_path: str, *, tbgd_dir: Optional[str] = None) -> Opti
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _load_config_json(relative_path: str, tbgd_dir: Optional[str]) -> Optional[Dict[str, Any]]:
-    """读取仓库根部 Config  JSON；拒绝穿越，缺文件与 AI 配置一样返回 None."""
+def _merge_config(parent: Dict[str, Any], child: Dict[str, Any]) -> Dict[str, Any]:
+    """Config 继承合并：dict 递归合并，列表/标量子级覆盖."""
+    out = dict(parent)
+    for key, value in child.items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = _merge_config(out[key], value)
+        else:
+            out[key] = value
+    return out
+
+
+def _load_config_json(relative_path: str, tbgd_dir: Optional[str],
+                      _seen: Optional[frozenset] = None) -> Optional[Dict[str, Any]]:
+    """读取仓库根部 Config JSON；拒绝穿越，缺文件与 AI 配置一样返回 None.
+
+    显式 ParentConfigPath 递归继承：父 Config 先加载，子级覆盖；父路径缺失或循环显式报错。
+    """
     if (not relative_path or relative_path.startswith(("/", "\\"))
             or ".." in Path(relative_path).parts):
         raise ValueError(f"非法 Config 路径 {relative_path!r}")
+    seen = _seen or frozenset()
+    if relative_path in seen:
+        raise ValueError(f"Config ParentConfigPath 循环：{relative_path}")
     try:
         value = _load_table(relative_path, tbgd_dir)
     except FileNotFoundError:
         return None
     if not isinstance(value, dict):
         raise ValueError(f"Config 须为 JSON object：{relative_path}")
+    parent_path = str(value.get("ParentConfigPath") or "")
+    if parent_path:
+        parent = _load_config_json(parent_path, tbgd_dir, seen | {relative_path})
+        if parent is None:
+            raise ValueError(f"Config 父路径缺失：{relative_path} -> {parent_path}")
+        value = _merge_config(parent, value)
     return value
 
 
