@@ -556,7 +556,7 @@ ParamEntity2 与既有谓词一样读 `$event.target`。这些别名在目标列
 `ByIsTriggeredBlockDamage` 只在持有者的 `after_being_hit` 语境读取 `$event.block_damage_triggered`：一次性免伤屏障消费后，即使 modifier 已离场，仍能识别本次命中；Inverse 取反，不以伤害量为零反推屏障触发。
 `ByIsIndirectDamage` 在受击前/后读取 `$event.is_indirect`，该字段只来自 Action/DealDamage 的显式 `is_indirect`（上游 AttackData.IsIndirect）；Inverse 取反，不把相邻目标或追加攻击擅自当作间接伤害。
 `ByCompareDamageTag` 仅在 DamageTagList 含一个 EnumIndex=3 的整数标签时编译为该值 `in $event.damage_tags`，Inverse 取反；多标签的集合比较语义未核定，继续显式拒绝。
-标准 `DeathSetCamera`/`MuteHitFly` Ability 属死亡镜头与受击飞行动画，即使旧配置引用而定义未入闭包也不产生模拟效果；宽泛的 DeathEffect 不在此列。`SwitchBattleArea` 只切换场景 UnifiedId/演出状态，当前无区域战斗状态读取方，因此不生成模拟效果。`InsertBattlePerform` 只播放 Story/BattlePerformance 资产；改变通关判定的 `EnableStoryWin` 不属于表现节点。`SetMonsterHPTotalSeg` 只设置血条分段显示，不写 HP 或阶段阈值。
+标准 `DeathSetCamera`/`MuteHitFly` Ability 属死亡镜头与受击飞行动画，即使旧配置引用而定义未入闭包也不产生模拟效果；宽泛的 DeathEffect 不在此列。`SwitchBattleArea` 只切换场景 UnifiedId/演出状态，当前无区域战斗状态读取方，因此不生成模拟效果。`InsertBattlePerform` 只播放 Story/BattlePerformance 资产；改变通关判定的 `EnableStoryWin` 不属于表现节点。`SetMonsterHPTotalSeg` 只设置血条分段显示，不写 HP 或阶段阈值。`ShowTargetHPBar` 仅接受 `$type + TargetType` 对象的目标血条显示，零 effect；额外字段仍拒绝。
 动态覆写由 override_exprs 现场求值，敌方速度统一经 `_sync_speed` 同步调度器。`ByCompareParamString` 的实样按当前 Ability 名在编译期比较，Inverse 取反；无当前 Ability 或空值拒绝。`ByCurrentTurnState` 收编 InsertAbilityActionPhase/InsertUltraSkillExecuting，读取执行帧的 insert/action_type，其他状态仍拒绝。谓词长尾同批收编：`ByCurrentSkillName`/`ByCurrentSkillType`（带 `action_type` 的行动/伤害事件，
 `$event.action_id`/`$event.action_type` 窄化，SkillParam 绑定与词表外类型显式拒）、
 `ByIsDamageType`/`ByAttackType`（伤害事件语境 `$event.damage_type`/`action_type` 窄化；`ByIsSplitDamage` 读取同事件的 `split != ''`，空串表示非均分；

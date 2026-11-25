@@ -16055,6 +16055,20 @@ def test_character_config_inherits_parent_dynamic_values():
 
 
 @_need_ability
+def test_show_target_hp_bar_is_presentation_only_but_fields_still_reject():
+    task = {"$type": "RPG.GameCore.ShowTargetHPBar",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "ModifierOwnerEntity"}}
+    out = _task_skill(task)
+    assert out["ok"] and not out["unsupported"]
+    assert not any(hook.get("effects") for hook in out["hooks"])
+
+    rejected = _task_skill({**task, "Unknown": 1})
+    assert not rejected["ok"]
+    assert any(issue["node_type"] == "RPG.GameCore.ShowTargetHPBar"
+               for issue in rejected["unsupported"])
+
+
+@_need_ability
 def test_empty_apply_operation_is_placeholder_but_fields_still_reject():
     out = _task_skill({"$type": "RPG.GameCore.ApplyOperation"})
     assert out["ok"] and not out["unsupported"]

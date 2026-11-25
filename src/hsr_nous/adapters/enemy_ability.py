@@ -277,6 +277,7 @@ TASK_HANDLERS = {
     "RPG.GameCore.LoopExecuteTaskList": "_compile_loop",
     "RPG.GameCore.WaitFor": "_compile_wait_for",
     "RPG.GameCore.ApplyOperation": "_compile_apply_operation",
+    "RPG.GameCore.ShowTargetHPBar": "_compile_show_target_hp_bar",
     "RPG.GameCore.SequenceConfig": "_compile_sequence_config",
     "RPG.GameCore.LockStance": "_compile_lock_stance",
     "RPG.GameCore.LockActionDelayChange": "_compile_lock_action_delay",
@@ -1702,6 +1703,12 @@ class AbilityCompiler:
         if set(task) != {"$type"}:
             self._issue(ctx, path, str(task.get("$type")),
                         "ApplyOperation 非空操作对象/效果未注册")
+
+    def _compile_show_target_hp_bar(self, task: Dict[str, Any], ctx: _Context,
+                                    path: str, stack: Tuple[str, ...]) -> None:
+        if set(task) != {"$type", "TargetType"} or not isinstance(task.get("TargetType"), dict):
+            self._issue(ctx, path, str(task.get("$type")),
+                        "ShowTargetHPBar 仅接受目标对象的纯呈现形态")
 
     def _compile_wait_for(self, task: Dict[str, Any], ctx: _Context,
                           path: str, stack: Tuple[str, ...]) -> None:
