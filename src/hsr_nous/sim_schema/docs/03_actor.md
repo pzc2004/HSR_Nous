@@ -27,6 +27,7 @@ actor:
     break_effect: 0.0
     break_efficiency_boost: 0.0   # 击破效率提升
     weakness_break_efficiency_boost: 0.0  # 弱点击破效率提升
+    toughness_taken: 0.0  # 目标侧承受削韧比例（独立乘区）
     fixed_toughness_dmg: 0.0      # 固定削韧值（不受效率加成影响）
 
     effect_hit: 0.0
@@ -314,7 +315,7 @@ actor:
 
 **modifier 携带的动态削韧闸**：modifier 可携带 `toughness_scope` / `toughness_dmg_ratio` 字段——运行时给**他人攻击**开闸/折扣（忘归人狐祈"无对应弱点也可削韧、削韧量 ×50%"）；跨源互斥走 `singleton_group`（§4.11）。action 级静态字段与 modifier 级动态字段并存：静态是技能固有属性，动态是 buff 授予属性。**静动合成规则**：scope 取**并集**（静态 ∪ 全部动态来源），ratio 动态来源唯一（`singleton_group` 保证，多源同组替换）。
 
-> **实现状态**：`own_element` 默认闸与 action 级 `toughness_scope`（`"all"` / 元素列表）**已实现**（2026-09-06，`sim/engine.py` `_apply_toughness_damage`）；hook 语境 `deal_damage` 的 `toughness_dmg` **已实现**（2026-09-07——同走 `_apply_toughness_damage` 单漏斗，恒 own_element 默认闸、无 scope 参；忆灵技/hook 段削韧族的落点，见 `05_effects.md` §造成伤害）；modifier 携带的动态闸（`toughness_scope` / `toughness_dmg_ratio` 及静动合成，忘归人狐祈族）**未落地**——`_MODIFIER_SPEC_KEYS` 无此键，写了编译期炸。
+> **实现状态**：`own_element` 默认闸与 action 级 `toughness_scope`（`"all"` / 元素列表）**已实现**；hook 语境 `deal_damage` 的 `toughness_dmg` / `toughness_scope` 同走 `_apply_toughness_damage` 单漏斗。通用 modifier 的 `toughness_scope` / `toughness_dmg_ratio` 字段及静动合成（忘归人狐祈族）仍未落地。敌人 `ModifyDamageData.Attacker_ForceStanceBreakRatio=1` 则使用攻击侧命中域 `hit_stat_exprs(force_stance_break)=1` 作为本次命中的专用开闸标志，效果等价于当次 `toughness_scope="all"`；其他比例仍显式拒绝，不代表通用动态比例已落地。
 
 - 闸门只决定**能不能削**；削多少仍走 `01_formula.md` §1.5/§1.11 的削韧公式（`toughness_dmg` × 效率 + `fixed_toughness_dmg`），含固定削韧值一并受闸门约束
 - 韧性保护（锁定弱点，见 `04_break_system.md` §4.1）与超韧性（§4.6）优先级高于闸门——锁定时任何 scope 都不可削
@@ -400,6 +401,9 @@ actions:
 | `ult_consume_amount` | `float` | **实际扣量 ≠ 门槛**时显式声明（昔涟 141503 门槛 24 扣 12 族——fandom energy_cost 与 params #4 双源）；缺省 `0` = 与 `ult_cost_amount` 同（门槛=扣量全扣，遐蝶新蕊族口径）。仅特殊充能语境有意义 |
 | `ult_quick_cast` | `bool` | **免确认立即释放**：按下即放、不进确认态（白厄变身/遐蝶召唤/银狼LV.999 族）。与机制类型无关——阿格莱雅变身反例：变身 ≠ 免确认；游戏设计逐角色定，必须显式标注，缺省 `false` 进确认态 |
 | `split` | `str` | `""`（默认）/ `"even"`：分配轴——总伤按结算时存活目标数均分，逐目标各自跑公式（05_effects §split；白厄最后一击、赛飞儿族） |
+| `is_indirect` | `bool` | 上游 AttackData.IsIndirect 的显式间接伤害标志，默认 `false`；原样进入受击事件，不按目标位置或攻击类别反推 |
+| `damage_tags` | `List[int]` | 上游 AttackData.DamageTag 的整数枚举值列表，默认空；原样进入受击事件，与内部字符串 tags 不混用 |
+| `damage_custom_name` | `str` | 上游 AttackData.CustomName，默认空串；原样进入受击前后事件，供 ByCompareDamageCustomName 等值过滤 |
 | `instances` | `int` | 多段段数（scaling/toughness_dmg 均为每段值，toughness_dmg 允许小数且编译不截断；段间目标死亡后续段落空——有下波则**转波续段**（续段执行 2026-09-07 落地：段间全灭时推进波次重解析目标继续，黄泉族砍穿波次；无下波才鞭尸损失） |
 | `segment_confirm` | `bool` | **逐段确认**：`instances > 1` 时第 2 段起每段结算前挂起回决策点等确认（黄泉三段族）。仅手动模式有观察效应；脚本/编译策略与 expected/roll 直通（确定性零影响）。段间换目标与段级变体见下两键 |
 | `instance_variants` | `List[Dict?]` | **段级变体**（黄泉 3 单刀+1 群攻混合段型族）：下标对齐段序逐段覆写 `{target_type, scaling, damage_type, toughness_dmg}`（`None`=该段用基础行动，未列字段沿用基础行动） |

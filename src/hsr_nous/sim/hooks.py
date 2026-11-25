@@ -1892,6 +1892,29 @@ class HookRuntime:
                         action_id="reduce_toughness", name="reduce_toughness",
                         action_type="skill", damage_type=str(eff.get("damage_type") or "physical"))
                     self._engine._trigger_break(st.actor, pseudo, t2)
+        elif t == "exit_break_state":
+            for t2 in self._hook_target_states(eff.get("target", "enemy_first"), st, payload):
+                t2.broken = False
+                self._engine.state.log.append(
+                    f"AV{self._engine.state.clock:.1f}: {t2.actor.name} 退出击破状态")
+        elif t == "reset_stance":
+            for t2 in self._hook_target_states(eff.get("target", "enemy_first"), st, payload):
+                t2.bar_index = 0
+                maximum = float(t2.actor.stats.max_toughness)
+                if "amount" not in eff:
+                    t2.toughness = maximum
+                else:
+                    amount = self._hook_amount(eff["amount"], st, payload, target_st=t2)
+                    mode = str(eff.get("mode") or "set")
+                    if mode == "add":
+                        value = t2.toughness + amount
+                    elif mode == "set":
+                        value = amount
+                    else:
+                        raise ValueError(f"reset_stance 的 mode 非法值 {mode!r}")
+                    t2.toughness = min(maximum, max(0.0, value))
+                self._engine.state.log.append(
+                    f"AV{self._engine.state.clock:.1f}: {t2.actor.name} 韧性重置")
         elif t == "restore_toughness":
             # 韧性恢复（05_effects §restore_toughness）：与自然恢复同态——回主条、补满、
             # 追加条保留；未击破时仅补足当前韧性，不另发事件。

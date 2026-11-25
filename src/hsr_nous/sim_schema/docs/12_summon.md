@@ -160,8 +160,12 @@ actions:
       - trigger: "on_cast"               # 04_modifier.md §4.8 modifier 生命周期触发器（非 §23.4 hook 契约事件）
         effect_type: "summon"            # 已实现（2026-09-06 收编——`05_effects.md` §5.2）
         summon_id: "hyacine_memosprite"
-        position: "after_owner"        # 召唤位置：after_owner | before_owner | first | last（敌方 SummonMonster LocationType=First/Last 队首/队尾，2026-11-02 落地）| fixed_position
+        position: "after_owner"        # after_owner | before_owner | first | last | last_die | fixed_position | formation_record（读取 RecordEntityFormationIndex 按阵营记录的原站位）
 ```
+
+一次 SummonMonster 任务编译出的所有 summon 效果共享 `summon_group`；引擎保存该组实际入场的实体列表，下一组替换上一组。目标代数 `pool: "last_summons"` 读取这一最近召唤组，不等同于当前所有存活召唤物；组与列表进入存档。
+
+怪物 ID 为动态表达式时，仅在 CharacterConfig 的 SummonIDList 非空时收编：编译器为闭集内每个 ID 登记独立定义，效果以 `summon_id_source` + `summon_variants` 在运行时选择；选到表外值显式报错。无候选闭集仍拒绝，不能按静态 0 或首个候选代替。
 
 #### 离场/解散
 

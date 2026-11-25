@@ -23,11 +23,25 @@ ENGINE_EFFECT_TYPES = frozenset({
     "adjust_duration",   # modifier 时长 ±N（≠ refresh 重置满值；调到 0 按到期移除——刃族）
     "add_toughness_bar", # 追加韧性条（03_actor §3.10 虚韧性族机制赋予；运行期追加按加入序承接）
     "restore_toughness", # 恢复韧性至上限并解除击破态（bar_index 回主条，追加条保留）
+    "exit_break_state", # 仅解除弱点击破状态，不改变韧性与条序
+    "reset_stance",     # 回主条并重置韧性（默认补满；set/add amount 可选），不改弱点击破状态
+    "clear_protected_weakness",  # Protected 按元素解除（不是摘整个 modifier）
+    "clear_attached_weakness",  # Attach 按元素撤销附加弱点（保留基底与其他修饰）
+    "clear_secret_weakness",  # 解除弱点显示隐藏，不改有效弱点或削韧规则
+    "set_targetable",  # 设置目标 enemy/ally 可选状态（AttachEntityUnselectable 直译）
     "reduce_toughness",  # 固定削韧（amount + floor 保底；toughness_lock 与 bars_exhausted 同闸）
+    "trigger_stance_countdown",  # 逐目标发射倒计时事件；不直接改韧性
     "trigger_action",    # 代放/复制行动（可选 scaling_atk 动态倍率覆写、target 强制主目标）
     "gain_resource",     # 自定义资源 +=（发 on_resource_gain）
     "set_resource",      # 自定义资源直接设值
-    "set_dynamic_value", # ConfigAI 动态值直接设值（dynamic_key + amount，写敌方 policy 运行态）
+    "set_dynamic_value", # 任意 actor_id 动态值直接设值（dynamic_key + amount，可存档）
+    "loop_effects",     # 动态次数执行嵌套 effects（已收编写入、modifier 与直伤循环的编译产物）
+    "set_modifier_dynamic_value", # 具名 modifier 实例动态值 Set/Add（缺失实例跳过）
+    "set_dynamic_target", # 动态目标绑定（dynamic_key + target，可选 owner/unique_name scope）
+    "modify_shield",     # ModifyShield/ModifyShieldMax 的 Set 盾值/上限改写
+    "create_battle_event", # 创建战斗事件伪实体并注册 EventID（CreateBattleEvent 直译）
+    "emit_phase_custom_event", # 阶段开始/结束自定义事件（TriggerModifierCustomEvent 13/8 直译）
+    "emit_modifier_custom_event", # 通用 modifier 自定义事件（逐目标保留事件值与可选数值）
     "bind_roll",        # 执行帧共享掷骰绑定锚（roll_key + 可选 scale——编译器概率分支
                         # 翻译前置绑定，23_event_hook_system §23.15；roll 模式采主流、
                         # expected 绑 0.5 下邻浮点，与 mechanic_chance 期望口径一致）
@@ -38,18 +52,25 @@ ENGINE_EFFECT_TYPES = frozenset({
     "refill_skill_point",  # 溢出回补（from_resource 记录池补足至上限——花火 1130603 族）
     "gain_energy",       # 回能（可走 err_exempt 豁免 ERR）
     "consume_energy",    # 扣能（amount 非负，min(amount, 当前能量)，不走 on_gain_energy）
+    "set_energy",        # 直接设当前能量（ModifySPNew.SetValue，不乘 ERR、不走 on_gain_energy）
+    "modify_special_sp", # 特殊充能增减（逐目标求值，钳在 0..MaxSpecialSP）
+    "set_skill_point",   # 直接设当前战技点（ModifyTeamBoostPoint.Set，经统一 SP 差量通道）
     "heal_self",         # 自疗（hp_scaling=ratio，走统一治疗管线）
     "heal",              # 治疗（target 选择器 + ratio=施放者 HP 比例，走统一治疗管线——忆灵/丰饶族）
     "set_hp_to_percent", # HP 设为上限×比例（可致死，走死亡检查）
     "drain_hp",          # 生命流失/汲取（floor 保底 + drain_ratio 治疗转化 + into_resource 记账；
                          # 发 on_hp_decrease reason='drain'，不触发伤害类 hook——遐蝶耗血族）
-    "summon",            # 召唤物入场（summon_id → 布场+上行动条+actor_enter；12_summon）
+    "summon",            # 召唤物入场（summon_id 或 summon_id_source+summon_variants → 布场+上行动条+actor_enter；12_summon）
     "dismiss_summon",    # 召唤物离场（summon_id → actor_exit reason=dismiss）
     "leave_battle",      # 非击杀离场/逃跑（actor_exit reason=flee，不发 on_kill）
     "grant_extra_turn",  # 授予额外回合
     "immediate_action",  # 立即行动（剩余距离置 0 到顶，无视推条；普通回合口径）
+    "set_action_delay",  # 剩余行动条设指定百分数；可选 near_target 排近目标后（After）
     "delay_action",      # 行动延后（amount 百分数）
     "advance_action",    # 行动提前（amount 百分数；remaining ≤ 0 时无效——小伊卡消失拉忆师族）
+    "lock_action_delay", # 行动条锁（LockActionDelayChange；来源/方向白名单）
+    "set_team_location", # 编队位置移动（队首/队尾/参照前后；复用统一布场顺序）
+    "record_formation_index", # 记录目标在同侧编队中的位置，供 FormationRecord 召唤复用
     "cancel_event",      # waterfall 事件取消（免死族）
     "modify_amount",     # waterfall 事件 amount 改写（抵扣/减免族——遐蝶 E2 炽意抵扣焰息耗血首实例）
     "aha_instant",       # 额外阿哈时刻（21_elation §21.4——结算档=模板 amount 槽声明（必填，
@@ -62,7 +83,7 @@ ENGINE_EFFECT_TYPES = frozenset({
 #: hook effect `target` 选择器合法值（HookRuntime._hook_target_states 实现）；
 #: 另支持动态前缀 `$event.<字段>`（payload actor_id 寻址，见 HookRuntime._event_actor）
 HOOK_TARGET_SELECTORS = frozenset({
-    "self",
+    "self", "$level", "$light_team", "$dark_team",
     "all_allies",
     "other_allies",
     "all_enemies",
@@ -93,5 +114,5 @@ POLICY_SELECTOR_DICT_TYPES = frozenset({"min", "max", "random", "has_modifier", 
 EFFECT_EXPR_SLOTS = frozenset({
     "amount", "ratio", "scaling_atk", "scaling_hp", "delta", "percent", "floor",
     "toughness_dmg", "punchline_source", "pool_override", "elation",
-    "instances_expr", "repeat_scaling_atk", "scale",
+    "instances_expr", "repeat_scaling_atk", "scale", "apply_chance", "count",
 })

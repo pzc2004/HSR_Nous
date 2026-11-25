@@ -41,7 +41,8 @@ class ExpressionError(ValueError):
 # 预处理：C 三元、布尔运算符、命名空间
 # ---------------------------------------------------------------------------
 
-_NS_PATTERN = re.compile(r"\$(self|resource|event|target|build|prev|last|team|it|modifier|mod|snapshot|level)\b")
+_NS_PATTERN = re.compile(
+    r"\$(self|resource|event|target|build|prev|last|team|it|modifier|mod|snapshot|level|light_team|dark_team)\b")
 
 
 def _convert_ternary(expr: str) -> str:
@@ -114,6 +115,10 @@ def _preprocess(expr: str) -> str:
     参数会被改成 "a and b"、`"x!y"` → "x not y"、`"def"` → "defense"、
     `"if only"` 被 if/else 检查误杀。
     """
+    if expr.strip() == "true":
+        expr = "1 == 1"
+    elif expr.strip() == "false":
+        expr = "1 == 0"
     masked, literals = _mask_strings(expr)
     if re.search(r"\b(if|else)\b", masked):
         raise ExpressionError(
@@ -177,15 +182,15 @@ def _unmask_strings(expr: str, literals: List[str]) -> str:
 #: 一致由 tests/test_doc_lint.py 词表闸保证——改白名单只改这里）
 EFFECT_FUNCTIONS = frozenset(
     {"min", "max", "abs", "round", "clamp", "sum", "chance", "roll", "in_zone", "stacks", "sum_stacks",
-     "modifier_duration",
-     "enemies_alive", "has_modifier", "modifier_source", "count", "count_selected", "count_modifier", "unique_sources", "mechanic_chance",
-     "actor_type_of", "hp_of", "max_hp_of", "toughness_of", "resource_of", "dynamic_of", "count_team", "stat_of",
-     "has_pending_one_more", "battle_event_exists", "turn_owner_of", "position_of", "side_size", "position_delta", "neighbor_of",
-     "base_stat_of", "controlled", "action_disabled", "path_of", "has_summon", "in_group", "element_of", "who_has", "character_id", "monster_id", "monster_rank", "monster_unique_id",
-     "elation_of",
+     "modifier_duration", "modifier_max_stacks", "modifier_dynamic_of",
+     "enemies_alive", "has_modifier", "has_behavior_flag", "modifier_source", "modifier_kind", "count", "count_selected", "count_modifier", "unique_sources", "mechanic_chance",
+     "actor_type_of", "hp_of", "max_hp_of", "energy_of", "max_energy_of", "special_sp_of", "max_special_sp_of", "max_skill_points", "toughness_of", "stance_count_of", "action_delay_of", "resource_of", "dynamic_of", "count_team", "stat_of",
+     "has_pending_one_more", "battle_event_exists", "in_elation_time", "turn_owner_action_phase_end", "turn_owner_has_action_in_turn", "turn_owner_of", "wave_index", "stage_id", "position_of", "side_size", "position_delta", "neighbor_of",
+     "base_stat_of", "controlled", "action_disabled", "immune_debuff", "unique_target", "path_of", "has_summon", "in_group", "element_of", "who_has", "character_id", "monster_id", "monster_id_equals", "monster_rank", "monster_unique_id",
+     "elation_of", "target_unselectable", "is_top_action_delay_target", "current_turn_state",
      "broken_of", "has_debuff", "debuff_count", "dot_count", "actor_alive",
-     "weakness_count", "has_stat_penalty", "has_shield", "shielded_count",
-     "damageable_enemies", "dot_value", "is_adjacent",
+     "weakness_count", "has_stat_penalty", "has_shield", "shielded_count", "shield_of",
+     "damageable_enemies", "hp_locked", "dot_value", "is_adjacent", "target_lists_intersect", "target_in_selected",
      "has_weakness", "dot_kind", "summoner_of"}
 )
 

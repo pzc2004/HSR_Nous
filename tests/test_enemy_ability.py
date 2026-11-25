@@ -1583,9 +1583,104 @@ def test_exit_break_and_default_reset_stance_pair():
     }]
 
     sources["abilities"]["A"]["OnStart"] = [sources["abilities"]["A"]["OnStart"][1]]
+    independent = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert independent["ok"] and not independent["unsupported"]
+    assert independent["hooks"][0]["effects"] == [{
+        "effect_type": "reset_stance", "target": "self",
+    }]
+
+    sources["abilities"]["A"]["OnStart"][0]["ConstantValue"] = {
+        "IsDynamic": False, "FixedValue": {"Value": 2}}
+    custom = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert custom["ok"] and custom["hooks"][0]["effects"] == [{
+        "effect_type": "reset_stance", "target": "self", "mode": "set", "amount": 2.0,
+    }]
+
+    reset_task = sources["abilities"]["A"]["OnStart"][0]
+    del reset_task["ConstantValue"]
+    reset_task["AddValue"] = {"IsDynamic": False, "FixedValue": {"Value": 30}}
+    added = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert added["ok"] and added["hooks"][0]["effects"] == [{
+        "effect_type": "reset_stance", "target": "self", "mode": "add", "amount": 30.0,
+    }]
+
+    reset_task["ForbidWhenEmpty"] = True
     rejected = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
     assert not rejected["ok"]
-    assert any("默认 ResetStance" in item["reason"] for item in rejected["unsupported"])
+    assert any("ForbidWhenEmpty=true" in item["reason"] for item in rejected["unsupported"])
+
+
+def test_independent_exit_break_and_reset_stance_in_engine():
+    from tests._builders import engine_vs_dummy, make_dummy
+
+    skills, sources = _predicate_skill({})
+    sources["abilities"]["A"]["OnStart"] = [{
+        "$type": "RPG.GameCore.ExitBreakState",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+    }]
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and out["hooks"][0]["effects"] == [{
+        "effect_type": "exit_break_state", "target": "self"}]
+
+    eng = engine_vs_dummy(enemies=[make_dummy("source", max_toughness=120)])
+    st = eng.state.actors["source"]
+    st.broken = True
+    st.bar_index = 1
+    st.toughness = 0
+    eng._hooks._run_hook_effect(st, out["hooks"][0]["effects"][0], {})
+    assert not st.broken and st.bar_index == 1 and st.toughness == 0
+
+    st.broken = True
+    eng._hooks._run_hook_effect(st, {"effect_type": "reset_stance", "target": "self"}, {})
+    assert st.broken and st.bar_index == 0 and st.toughness == 120
+
+    st.toughness = 80
+    eng._hooks._run_hook_effect(st, {
+        "effect_type": "reset_stance", "target": "self", "mode": "set", "amount": 60}, {})
+    assert st.broken and st.toughness == 60
+    eng._hooks._run_hook_effect(st, {
+        "effect_type": "reset_stance", "target": "self", "mode": "add", "amount": 50}, {})
+    assert st.toughness == 110
+    eng._hooks._run_hook_effect(st, {
+        "effect_type": "reset_stance", "target": "self", "mode": "add", "amount": 200}, {})
+    assert st.toughness == 120
+
+
+def test_on_stack_reset_stance_uses_add_modifier_inline_symbols():
+    from hsr_nous.sim_schema.config_ai import dynamic_value_hash
+
+    skills, sources = _predicate_skill({})
+    sources["abilities"]["A"]["OnStart"] = [{
+        "$type": "RPG.GameCore.AddModifier",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+        "ModifierName": {"Value": "Buff"},
+        "DynamicValues": {
+            "Ratio": {"IsDynamic": False, "FixedValue": {"Value": 0.5}},
+        },
+    }]
+    sources["modifiers"] = {"Buff": {"_CallbackList": [{
+        "Event": "OnStack", "CallbackConfig": [{
+            "$type": "RPG.GameCore.StackProperty", "Property": "AttackAddedRatio",
+            "PropertyValue": {"IsDynamic": False, "FixedValue": {"Value": 0.1}},
+        }, {
+            "$type": "RPG.GameCore.SetDynamicValueByProperty",
+            "DynamicKey": "_MaxStance",
+            "ReadTargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+            "Value": "MaxStance",
+        }, {
+            "$type": "RPG.GameCore.ResetStance",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+            "AddValue": _dynamic("AQABAQQR", hashes=[
+                dynamic_value_hash("_MaxStance"), dynamic_value_hash("Ratio")]),
+        }],
+    }]}}
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    resets = [effect for hook in out["hooks"] for effect in hook["effects"]
+              if effect["effect_type"] == "reset_stance"]
+    assert len(resets) == 1
+    assert resets[0]["mode"] == "add" and resets[0]["target"] == "self"
+    assert "_MaxStance" in resets[0]["amount"] and "0.5" in resets[0]["amount"]
 
 
 def test_empty_damage_ability_is_not_full_coverage():
@@ -2820,14 +2915,14 @@ def test_lesser_sting_deathrattle_keeps_unproven_branch_unsupported():
     assert not out["ok"]
     kill_hooks = [hook for hook in out["hooks"] if hook["event"] == "on_kill"]
     assert kill_hooks, f"亡语钩应保留：{[h['event'] for h in out['hooks']]}"
-    damage = kill_hooks[0]["effects"][0]
+    damage = next(effect for effect in kill_hooks[0]["effects"]
+                  if effect["effect_type"] == "deal_damage")
     assert damage["scaling_hp"] == pytest.approx(0.6)
     assert damage["toughness_dmg"] == pytest.approx(30.0)
     unsupported = {item["node_type"] for item in out["unsupported"]}
-    # UniqueID/站位谓词收编（决策卡 #28/#30）后 PredicateTaskList 已可编译；
-    # 未证明分支的拒因由 DispelStatus/ExitBreakState 等真未收编节点承担
+    # UniqueID/站位谓词与独立击破退出已收编；未证明的驱散分支仍显式拒绝。
     assert "RPG.GameCore.PredicateTaskList" not in unsupported
-    assert "RPG.GameCore.DispelStatus" in unsupported or "RPG.GameCore.ExitBreakState" in unsupported
+    assert "RPG.GameCore.DispelStatus" in unsupported
     assert all(effect["effect_type"] != "apply_modifier" for effect in kill_hooks[0]["effects"])
 
 

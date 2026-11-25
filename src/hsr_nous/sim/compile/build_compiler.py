@@ -303,6 +303,8 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "adjust_duration": frozenset({"modifier_id", "delta"}),
     "add_toughness_bar": frozenset({"amount"}),
     "restore_toughness": frozenset(),
+    "exit_break_state": frozenset(),
+    "reset_stance": frozenset({"amount", "mode"}),
     "reduce_toughness": frozenset({"amount", "floor", "damage_type"}),
     "grant_extra_turn": frozenset(),
     "immediate_action": frozenset(),

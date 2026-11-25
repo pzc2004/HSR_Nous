@@ -151,6 +151,8 @@ TASK_HANDLERS = {
     "RPG.GameCore.AddWeakness": "_compile_add_weakness",
     "RPG.GameCore.DamageByAttackProperty": "_compile_damage",
     "RPG.GameCore.DamageStance": "_compile_damage_stance",
+    "RPG.GameCore.ExitBreakState": "_compile_exit_break",
+    "RPG.GameCore.ResetStance": "_compile_reset_stance",
     "RPG.GameCore.DispelStatus": "_compile_dispel_status",
     "RPG.GameCore.TurnInsertAction": "_compile_turn_insert_action",
     "RPG.GameCore.EscapeFromBattle": "_compile_escape_from_battle",
@@ -452,6 +454,7 @@ class _Context:
     current_modifier: str = ""
     dynamic_writes: set[str] = field(default_factory=set)
     count_expressions: Dict[int, str] = field(default_factory=dict)
+    value_symbols: Dict[int, Any] = field(default_factory=dict)
     lifecycle_hooks: List[Dict[str, Any]] = field(default_factory=list)
     before_dying_stack: Tuple[str, ...] = ()
     summons: List[Dict[str, Any]] = field(default_factory=list)
@@ -626,7 +629,7 @@ class AbilityCompiler:
     def _value(self, raw: Any, ctx: _Context, path: str,
                symbols: Optional[Dict[int, Any]] = None) -> Any:
         selected = ({**self.dynamic_name_symbols, **self.custom_value_symbols,
-                     **self.dynamic_symbols, **ctx.count_expressions}
+                     **self.dynamic_symbols, **ctx.value_symbols, **ctx.count_expressions}
                     if symbols is None else {**self.custom_value_symbols, **symbols})
         try:
             return compile_dynamic_value(raw, selected)
@@ -675,10 +678,11 @@ class AbilityCompiler:
                     self._compile_restore_toughness(task, ctx, node_path)
                     index += 2
                     continue
-                self._issue(ctx, node_path, node_type,
-                            "仅支持同目标相邻的 ExitBreakState + 默认 ResetStance")
-                index += 1
-                continue
+                if node_type == "RPG.GameCore.ResetStance" and task.get("ForbidWhenEmpty"):
+                    self._issue(ctx, node_path, node_type,
+                                "ResetStance 的 ForbidWhenEmpty=true 变体未收编")
+                    index += 1
+                    continue
             method_name = TASK_HANDLERS.get(node_type)
             if method_name is None:
                 reason = self._UNREGISTERED_TASK_REASONS.get(node_type, "未注册任务节点")
@@ -701,6 +705,35 @@ class AbilityCompiler:
             self._issue(ctx, path, str(task.get("$type")), "韧性恢复目标未注册")
             return
         self._add_effect(ctx, {"effect_type": "restore_toughness", "target": target})
+
+    def _compile_exit_break(self, task: Dict[str, Any], ctx: _Context,
+                            path: str, stack: Tuple[str, ...]) -> None:
+        target = self._hook_target(self._alias(task), ctx)
+        if target is None:
+            self._issue(ctx, path, str(task.get("$type")), "击破退出目标未注册")
+            return
+        self._add_effect(ctx, {"effect_type": "exit_break_state", "target": target})
+
+    def _compile_reset_stance(self, task: Dict[str, Any], ctx: _Context,
+                              path: str, stack: Tuple[str, ...]) -> None:
+        target = self._hook_target(self._alias(task), ctx)
+        if target is None:
+            self._issue(ctx, path, str(task.get("$type")), "韧性重置目标未注册")
+            return
+        has_constant = "ConstantValue" in task
+        has_add = "AddValue" in task
+        if has_constant and has_add:
+            self._issue(ctx, path, str(task.get("$type")), "ResetStance 同时带 ConstantValue 与 AddValue")
+            return
+        effect = {"effect_type": "reset_stance", "target": target}
+        if has_constant or has_add:
+            field = "AddValue" if has_add else "ConstantValue"
+            amount = self._value(task.get(field), ctx, f"{path}/{field}")
+            if amount is None:
+                self._issue(ctx, path, str(task.get("$type")), "ResetStance 数值未注册")
+                return
+            effect.update({"mode": "add" if has_add else "set", "amount": amount})
+        self._add_effect(ctx, effect)
 
     def _compile_ability(self, name: str, ctx: _Context, path: str,
                          stack: Tuple[str, ...]) -> None:
@@ -3141,6 +3174,8 @@ class AbilityCompiler:
         has_cleanup = False
         previous_modifier = ctx.current_modifier
         previous_condition = ctx.condition
+        previous_value_symbols = ctx.value_symbols
+        ctx.value_symbols = symbols
         ctx.current_modifier = name
 
         runtime_stack_tasks: List[Dict[str, Any]] = []
@@ -3258,7 +3293,8 @@ class AbilityCompiler:
                     modifier_id = self._modifier_id(name, definition, skill_id)
                     for task, branch_condition in runtime_stack_tasks:
                         sub = _Context(mode="event", skill=ctx.skill,
-                                       event="after_apply_modifier", current_modifier=name)
+                                       event="after_apply_modifier", current_modifier=name,
+                                       value_symbols=dict(symbols))
                         self._compile_tasks([task], sub, f"{path}/OnStack", ())
                         ctx.handled.extend(sub.handled)
                         ctx.lifecycle_hooks.extend(sub.lifecycle_hooks)
@@ -3270,6 +3306,7 @@ class AbilityCompiler:
                             condition = f"({condition}) and ({branch_condition})"
                         ctx.lifecycle_hooks.extend(
                             self._make_hooks(sub, condition, event="after_apply_modifier"))
+        ctx.value_symbols = previous_value_symbols
         ctx.current_modifier = previous_modifier
         # 生命周期声明保留部分结果；纯表现与否由 _visual_modifier 独立判定。
         has_lifecycle = any(

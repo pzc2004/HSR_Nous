@@ -36,15 +36,53 @@ modifier:
       stat: "shield"
 ```
 
+`LightTeamEntity` / `DarkTeamEntity` 使用独立阵营伪 ActorState 承载 modifier，不占站位或普通目标池。
+我方队伍盾作为共享吸收单元参与 `_absorb_with_shields`，不按人数复制；盾破时移除队伍载体上的关联 modifier。
+两个阵营载体及各自 modifier/护盾均纳入运行期存档。
+
+`singleton_group: "global:<name>"` 对应上游 `RetainGlobalLatestUnique`：同名 modifier 在所有单位中
+只保留最新一件，施加新件时移除其他单位的旧件；不同名互斥组仍可共存。普通 singleton_group
+仍只限制同目标。`stack_mode: replace_keep_duration` 对应上游 `ReplaceButKeepLifeTime`：替换 modifier 实例与效果，
+但保留旧实例的剩余时长，不按新声明时长重置。上游 `Prolong` 则复用 `refresh`，叠层并刷新时长。
+`stacks` 是初始层数，缺省为 1。hook `apply_modifier` 允许它在施加时按表达式逐目标求值，
+再经既有取整与上限钳制；敌方 `LayerAddWhenStack` 复用同一通道，编译期不再强制静态整数。
+`MaxLayer` 与 `LifeTime` 可由敌方动态表达式给出；hook 施加时按目标求值并烘焙到实例，后续不随表达式源变化。
+
+`dynamic_values` 保存 modifier **实例级**动态载荷，键为上游 DynamicValues 名，值可为数值或表达式。
+它与携带者的 ConfigAI `dynamic_values` 是两个命名空间；`modifier_dynamic_of(target, modifier_id, key)`
+只读前者，表达式在读取时以来源持有者与来源 modifier 实例为语境求值，因此可引用 `$modifier.stacks`，
+不能在施加时一律烘焙成浮点数。`refresh`/`set`/`independent` 重挂保留原实例载荷，`replace` 族随新实例替换；
+摘除后读取为 0，载荷随实例进入全状态存档，不进入行为无关的 snapshot 投影。
+
 当前执行层的生命周期字段为 `on_apply` / `on_remove`：分别在成功挂载后、实例经任意原因
 摘除后执行；定义随存档保留，并复用 `05_effects.md` 的效果词表。`on_remove` 的事件载荷与
 `after_remove_modifier` 相同。上游 `OnBeforeDying` 则编译为 `before_actor_exit` hook，
 避免把可递归转移的 modifier 展开成自引用定义。
 
 `toughness_lock: true` 是独立的韧性锁字段：modifier 存续期间携带者不可被削减韧性，
-不表示弱点失效、伤害免疫或已经处于弱点击破状态。`lock_on: true` 是目标侧锁定标记，
+不表示弱点失效、伤害免疫或已经处于弱点击破状态。`LockStance(StanceValueRatio=0)` 复用该字段；
+普通回调生成锁韧 modifier，`OnStack` 直接标记所属 modifier，缺省目标为 modifier 持有者；
+非零比例还涉及韧性恢复，当前显式拒绝。`protected_weakness: ["fire"]`
+表示 `StackWeakness(OPType=Protected)` 的按元素保护：只挡该属性的默认弱点范围削韧，
+`clear_protected_weakness` 按元素解除；它不等于全局 `toughness_lock`，显式 `toughness_scope`
+的无视弱点削韧仍走原通道。保护列表随 modifier 生命周期和真存档保存。
+`custom_unselectable: {"SOURCE_MODIFIER": ["light", "neutral"]}` 是来源—目标配对限制：
+指定队伍中持有 `SOURCE_MODIFIER` 的来源不能选择当前 modifier 携带者；light/dark 按阵营，
+neutral 对应战斗事件伪实体。它不等于 `enemy_targetable` / `ally_targetable` 的全局布尔覆写，
+并随 modifier 生命周期与真存档保存。`lock_on: true` 是目标侧锁定标记，
 全体敌方单目标技能优先指向携带者；强制嘲讽优先级高于锁定。`prevent_action: true`
 表示下一次行动阶段空过，回合末时长和事件仍正常结算，不等同冻结或死亡。
+`locked_action_types: ["ultimate", "basic", "skill"]` 表示禁用对应行动类型，合法性检查与
+`ultimate_available` 同闸；父 modifier 移除后禁用随之解除，不借用 StateConfig 形态锁。
+`allow_negative_hp: true` 表示父件存在时允许 HP 为负且不做真死定论；父件移除后恢复
+正常死亡检查，区别于锁血钳 1 血。
+`behavior_flags: [...]` 保留敌人原始 `BehaviorFlagList`，供 modifier 添加/移除事件按
+`$event.behavior_flags` 检查本次回调对象。它是原始旗标的运行时载体，不从当前持有者
+状态反推，也不替代 `control_kind` / `prevent_action` 等实际行为字段；移除事件在实例离场前
+保存该列表，因此被摘件已不在字典中也能判定。
+`control_kind: "stun"` 表示眩晕：携带者属于控制类负面状态，且 `prevent_action` 禁止行动；
+敌人公共 modifier `MCommon_CTRL_Stun` 的 `STAT_CTRL` / `STAT_CTRL_Stun` / `DisableAction`
+三组原始旗标共用这一载体，查询眩晕时按 `control_kind` 精确过滤，不能泛化成任意禁行动。
 `control_kind: "outrage"` 表示暴怒：携带者回合不能按正常决策施放技能，改为以普攻攻击
 一名随机**对立阵营**目标（无对立阵营目标或无普攻则空过）。
 `control_kind: "dominate"` 表示支配：携带者回合改为以普攻攻击一名随机**其他同阵营友方**
@@ -80,10 +118,10 @@ modifier:
 > |------|------|
 > | `dot_element` | 跳伤属性。**路由**：击破裂伤（engine 击破链建件，id 带 `BRK_DOT_` 前缀）且 physical 走裂伤特判（bleed_base_multi 基数区，`01_formula.md` §1.4）；其余（含角色物理 DoT——天赋裂伤/Zone 追加族）走常规 dot 链（`route["dot"]`） |
 > | `dot_ratio` | 跳伤倍率（静态/施加时烘焙）：静态数值（击破裂伤=1.0，rulebook `break_effects.*.dot_ratio/bleed_ratio`；**叠层 DoT=每层倍率**——跳伤基数 ×跳伤时刻 `max(1, stacks)` 现值，桑博 1108 风化族；单档件 stacks 恒 1 无观察差）；字符串值走 param() 编译期取档，残留表达式=hook `apply_modifier` 现场求值烘焙族（星魂闩读数——桂乃芬 S2「param×(1+0.4×res__s2_burn)」/桑博 E6「param+0.15×marker」——施加时 `_hook_amount` 烘焙成全目标同值定值；action `apply_modifiers` 通道无烘焙，残留表达式编译期炸）。旧写法中含 `$snapshot`/`$modifier` 的表达式仍按既有分类兼容为跳伤时求值件；新的显式跳伤表达式用下行 `dot_ratio_expr` |
-> | `dot_ratio_expr` | **显式跳伤时求值表达式**（与 `dot_ratio` 互斥；模板写表达式字符串，编译期预编译为 `PreparedExpression`）：跳伤时刻以**持有者为语境**求值，**表达式值即当跳基数**（不再 ×快照 atk/×stacks——层数语义由表达式自含）——`$self`=持有者现值（敌方：hp/energy/max_hp/atk/def_/spd 等有效面板，`_SELF_NS_FIELDS` 白名单）+ `$snapshot`=施加者攻击侧快照包（dot_snapshot_ctx 键 + atk=dot_source_atk）+ `$modifier`=modifier 自身（stacks/duration/max_stack/modifier_id/dot_element）。语境闭合（仅内建数学函数 min/max/abs/round/clamp/sum——宿主函数不注入），编译闸 `_check_dot_tick_expr` 对语境外引用/白名单外字段/非内建函数调用编译期炸。首实例：黑天鹅 1307 奥迹仿射叠层 / 海瑟音 1410 HP 帽形；敌方 Target Max HP DoT 也走此显式通道 |
+> | `dot_ratio_expr` | **显式跳伤时求值表达式**（与 `dot_ratio` 互斥；模板写表达式字符串，编译期预编译为 `PreparedExpression`）：跳伤时刻以**持有者为语境**求值，**表达式值即当跳基数**（不再 ×快照 atk/×stacks——层数语义由表达式自含）——`$self`=持有者现值（敌方：hp/energy/max_hp/atk/def_/spd 等有效面板，`_SELF_NS_FIELDS` 白名单）+ `$snapshot`=施加者攻击侧快照包（dot_snapshot_ctx 键 + atk=dot_source_atk + max_hp=施加者有效生命上限快照）+ `$modifier`=modifier 自身（stacks/duration/max_stack/modifier_id/dot_element）。语境闭合（仅内建数学函数 min/max/abs/round/clamp/sum——宿主函数不注入），编译闸 `_check_dot_tick_expr` 对语境外引用/白名单外字段/非内建函数调用编译期炸。首实例：黑天鹅 1307 奥迹仿射叠层 / 海瑟音 1410 HP 帽形；敌方 Target Max HP DoT 也走此显式通道 |
 > | `dot_base_chance` | 跳伤期望权重（缺省 1.0）——快照 `ehr_multi = min(1, dot_base_chance×(1+EHR)×(1-敌效果抵抗+穿透))`（与 optimizer standardDot `dotBaseChance` 同口径；01_formula dot_damage 注）。字符串值同 `dot_ratio` 烘焙通道；实际施加判定由 hook `apply_chance` 负责，不再默认恒挂 |
 > | `dot_source_atk` | 施加者攻击快照（跳伤基数；施加时刻**有效面板**；跳伤时求值件的 `$snapshot.atk` 读此） |
-> | `dot_snapshot_ctx` | 攻击侧快照包（`Dict[str, float]`——**施加时引擎算好存件**，模板/测试不手填）：ability_multiplier（静态 dot_ratio 件；跳伤时求值件不烤此槽）/ dmg_boost_multi / ind_dmg_boost_multi / final_dmg_multi / weaken_multi / ehr_multi / be_multi + 防御/抗性区的攻击侧输入（source_level/def_pen/res_pen）；跳伤时只补目标侧链乘（mechanics 02 §2.12 快照切分）。refresh 重挂不刷新快照（首次施加源存件——同 id 多源施加（桂乃芬战技 1.0/High Poles 0.8）按首次源口径在案） |
+> | `dot_snapshot_ctx` | 攻击侧快照包（`Dict[str, float]`——**施加时引擎算好存件**，模板/测试不手填）：ability_multiplier（静态 dot_ratio 件；跳伤时求值件不烤此槽）/ dmg_boost_multi / ind_dmg_boost_multi / final_dmg_multi / weaken_multi / ehr_multi / be_multi + 防御/抗性区的攻击侧输入（source_level/def_pen/res_pen）+ max_hp（施加者有效生命上限）；跳伤时只补目标侧链乘（mechanics 02 §2.12 快照切分）。refresh 重挂不刷新快照（首次施加源存件——同 id 多源施加（桂乃芬战技 1.0/High Poles 0.8）按首次源口径在案） |
 >
 > 模板经 hook `apply_modifier` 声明 `modifier_type: "dot"` + `dot_element`/`dot_ratio` 时，
 > `dot_source_atk`/`dot_snapshot_ctx` 由引擎在施加时刻从施加者有效面板结算填入（source 缺失
@@ -188,16 +226,16 @@ modifier:
 
 - **面板求值**（速度用于行动值、属性用于转化读取/`$self.xxx` 引用等）：**一律忽略**带 `hit_condition` 的 modifier。面板值保持单值，两层模型（Layer 1 / Layer 2）的求值与缓存不受影响
 - **命中求值**（伤害/治疗公式乘区取值时，即 `on_before_hit` 上下文）：对携带者每个 modifier 求 `hit_condition`（缺省视为 `true`），通过的才计入该次命中
-  - **伤害命中** `$event` 字段：`action_type` / `damage_type` / `target_broken` / `target_controlled` / `target_control_kinds`（目标控制类型列表——`freeze`/`imprison`/`entangle`，`"freeze" in $event.target_control_kinds` 可分类型判定，2026-09-23 黑塔 Icing 首实例）/ `target_hp_ratio`（目标当前 HP / 有效生命上限，2026-09-23 黑塔战技 HP≥50% 首实例）/ `decl_action_type`（**行动声明类别**——elation 路由专有（2026-10-11）：本路由 `action_type` 喂路由 id `"elation_damage"`（承伤 scoped 按类别判定），行动层行动真型/hook 段伪行动类别声明槽经本字段流入——「强化普攻期间」族行动域隔离判定读（银狼LV.999 E6/150608 增伤档首实例），直伤路由无此字段（其 `action_type` 即声明类别，写 `$event.decl_action_type` 求值失败按不计入））/ `target`（本次命中目标 `ActorState`——按目标状态判定的宿主函数（`has_debuff`/`debuff_count`/`dot_count` 等，`has_modifier` 同解析通道）经 `$event.target` 读目标；由结算点统一注入，调用方 payload dict 不含此键）。命中域可用函数 = `22_syntax_reference.md` §22.4 白名单（宿主注入同 `_hook_functions` 集，`$self` 绑定携带者）
+  - **伤害命中** `$event` 字段：`action_type` / `damage_type` / `damage_custom_name` / `target_broken` / `target_controlled` / `target_control_kinds`（目标控制类型列表——`freeze`/`imprison`/`entangle`，`"freeze" in $event.target_control_kinds` 可分类型判定，2026-09-23 黑塔 Icing 首实例）/ `target_hp_ratio`（目标当前 HP / 有效生命上限，2026-09-23 黑塔战技 HP≥50% 首实例）/ `decl_action_type`（**行动声明类别**——elation 路由专有（2026-10-11）：本路由 `action_type` 喂路由 id `"elation_damage"`（承伤 scoped 按类别判定），行动层行动真型/hook 段伪行动类别声明槽经本字段流入——「强化普攻期间」族行动域隔离判定读（银狼LV.999 E6/150608 增伤档首实例），直伤路由无此字段（其 `action_type` 即声明类别，写 `$event.decl_action_type` 求值失败按不计入））/ `target`（本次命中目标 `ActorState`——按目标状态判定的宿主函数（`has_debuff`/`debuff_count`/`dot_count` 等，`has_modifier` 同解析通道）经 `$event.target` 读目标；由结算点统一注入，调用方 payload dict 不含此键）。命中域可用函数 = `22_syntax_reference.md` §22.4 白名单（宿主注入同 `_hook_functions` 集，`$self` 绑定携带者）
   - 计入 stat（按乘区分族，攻击侧/承伤侧携带者不同——逐区枚举即引擎 `_scoped_boost` accept 清单）：
     - 增伤区（攻击侧携带）：`dmg_*` / `all_dmg`（增伤族——刻律德菈 Peerage 类；按目标负面状态判定族——117 死水 2pc / 21001 晚安）
     - 穿透区（攻击侧携带）：`res_pen`（飞霄 E6 族）/ `def_pen`（**逐目标无视防御通道**——116 幽锁 4pc 按目标 DoT 数族，2026-09-16；直伤/击破/超击破/欢愉/DoT 跳伤全伤害路由同通道）
-    - 暴击区（攻击侧携带）：`crit_rate` / `crit_dmg`（**目标条件暴击通道**——23007 雨下「≥3 负面暴击率」/23020 洗礼「按负面数暴伤」/117 死水 4pc 族，2026-09-16；仅直伤路由消费——DoT/击破不暴击天然无消费端）
-    - 承伤区（**目标侧携带**——承伤件挂敌方）：`vulnerability`（易伤单一池；椒丘结界族；击破/超击破/欢愉/DoT 路由 action_type 喂路由 id `"break"` / `"super_break"` / `"elation_damage"` / `"dot"`）
-    - 削韧区（攻击侧携带）：`break_efficiency_boost`（飞霄 E4 族）
+    - 暴击区（攻击侧携带）：`crit_rate` / `crit_dmg`（**目标条件暴击通道**——23007 雨下「≥3 负面暴击率」/23020 洗礼「按负面数暴伤」/117 死水 4pc 族，2026-09-16；仅直伤路由消费——DoT/击破不暴击天然无消费端）/ `fixed_crit_rate`（本次暴击率覆写，经 scoped_override 消费；与同次普通 crit_rate 加算互斥，多个不同固定值显式冲突）
+    - 承伤区（**目标侧携带**；上游 OnBeforeHitAll 的攻击者携带件也按本次命中计入，同 actor 去重）：`vulnerability`（易伤单一池；椒丘结界族；击破/超击破/欢愉/DoT 路由 action_type 喂路由 id `"break"` / `"super_break"` / `"elation_damage"` / `"dot"`）/ `dmg_dmg_reduction`（逐命中减伤；仅直伤路由激活，各来源与面板减伤按 `∏(1-r)` 乘算，不走普通 scoped 加算）
+    - 削韧区（攻击侧携带）：`break_efficiency_boost`（飞霄 E4 族）/ `force_stance_break`（本次命中无视弱点的开闸标志；仅敌人 `Attacker_ForceStanceBreakRatio=1` 编译产生，正值开闸，不进入削韧量公式）
     - 欢愉乘区（攻击侧携带，**仅 elation 路由消费**——2026-10-11）：`merrymake`（增笑池——银狼LV.999 E6「强化普攻期间增笑」族）/ `final_dmg_boost`（最终伤害池——150608「强化普攻期间增伤档」族；激活归 elation 路由 `settle.scoped` 名单，其余路由不激活）
   - **DoT 跳伤命中域**：`action_type` 喂 `"dot"` 路由 id；施加者的增伤/无视防御条件件按**跳伤时刻**目标状态现值判定（逐目标条件件不进施加时刻快照——`dot_snapshot_ctx` 只含无条件面板；21001「该效果对持续伤害也会生效」族）
-  - **治疗命中** `$event` 字段：`target_hp_ratio` = 受疗者当前 HP / 有效生命上限（**治疗前**现场值——"为当前生命值 ≤N% 的我方目标提供治疗时治疗量提高"族，1409 大行迹「阴云莞尔」首实例）；计入 stat = `heal_bonus`（施放者侧 Outgoing Healing）
+  - **治疗命中** `$event` 字段：`target_hp_ratio` = 受疗者当前 HP / 有效生命上限（**治疗前**现场值——"为当前生命值 ≤N% 的我方目标提供治疗时治疗量提高"族，1409 大行迹「阴云莞尔」首实例）；计入 stat = `heal_bonus`（施放者侧 Outgoing Healing）及 `incoming_heal`（受疗者侧命中域条件件；敌人 OnBeforeBeingHeal 的 Target_HealTakenRatio 直译，与普通有效面板入治加减同池）
   - scoped 判定只扫**携带者自身持有**件——`effect_scope: team` 光环**不辐射** hit_condition 件（全队族双件各挂：阴云莞尔忆灵侧同 §4.16 暴风停歇 `stat_of($self.summoner_id, ...)` 先例）；求值失败静默按不计入（命中热循环不留 ⚠，与面板域条件光环同族口径分工）
 - `hit_condition` 与转化标签（`tagged_as_conversion` 等）**正交**：层级归属规则照常；转化读取发生在面板域，永远读不到 `hit_condition` 的值
 - 反例（不要这么做）：为"只对终结技生效的穿透"新增 `res_pen_ultimate` stat——用 `stat: "res_pen"` + `hit_condition: "$event.action_type == 'ultimate'"` 组合表达
@@ -205,7 +243,7 @@ modifier:
 **`hit_stat_exprs`：命中域表达式值（per-hit 值槽，2026-09-23 落地）**
 
 静态 `stat_effects` 是施加时刻烘焙的定值；按**目标状态/层数现场伸缩**的命中域值走本槽——
-与 `hit_condition` 同语境（`$event` 命中域 + §22.4 宿主函数 + `$self`=携带者），
+与 `hit_condition` 同语境（`$event` 命中域 + §22.4 宿主函数 + `$self`=携带者 + `$modifier`=当前求值实例，可读取 stacks 等字段；宿主函数接收同一份事件载荷，target_lists_intersect 等目标查询不会因丢失 `$event.target` 而落空），
 条件通过（无 `hit_condition` 缺省 true）时逐 stat 现场求值计入当次命中，求值失败静默
 不计（同族口径）。携带本槽的 modifier 与 `hit_condition` 件同纪律：**面板求值一律
 忽略**（值只经命中域计入，防面板/命中双计）。
@@ -357,6 +395,8 @@ modifier:
 | `"replace"` | 替换旧的 | 同一 modifier 重复施加（注：不同来源护盾的全局共存规则——有效值取最高、受伤同时吸收、低盾破高盾留——见 01_base_stats.md，不由 stack_mode 表达） |
 | `"set"` | 层数**设为**指定值（配 `stacks_value` 表达式；区别于加层/刷新） | 椒丘"层数同步至全场最高"族 |
 
+上游 `Stacking=Merge` 直译为 `refresh`：同名件层数按上限合并，并重挂到较新的完整时长；`Multiple` 要求同名多实例，仍不使用该通道。
+
 ### 4.6 驱散规则
 
 `dispellable` 是**每个 modifier 实例上的正交属性**——与施加对象（我方/敌方）、类型（buff/debuff/shield/heal 及 `debuff_kind` 各子类型）全无关。**任何类型都不获得类别级可/不可解除特权**，可不可解除只看实例开关。
@@ -376,11 +416,11 @@ modifier:
 hit_chance: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + effect_res_pen) * (1 - type_res))"
 ```
 
-> `type_res` 为类型抵抗，按 `debuff_kind` 取（当前内容仅控制类有实例，如 boss 控制类类型抵抗；dot 类默认为 0，预留"持续伤害抵抗"落点）。全体 debuff 共用本式（含 dot，参考 `docs/mechanics/07_buff_system.md:78`）。
+> `type_res` 为类型抵抗，按 `debuff_kind` 取（当前内容仅控制类有实例，如 boss 控制类类型抵抗；dot 类默认为 0，预留"持续伤害抵抗"落点）。全体 debuff 共用本式（含 dot，参考 `docs/mechanics/07_buff_system.md:78`）。敌人 `StackStatusResistance(BehaviorFlag=STAT_CTRL)` 在父 modifier 上写 `stat_effects/stat_exprs.control_type_res`，运行时由目标有效面板送入 `hit_chance(type_res=...)`；`BehaviorFlag=Taunt` 同属控制类并共用该键，负值表示降低控制抵抗。它是独立乘区，不能并入通用 `effect_res`，也不影响普通 debuff。
 
 > **`debuff_immune`（硬免疫）**：actor 级声明字段——apply 前**硬拒**，不进入命中判定。与 `type_res = 1` 的区分：效果抵抗是概率模型（可被"必中/无视抵抗"穿），硬免疫直接豁免（小伊卡"is immune to debuffs"）。控制类免疫仍走 `type_res`，不加新件。
 
-> **`grants_immune`（modifier 级授予免疫）**：修饰符字段——携带者免疫列表内类别的负面（apply 前硬拒，同 `debuff_immune` 通道发 `on_immune`）。**字面 kind 词表成员判定**（`"control"` 等，与 `new_kind = debuff_kind or control or modifier_type` 取值空间对齐），**不是表达式**（写 `"$mod.kind == 'debuff'"` 不生效——1207 驭空过堂勘正③病例）。**条件件（`enable_if`）的免疫随启用态开关**——未启用 = 免疫不在场（`pipeline.modifier_enabled` 统一判定；驭空「青镞」冷却闩族首实例，闩期间免疫关闭）。形态通道 `state_config.grants_immune`（140805 控制免疫族）经形态标记 modifier 并入同字段、同判定。
+> **`grants_immune`（modifier 级授予免疫）**：修饰符字段——携带者免疫列表内类别的负面（apply 前硬拒，同 `debuff_immune` 通道发 `on_immune`）。**字面 kind 词表成员判定**（`"control"` 等，与 `new_kind = debuff_kind or control or modifier_type` 取值空间对齐），**不是表达式**（写 `"$mod.kind == 'debuff'"` 不生效——1207 驭空过堂勘正③病例）。**条件件（`enable_if`）的免疫随启用态开关**——未启用 = 免疫不在场（`pipeline.modifier_enabled` 统一判定；驭空「青镞」冷却闩族首实例，闩期间免疫关闭）。形态通道 `state_config.grants_immune`（140805 控制免疫族）经形态标记 modifier 并入同字段、同判定。敌人原始 `ImmuneDebuff` 旗标编译为 `["debuff", "dot", "control"]` 三类现有负面状态免疫，运行时 `immune_debuff(target)` 也按这三类同时存在且件已启用判定；单独 `control` 不等于全减益免疫。
 
 ### 4.8 Buff 触发时机清单
 
@@ -398,7 +438,7 @@ hit_chance: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + ef
 | `on_before_action` | 行动前 | waterfall |
 | `on_cast` | 技能/普攻/终结技释放时（判定效果前） | waterfall |
 | `on_after_action` | 行动后 | emit |
-| `on_action` | 一切能力施放结算后（普攻/战技/**终结技同发**——2026-09-10 收编：官方英文三层措辞实锤 "uses an ability"=含终结技（1413101/1413102 在案）/"uses Skill"=仅战技（1313103）/"uses Skill and Ultimate"=明示双类（1409102），`on_action` 即 "uses an ability" 的发射点，"uses Skill" 仅战技族用 `action_type`/`action_id` 过滤表达；入口变身技与常态技同口径，`activate_ultimate` 免费激活同发。插入行动带 `insert: true` 标记；行动计数型 buff 的计时锚点 `tick_anchor: "on_action"` 同源——bus 契约已登记。payload：`actor` / `action_type` / `action_id`（2026-09 起携带——`trigger_action` 的 `$event.action_id` 动态复刻取数锚，奇袭战技复制族） / `target_type`（2026-09 起携带——"以敌方为目标的战技"族过滤锚，奇袭限定） / `target`（主目标 id） / `actor_type` / `sp_consumed`（2026-09-23 起携带——本次行动**实际**战技点消耗净值（before_consume 抵扣/clamp 后），`_execute_action` 每次行动覆写；爻光 150204 大吉大利「攻击消耗战技点额外触发」/23053 耗点叠层族取数锚）；插入行动另带 `insert` / `tag`） | emit |
+| `on_action` | 一切能力施放结算后（普攻/战技/**终结技同发**——2026-09-10 收编：官方英文三层措辞实锤 "uses an ability"=含终结技（1413101/1413102 在案）/"uses Skill"=仅战技（1313103）/"uses Skill and Ultimate"=明示双类（1409102），`on_action` 即 "uses an ability" 的发射点，"uses Skill" 仅战技族用 `action_type`/`action_id` 过滤表达；入口变身技与常态技同口径，`activate_ultimate` 免费激活同发。插入行动带 `insert: true` 标记；行动计数型 buff 的计时锚点 `tick_anchor: "on_action"` 同源——bus 契约已登记。payload：`actor` / `action_type` / `action_id`（2026-09 起携带——`trigger_action` 的 `$event.action_id` 动态复刻取数锚，奇袭战技复制族） / `target_type`（2026-09 起携带——"以敌方为目标的战技"族过滤锚，奇袭限定） / `target`（主目标 id） / `targets`（2026-11-17 起携带——行动解析出的技能目标列表，保留原顺序，`SkillTargetEntityList` 的取数锚） / `actor_type` / `sp_consumed`（2026-09-23 起携带——本次行动**实际**战技点消耗净值（before_consume 抵扣/clamp 后），`_execute_action` 每次行动覆写；爻光 150204 大吉大利「攻击消耗战技点额外触发」/23053 耗点叠层族取数锚）；插入行动另带 `insert` / `tag`） | emit |
 | `on_before_hit` | 造成伤害前 | waterfall |
 | `on_after_hit` | 造成伤害后 | emit |
 | `on_being_targeted` | 被选为目标时 | emit |
@@ -511,11 +551,20 @@ modifier:
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `weakness_add` | `List[element]` | 存续期间目标弱点列表追加这些属性；**移除即还原**（目标弱点列表回到未植入状态） |
+| `protected_weakness` | `List[element]` | 按元素保护，挡对应属性的默认弱点范围削韧；`clear_protected_weakness` 只清除列表中的指定元素，不摘承载其他效果的 modifier |
+| `weakness_override` | `List[element]?` | 非 None 时覆写当前有效弱点，空列表表示清空；挂载序在后的覆写会替换此前弱点集合，之后 `weakness_add` 再追加 |
+| `secret_weakness` | `List[element]` | 弱点显示隐藏，不影响正确属性削韧；`clear_secret_weakness` 按元素解除隐藏 |
+
+DoT 的 `SetDynamicValueByProperty(SnapshotPropertyEntity, Attack/MaxHP)` 分别写
+`$snapshot.atk` / `$snapshot.max_hp`，读取施加时保存的攻击/有效生命上限，不是受击者当前的
+`$self.atk` / `$self.max_hp`。相位/引爆回调里的顺序动态赋值与双分支同键赋值折叠进跳伤表达式。
+OnCreate 在施加时也有同名读取：经 on_apply 载荷的 `$event.source` 读取施加者现值并写入携带者动态值，
+不与跳伤时的 `$snapshot` 命名空间混用。
 | `singleton_group` | string? | singleton 标签：同一目标上同组 modifier 互斥，新挂替换旧挂；加 `scope: "global" \| "team"` 升格为**跨目标单例**（师父/Bondmate"最新即唯一"族，policy: first\|latest——现状 remove(all)+apply 手写换标对收编） |
 
 - **唯一性**：`stack_mode: "replace"`（同 ID 重挂替换）+ `singleton_group`（跨 ID 同族互斥）——银狼重复植入换属性 = 同组替换
 - **削韧联动**：植入生效后目标弱点列表已含新属性，`toughness_scope` 闸门（`03_actor.md` §3.4）按修改后的列表判定，植入属性可正常削韧
-- **查询谓词**：`has_weakness(target, element)`（单属性判定——字面量元素参词表外编译期炸，316 火弱点/108 量子弱点族）/ `weakness_count(target)`（种类数——22004 族）——两者同走 `pipeline.effective_weakness`（面板弱点 ∪ `weakness_add` 植入），表达式白名单见 `22_syntax_reference.md` §22.4
+- **查询谓词**：`has_weakness(target, element)`（单属性判定——字面量元素参词表外编译期炸，316 火弱点/108 量子弱点族）/ `weakness_count(target)`（种类数——22004 族）——两者同走 `pipeline.effective_weakness`（面板/最新 `weakness_override` ∪ 之后的 `weakness_add`），表达式白名单见 `22_syntax_reference.md` §22.4
 - **机制事实**：见 `../../../../docs/mechanics/04_break_system.md` §4.1"弱点列表变动"
 
 ```yaml
@@ -813,13 +862,14 @@ modifier:
 
 | 字段 | 类型 | 默认 | 说明 |
 |------|------|------|------|
-| `enable_if` | expression | `None`（恒生效） | 生效条件：不成立时该件的 stat_effects / scaling_effects / override_effects / stat_exprs **全部不计入面板** |
+| `enable_if` | expression | `None`（恒生效） | 生效条件：不成立时该件的 stat_effects / scaling_effects / override_effects / stat_exprs / override_exprs **全部不计入面板** |
 | `stat_exprs` | mapping[stat → expression] | `{}` | 现场求值数值槽：每次面板求值现场算（超速度档治疗量/抗性穿透族——条件源战中变化立即反映）；通过门控后与 stat_effects 并入同一加算池（pct 族同走白值口径） |
+| `override_exprs` | mapping[stat → expression] | `{}` | 现场求值覆写槽：与 override_effects 同属 Layer 2b，供动态 MaxStance 等覆写；同件同 stat 不得与其他数值通道重复；不同件按挂载顺序生效 |
 
 **语义钉**：
 
 - **门控非挂摘**：条件不成立只是数值不计——件**仍在挂载**（`has_modifier` 可见、驱散/净化/走字/叠层照常）。无"回收"动作，条件翻回成立即恢复；与挂/摘语义严格区分
-- **重估时机 = 面板读取即重估**（懒求值）：伤害公式、行动值插入、转化读取等一切面板消费点自动覆盖，无快照、无 stale。唯一推式消费点 = 调度器速度同步——HP 变化事件（`on_hp_decrease`/`on_hp_increase`）后若场上存在条件件则全队速度重同步（modifier 挂/摘本有 `_sync_speed` 通道；倒置的火炬"HP≥50% 速度+40%"族靠此上路）
+- **重估时机 = 面板读取即重估**（懒求值）：伤害公式、行动值插入、转化读取等一切面板消费点自动覆盖，无快照、无 stale。唯一推式消费点 = 调度器速度同步——HP 变化事件（`on_hp_decrease`/`on_hp_increase`）后若场上存在条件件则全体存活单位速度重同步（modifier 挂/摘本有 `_sync_speed` 通道，敌方覆写亦走此路；倒置的火炬"HP≥50% 速度+40%"族靠此上路）
 - **条件域面板 = 无条件件面板**：`enable_if` / `stat_exprs` 语境的一切面板读取（`$self.spd`、`stat_of(...)`）读到的**不含任何条件件的贡献**——构造上无环（A 件条件读不到 B 条件件的产出，互相不致递归）；条件件彼此不可互相观察，"条件件产出喂另一条件件"的设计不支持
 - **`$self` = 携带者**：光环件（`effect_scope: team`）辐射到他人面板时，条件仍读**携带者（源）**的面板而非目标面板（昔涟 1415103：队友吃到的增伤按昔涟速度判定）；忆灵侧条件件读忆师面板用 `stat_of($self.summoner_id, 'spd')`（小伊卡/德谬歌件）
 - **求值失败按不生效 + ⚠ 日志**（hook 条件同口径；语法错由编译期预编译闸拦截）

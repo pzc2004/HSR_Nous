@@ -45,6 +45,7 @@ elation_damage:
 ### 21.3 笑点 (Punchline)
 
 **累积**：欢愉角色通过普攻、战技、终结技累积笑点，**全队共享一池**（队伍账——不属于任何单个 actor；进战时每有 1 名欢愉角色 +1 笑点）。
+上游混淆节点 `JDOLDFECMPL` 的 `EGFCFCBHJJP=Add` / `DADCFBHGLOH=Set` 分别复用 `gain_resource` / `set_resource` 写入本池；只接受数值与操作两个参数字段，其他操作或额外字段仍拒绝。
 
 **乘区公式**：
 ```
@@ -103,6 +104,9 @@ constants——`on_resource_gain` 照发）→ `on_battle_start`。开局级联*
 5. 清空阿哈笑点池，开始新一轮累积
 
 **波次行为**：转波次**不重新跑条**（AV 保留——「转面不重跑」）；阿哈时刻内欢愉技**跨波次自动转火**（结算落到新波敌人）。
+
+执行主体 `_run_aha_turn` 期间，引擎持有瞬态 `_elation_time_active=true`，供 `ByIsInElationTime`
+谓词读取；正常结束与异常退出均复位。该字段纳入运行态存档，静止时不得残留为真。
 
 **额外阿哈时刻**（爻光终结技、环境 buff 等触发）：
 - 具有额外回合的一切特点（不可插入终结技）

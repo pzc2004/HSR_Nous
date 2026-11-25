@@ -32,8 +32,9 @@
 #                  →非弱点默认抗，元素取事件 damage_type）
 #       scoped     通用 scoped 聚合（命中域 hit_condition/hit_stat_exprs 件按目标状态计入）：
 #                  {stats: [...]} 精确 stat 集 或 {prefix: ..., extras: [...]} 前缀+补集；
-#                  from: attacker|target = 携带侧。**激活力**由 route.<类别>.settle.scoped
-#                  按乘区名单控制——同乘区不同类别开不开 scoped 是类别现状差异，归 route
+#                  from: attacker|target = 携带侧；aggregate 缺省加算，multiply_complement=减伤补数乘算。
+#                  scoped_override 同语法另声明唯一覆写输入（fixed_crit_rate 族），有值时替代普通求值结果。
+#                  **激活力**由 route.<类别>.settle.scoped 按乘区名单控制——同乘区不同类别开不开 scoped 是类别现状差异，归 route
 #       by_type    类别变体（现状逐比特的类别差：中性喂入/快照直读/宽 scoped 集）——
 #                  输入级（覆写本输入声明）或乘区级（read: 整区改直读不求值）
 #   scoped_post  求值/直读**之后**再加总的 scoped（dmg_boost 族——先 1+Σ桶 再加 scoped，
@@ -131,10 +132,10 @@ route:
       node_formula: damage
       is_crit: crit
       event: {action_type: action, damage_type: action, target_broken: live,
-              fields: [action_type, damage_type, target_broken, target_controlled,
+              fields: [action_type, damage_type, damage_custom_name, target_broken, target_controlled,
                        target_control_kinds, target_hp_ratio]}
       scoped: [dmg_boost_multi, def_multi, res_multi, crit_multi, crit_expected_multi, vuln_multi,
-               ability_base]
+               ability_base, dmg_red_multi]
       bind:
         ability_multiplier: {zone: ability_base, override_param: base_override, node: abilityMulti}
   break:                     # break_damage（一击击破）
@@ -267,7 +268,7 @@ formulas:
     expression: "(def_scaling * def + hp_scaling * hp + atk_scaling * atk + flat_shield) * (1 + shield_bonus)"
   # 削韧效率（实际削韧；toughness_scope 闸前置，见 01_formula §1.5）
   toughness_damage:
-    expression: "base_toughness * (1 + break_efficiency_boost) * (1 + weakness_break_efficiency_boost) + fixed_toughness_dmg"
+    expression: "base_toughness * (1 + break_efficiency_boost) * (1 + weakness_break_efficiency_boost) * (1 + toughness_taken) + fixed_toughness_dmg"
   # 回能（energy_regen = 目标**有效面板**能量恢复效率，含 modifier ERR buff；
   # err_exempt 具名豁免时由调用方喂 1.0，mechanics 05 §5.3）
   gain_energy:
@@ -331,7 +332,7 @@ zones:
       vulnerability:
         from: target
         stat: vulnerability
-        scoped: {stats: [vulnerability], from: target}
+        scoped: {stats: [vulnerability], from: target_or_attacker}
   # 最终伤害乘区
   final_dmg_multi:
     expression: "1 + final_dmg_bonus"
@@ -356,7 +357,11 @@ zones:
     node: critMulti
     roll_check: isCrit                    # roll 模式 trace 读判定条件中间值（与掷骰同源）
     inputs: &crit_inputs
-      crit_rate: {from: attacker, stat: crit_rate, scoped: {stats: [crit_rate], from: attacker}}
+      crit_rate:
+        from: attacker
+        stat: crit_rate
+        scoped: {stats: [crit_rate], from: attacker}
+        scoped_override: {stats: [fixed_crit_rate], from: attacker, aggregate: override}
       crit_dmg: {from: attacker, stat: crit_dmg, scoped: {stats: [crit_dmg], from: attacker}}
   # 暴击期望形式（期望值模式）
   crit_expected_multi:
@@ -379,6 +384,7 @@ zones:
       dmg_reduction:
         from: target
         bucket: dmg_reduction
+        scoped: {stats: [dmg_dmg_reduction], from: target_or_attacker, aggregate: multiply_complement}
         by_type:
           break: {from: literal, value: 0.0}        # 未实装乘区，中性喂入
           super_break: {from: literal, value: 0.0}  # 同上
