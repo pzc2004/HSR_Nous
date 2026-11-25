@@ -276,6 +276,7 @@ TASK_HANDLERS = {
     "RPG.GameCore.ModifyLoseHPData": "_compile_modify_lose_hp",
     "RPG.GameCore.LoopExecuteTaskList": "_compile_loop",
     "RPG.GameCore.WaitFor": "_compile_wait_for",
+    "RPG.GameCore.ApplyOperation": "_compile_apply_operation",
     "RPG.GameCore.SequenceConfig": "_compile_sequence_config",
     "RPG.GameCore.LockStance": "_compile_lock_stance",
     "RPG.GameCore.LockActionDelayChange": "_compile_lock_action_delay",
@@ -1695,6 +1696,12 @@ class AbilityCompiler:
         self._add_effect(ctx, {
             "effect_type": effect_type, "resource_id": "punchline", "amount": amount,
         })
+
+    def _compile_apply_operation(self, task: Dict[str, Any], ctx: _Context,
+                                 path: str, stack: Tuple[str, ...]) -> None:
+        if set(task) != {"$type"}:
+            self._issue(ctx, path, str(task.get("$type")),
+                        "ApplyOperation 非空操作对象/效果未注册")
 
     def _compile_wait_for(self, task: Dict[str, Any], ctx: _Context,
                           path: str, stack: Tuple[str, ...]) -> None:
@@ -3842,8 +3849,7 @@ class AbilityCompiler:
     _UNREGISTERED_TASK_REASONS = {
         "RPG.GameCore.SetIronTombProgress": "BOSS 进度语义未钉，不能按纯 UI 忽略",
         "RPG.GameCore.RemoveBpFeature": "特殊 BP 特性移除依赖 BP 体系，不能按普通 modifier 摘除近似",
-        "RPG.GameCore.ApplyOperation": "空节点只有类型名，操作对象与效果未由数据给出",
-        "RPG.GameCore.TaskConfig": "仅支持无字段空占位；出现配置字段仍需注册语义",
+            "RPG.GameCore.TaskConfig": "仅支持无字段空占位；出现配置字段仍需注册语义",
         "RPG.GameCore.MoveStageOnTargetForward": "Stage 前移与行动值推进的关系待实测，不按 ModifyActionDelay 近似",
         "RPG.GameCore.IncludeGlobalTaskListTemplate": "引用的全局 TaskListTemplate 不在当前数据闭包，不能凭空展开",
         "RPG.GameCore.DefineHPSharedGroup": "HP 共享组（连坐血条）未收编",

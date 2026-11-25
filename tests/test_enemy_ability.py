@@ -16046,6 +16046,22 @@ def test_empty_task_config_is_placeholder_but_fields_still_reject():
 
 
 @_need_ability
+def test_empty_apply_operation_is_placeholder_but_fields_still_reject():
+    out = _task_skill({"$type": "RPG.GameCore.ApplyOperation"})
+    assert out["ok"] and not out["unsupported"]
+    assert not any(hook.get("effects") for hook in out["hooks"])
+
+    rejected = _task_skill({"$type": "RPG.GameCore.ApplyOperation", "Unknown": 1})
+    assert not rejected["ok"]
+    assert any(issue["node_type"] == "RPG.GameCore.ApplyOperation"
+               for issue in rejected["unsupported"])
+    for enemy_id in ("1005010", "1005011"):
+        real = _real_compiler(enemy_id).compile_enemy()
+        assert not any(issue["node_type"] == "RPG.GameCore.ApplyOperation"
+                       for issue in real["unsupported"])
+
+
+@_need_ability
 def test_modifier_custom_event_connects_trigger_and_target_listener():
     from hsr_nous.sim.compile.compiled import CompiledHook
     from tests._builders import engine_vs_dummy, make_dummy
