@@ -107,6 +107,12 @@ class TestHitChancePen:
         chance_no_pen = pipe.hit_chance({"effect_hit": 0.0}, {"effect_res": 0.4}, 1.0)
         assert math.isclose(chance_no_pen, 0.6, rel_tol=1e-9)
 
+    def test_type_res_is_independent_from_effect_res(self):
+        pipe = SettlementPipeline(mode=MODE_EXPECTED)
+        chance = pipe.hit_chance({"effect_hit": 0.0}, {"effect_res": 0.4}, 1.0,
+                                 type_res=0.25)
+        assert math.isclose(chance, 0.45, rel_tol=1e-9)
+
     def test_pen_via_panel_flows_at_engine_callsite(self):
         """引擎调用点：modifier 面板 effect_res_pen 经 se 喂入（debuff 施加判定）."""
         pipe = SettlementPipeline(mode=MODE_EXPECTED)

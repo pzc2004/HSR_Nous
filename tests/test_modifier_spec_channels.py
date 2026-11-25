@@ -1,10 +1,8 @@
-"""modifier spec 四通道接线：DSL 声明 → 生效.
+"""modifier spec 多通道接线：DSL 声明 → 生效.
 
-四通道曾是半接线：Modifier 字段与引擎/pipeline 消费点早已存在，但 dict 声明层
-（_MODIFIER_SPEC_KEYS 键闸 + engine._modifier_from_spec 读取）不通——模板写出来
-编译期炸或被静默丢掉。本文件逐通道钉"声明→生效"：
-forced_taunt（引擎 _pick_ally_target 分支）/ scaling_effects（Layer 2a 转化）/
-override_effects（Layer 2b 覆写）/ hit_condition（scoped 命中域加成）。
+Modifier 字段与引擎/pipeline 消费点之外，dict 声明层（_MODIFIER_SPEC_KEYS 键闸 +
+engine._modifier_from_spec 读取）也必须接通，否则模板会编译期炸或被静默丢掉。
+本文件逐通道钉"声明→生效"，覆盖目标选择、生命周期、数值与命中域行为。
 """
 from __future__ import annotations
 
@@ -51,6 +49,28 @@ def _action(eng: CombatEngine, action_id: str):
     return next(a for a in eng.actions_by_actor["hero"] if a.action_id == action_id)
 
 
+class TestDynamicValuesChannel:
+    def test_hook_expression_reads_in_modifier_instance_context(self):
+        eng = _engine([{
+            "modifier_id": "PARENT", "name": "父件", "duration": 0,
+            "target": "all_enemies",
+            "on_apply": [{
+                "effect_type": "apply_modifier", "target": "self",
+                "modifier": {"modifier_id": "CHILD", "name": "子件", "duration": 0,
+                             "dynamic_values": {"Value": "max(1, $modifier.stacks) * 2.5"}},
+            }],
+        }])
+        eng._execute_action(eng.state.actors["hero"], _action(eng, "mark"))
+        target = eng.state.actors["e1"]
+        assert target.modifiers["CHILD"].dynamic_values == {
+            "Value": "max(1, $modifier.stacks) * 2.5"}
+        assert eng._hooks._hook_amount(
+            "modifier_dynamic_of($self, 'CHILD', 'Value')", target, {}) == 2.5
+        target.modifiers["CHILD"].stacks = 2
+        assert eng._hooks._hook_amount(
+            "modifier_dynamic_of($self, 'CHILD', 'Value')", target, {}) == 5.0
+
+
 class TestForcedTauntChannel:
     def test_dsl_to_targeting_override(self):
         """DSL 声明 forced_taunt → 敌人加权选目标被覆盖，必打施加者."""
@@ -64,6 +84,73 @@ class TestForcedTauntChannel:
         # 队友 taunt 150 > 测试员 100——无强制嘲讽时期望模式必选队友
         for _ in range(5):
             assert eng._pick_ally_target(e1) is hero_st
+
+
+class TestReplaceKeepDurationChannel:
+    def test_replacement_preserves_old_remaining_duration(self):
+        eng = _engine([])
+        target = eng.state.actors["hero"]
+        spec = {
+            "modifier_id": "PARASITISM", "name": "寄生", "duration": 5,
+            "stack_mode": "replace_keep_duration", "stacks": 1,
+        }
+        eng._apply_modifier_spec(target, spec, None)
+        eng._apply_modifier_spec(target, {**spec, "duration": 9, "stacks": 3}, None)
+        modifier = target.modifiers["PARASITISM"]
+        assert modifier.duration == 5 and modifier.stacks == 3
+
+
+class TestGlobalLatestUniqueChannel:
+    def test_global_group_replaces_across_actors(self):
+        eng = _engine([])
+        first = {
+            "modifier_id": "SCREEN01", "name": "屏幕一", "duration": 0,
+            "singleton_group": "global:SCREEN01", "stack_mode": "replace",
+        }
+        second = {
+            "modifier_id": "SCREEN02", "name": "屏幕二", "duration": 0,
+            "singleton_group": "global:SCREEN02", "stack_mode": "replace",
+        }
+        eng._apply_modifier_spec(eng.state.actors["hero"], first, None)
+        eng._apply_modifier_spec(eng.state.actors["ally"], first, None)
+        assert "SCREEN01" not in eng.state.actors["hero"].modifiers
+        assert "SCREEN01" in eng.state.actors["ally"].modifiers
+        eng._apply_modifier_spec(eng.state.actors["hero"], second, None)
+        assert "SCREEN01" in eng.state.actors["ally"].modifiers
+        assert "SCREEN02" in eng.state.actors["hero"].modifiers
+
+
+class TestCustomUnselectableChannel:
+    def test_dsl_to_source_target_pair_filter(self):
+        eng = _engine([{
+            "modifier_id": "WHITE", "name": "白卫", "duration": 0,
+            "target": "all_enemies",
+            "custom_unselectable": {"OPPOSITE": ["light", "neutral"]},
+        }])
+        hero = eng.state.actors["hero"]
+        eng._apply_modifier(hero, Modifier(
+            modifier_id="OPPOSITE", name="异侧标记", modifier_type="debuff"))
+        eng._execute_action(hero, _action(eng, "mark"))
+        target = eng.state.actors["e1"]
+        assert target.modifiers["WHITE"].custom_unselectable == {
+            "OPPOSITE": ["light", "neutral"]}
+        assert eng._hostile_target_pool(hero.actor) == []
+        assert eng._hostile_target_pool(eng.state.actors["ally"].actor) == [target]
+
+
+class TestLifecycleSourceChannel:
+    def test_on_apply_event_source_defaults_to_parent_source(self):
+        eng = _engine([{
+            "modifier_id": "PARENT", "name": "父标记", "duration": 0,
+            "target": "all_enemies",
+            "on_apply": [{
+                "effect_type": "apply_modifier", "target": "self", "source": "$event.source",
+                "modifier": {"modifier_id": "CHILD", "name": "子标记", "duration": 0},
+            }],
+        }])
+        hero = eng.state.actors["hero"]
+        eng._execute_action(hero, _action(eng, "mark"))
+        assert eng.state.actors["e1"].modifiers["CHILD"].source_id == "hero"
 
 
 class TestScalingEffectsChannel:
@@ -97,6 +184,24 @@ class TestOverrideEffectsChannel:
         assert math.isclose(eng.pipeline.effective_stats(e1)["def_"], 0.0)
         r1 = eng.pipeline.settle_damage("direct", hero_st, e1, action=_action(eng, "basic"))
         assert math.isclose(r1.node["defMulti"], 1.0, rel_tol=1e-9)
+
+    @pytest.mark.parametrize("order", [("dynamic", "static"), ("static", "dynamic")])
+    def test_dynamic_and_static_overrides_keep_attach_order(self, order):
+        from tests._builders import engine_vs_dummy, make_dummy
+        eng = engine_vs_dummy(enemies=[make_dummy("source", max_toughness=50)])
+        source = eng.state.actors["source"]
+        eng._enemy_policy_state.setdefault("source", {
+            "current_phase": 1, "dynamic_values": {"X": 100}})
+        specs = {
+            "dynamic": {"modifier_id": "dynamic", "modifier_type": "buff", "duration": 0,
+                        "override_exprs": {"max_toughness": "dynamic_of($self.actor_id, 'X')"}},
+            "static": {"modifier_id": "static", "modifier_type": "buff", "duration": 0,
+                       "override_effects": {"max_toughness": 200}},
+        }
+        for name in order:
+            eng._apply_modifier_spec(source, specs[name], source)
+        expected = 200 if order[-1] == "static" else 100
+        assert eng.pipeline.effective_stats(source)["max_toughness"] == expected
 
 
 class TestHitConditionChannel:

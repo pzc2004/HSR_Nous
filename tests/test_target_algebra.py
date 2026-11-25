@@ -1,7 +1,8 @@
-"""通用目标选择代数：pool → where → order_by → take → mode 一台求值器.
+"""通用目标选择代数：pool → where → order_by → index → take → mode 一台求值器.
 
 验证三层：存量选择器⇔代数等价（模板零改动的硬承诺）；代数直写（dict 全槽）；
-random 的 zagreus/expected 双口径（roll 抽 N、expected 按序取前 N 不掷骰）。
+random 的 zagreus/expected 双口径（roll 抽 N、expected 按序取前 N 不掷骰）；
+taunt_or_random 的嘲讽覆盖、候选过滤与普通随机回退。
 """
 from __future__ import annotations
 
@@ -85,6 +86,51 @@ class TestHookAlgebraDirect:
                 "effect_type": "deal_damage", "scaling_atk": 1.0, "target": spec,
             }], "模板 X")
 
+    def test_index_selects_exact_position_after_filter_and_order(self):
+        eng = _mk_engine()
+        hero = eng.state.actors["hero"]
+        spec = {"pool": "enemies", "where": "$it.hp > 2000", "order_by": "$it.hp", "index": 1}
+        BuildCompiler()._validate_effects([{
+            "effect_type": "deal_damage", "scaling_atk": 1.0, "target": spec,
+        }], "模板 X")
+        picked = eng._hooks._hook_target_states(spec, hero, {})
+        assert [state.actor.actor_id for state in picked] == ["e3"]
+        assert eng._hooks._hook_target_states({"pool": "enemies", "index": 3}, hero, {}) == []
+        with pytest.raises(ValueError, match="index 须为非负整数"):
+            BuildCompiler()._validate_effects([{
+                "effect_type": "deal_damage", "scaling_atk": 1.0,
+                "target": {"pool": "enemies", "index": -1},
+            }], "模板 X")
+
+    def test_unselectable_pool_excludes_selectable_and_includes_battle_events(self):
+        eng = _mk_engine()
+        hero = eng.state.actors["hero"]
+        eng.state.actors["a1"].actor.summon_flags.update({
+            "enemy_targetable": False, "ally_targetable": False})
+        eng.state.actors["e1"].actor.summon_flags["enemy_targetable"] = False
+        eng._hooks._run_hook_effect(hero, {
+            "effect_type": "create_battle_event", "event_id": 20001,
+            "team": "TeamNeutral"}, {})
+        spec = {"pool": "unselectable"}
+        BuildCompiler()._validate_effects([{
+            "effect_type": "deal_damage", "scaling_atk": 1.0, "target": spec,
+        }], "模板 X")
+        picked = eng._hooks._hook_target_states(spec, hero, {})
+        assert [s.actor.actor_id for s in picked] == ["a1", "e1", "$battle_event:20001"]
+
+    def test_unique_name_pool_passes_compiler_and_resolves_binding(self):
+        eng = _mk_engine()
+        hero = eng.state.actors["hero"]
+        spec = {"pool": "unique:Chosen"}
+        BuildCompiler()._validate_effects([{
+            "effect_type": "deal_damage", "scaling_atk": 1.0, "target": spec,
+        }], "模板 X")
+        assert eng._hooks._hook_target_states(spec, hero, {}) == []
+        eng._hooks._run_hook_effect(hero, {
+            "effect_type": "set_dynamic_target", "dynamic_key": "Chosen",
+            "target": "self", "scope": "unique_name"}, {})
+        assert eng._hooks._hook_target_states(spec, hero, {}) == [hero]
+
     def test_take_int_random_targets(self):
         """实例垫底（敌方 "Deals … to 3 random targets"）：take 3 + mode random——
         roll 同 seed 复现；expected 按序取前 N 不掷骰（确定化口径）."""
@@ -100,6 +146,92 @@ class TestHookAlgebraDirect:
         he = eng_e.state.actors["hero"]
         pe = [s.actor.actor_id for s in eng_e._hooks._hook_target_states(spec, he, {})]
         assert pe == ["e1", "e2", "e3"], "expected 确定化：按序取前 N（不掷骰）"
+
+    def test_taunt_or_random_respects_candidates_and_forced_taunt(self):
+        spec = {"pool": "enemy_targets", "take": 1, "mode": "taunt_or_random"}
+        BuildCompiler()._validate_effects([{
+            "effect_type": "deal_damage", "scaling_atk": 1.0, "target": spec,
+        }], "模板 X")
+        eng = _mk_engine(mode=MODE_ROLL, seed=42)
+        attacker = eng.state.actors["e1"]
+        candidates = [eng.state.actors[key] for key in ("hero", "a1", "a2")]
+        eng.pipeline.rng = _random.Random(17)
+        expected = _random.Random(17).choice(candidates)
+        picked = eng._hooks._hook_target_states(spec, attacker, {})
+        assert picked == [expected], "无嘲讽时按普通随机抽取，不按嘲讽值加权"
+
+        eng._apply_modifier(attacker, Modifier(
+            modifier_id="TAUNT", name="嘲讽", modifier_type="debuff",
+            source_id="a2", forced_taunt=True, duration=2))
+        assert eng._hooks._hook_target_states(spec, attacker, {}) == [candidates[2]]
+
+        filtered = {**spec, "where": "$it.actor_id != 'a2'"}
+        eng.pipeline.rng = _random.Random(17)
+        expected = _random.Random(17).choice(candidates[:2])
+        assert eng._hooks._hook_target_states(filtered, attacker, {}) == [expected], (
+            "被过滤的嘲讽来源不能越过候选集")
+        eng_expected = _mk_engine()
+        assert eng_expected._hooks._hook_target_states(
+            spec, eng_expected.state.actors["e1"], {}) == [eng_expected.state.actors["hero"]]
+        with pytest.raises(ValueError, match="仅支持 take: 1"):
+            BuildCompiler()._validate_effects([{
+                "effect_type": "deal_damage", "scaling_atk": 1.0,
+                "target": {**spec, "take": 2},
+            }], "模板 X")
+
+    def test_taunt_or_aggro_uses_weighted_fallback(self):
+        spec = {"pool": "enemy_targets", "take": 1, "mode": "taunt_or_aggro"}
+        BuildCompiler()._validate_effects([{
+            "effect_type": "deal_damage", "scaling_atk": 1.0, "target": spec,
+        }], "模板 X")
+        eng = _mk_engine(mode=MODE_ROLL, seed=42)
+        attacker = eng.state.actors["e1"]
+        for actor_id, taunt in (("hero", 100.0), ("a1", 100.0), ("a2", 300.0)):
+            eng.state.actors[actor_id].actor.stats.taunt = taunt
+        calls = []
+        original = eng._pick_ally_target
+
+        def checked(owner, *, candidates=None, random_by_aggro=True):
+            calls.append(random_by_aggro)
+            return original(owner, candidates=candidates, random_by_aggro=random_by_aggro)
+
+        eng._pick_ally_target = checked
+        eng.pipeline.rng = _random.Random(17)
+        assert eng._hooks._hook_target_states(spec, attacker, {}) == [eng.state.actors["a2"]]
+        assert calls == [True]
+
+        eng._apply_modifier(attacker, Modifier(
+            modifier_id="TAUNT", name="嘲讽", modifier_type="debuff",
+            source_id="hero", forced_taunt=True, duration=2))
+        assert eng._hooks._hook_target_states(spec, attacker, {}) == [eng.state.actors["hero"]]
+        with pytest.raises(ValueError, match="仅支持 take: 1"):
+            BuildCompiler()._validate_effects([{
+                "effect_type": "deal_damage", "scaling_atk": 1.0,
+                "target": {**spec, "take": 2},
+            }], "模板 X")
+
+    def test_concat_preserves_order_and_duplicates(self):
+        spec = {"concat": [
+            {"pool": "enemies", "take": 1},
+            {"pool": "enemies", "take": 2},
+        ]}
+        BuildCompiler()._validate_effects([{
+            "effect_type": "deal_damage", "scaling_atk": 1.0, "target": spec,
+        }], "模板 X")
+        eng = _mk_engine()
+        picked = eng._hooks._hook_target_states(spec, eng.state.actors["hero"], {})
+        assert [state.actor.actor_id for state in picked] == ["e1", "e1", "e2"]
+        outer = {**spec, "where": "$it.actor_id != 'e1'", "take": 1}
+        BuildCompiler()._validate_effects([{
+            "effect_type": "deal_damage", "scaling_atk": 1.0, "target": outer,
+        }], "模板 X")
+        picked = eng._hooks._hook_target_states(outer, eng.state.actors["hero"], {})
+        assert [state.actor.actor_id for state in picked] == ["e2"]
+        with pytest.raises(ValueError, match="pool/include_"):
+            BuildCompiler()._validate_effects([{
+                "effect_type": "deal_damage", "scaling_atk": 1.0,
+                "target": {**spec, "pool": "enemies"},
+            }], "模板 X")
 
     def test_where_has_modifier_named(self):
         """实例垫底（按修饰符点名，1224 师父族）：where: has_modifier($it, 'M')."""

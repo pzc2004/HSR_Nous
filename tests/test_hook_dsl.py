@@ -894,6 +894,17 @@ class TestGainResourceSourceAndMaxHpOf:
         assert math.isclose(fns["max_hp_of"]("ally"), 3000.0)
         assert math.isclose(fns["max_hp_of"]("nobody"), 0.0), "查无安全缺省（hp_of 同口径）"
 
+    def test_energy_readers(self):
+        eng = _au_engine()
+        hero = eng.state.actors["hero"]
+        ally = eng.state.actors["ally"]
+        ally.current_energy = 37.5
+        fns = eng._hooks._hook_functions(hero)
+        assert fns["energy_of"]("ally") == 37.5
+        assert fns["max_energy_of"]("ally") == ally.actor.stats.max_energy
+        assert fns["energy_of"]("nobody") == 0.0
+        assert fns["max_energy_of"]("nobody") == 0.0
+
 
 # ---------------------------------------------------------------------------
 # hook deal_damage 伪行动类别声明槽 "dot"（2026-09-22 收编——桑博 1108 风化 tick

@@ -91,6 +91,20 @@ class TestShieldAbsorb:
         broken = [p for et, p in events if et == "shield_broken"]
         assert [p["shield_id"] for p in broken] == ["SH_B"]
 
+    def test_shield_changed_covers_gain_absorb_and_break(self):
+        eng = _engine()
+        st = eng.state.actors["h"]
+        events = []
+        eng.bus.subscribe("shield_changed", lambda et, p, ctx: events.append(dict(p)))
+
+        eng._apply_modifier_spec(st, _shield_spec("SH_A", 100.0), st)
+        _hit_ally(eng)
+
+        assert [p["reason"] for p in events] == ["gain", "absorb", "break"]
+        assert [p["remaining"] for p in events] == [100.0, 0.0, 0.0]
+        assert [p["amount"] for p in events] == [100.0, 100.0, 0.0]
+        assert all(p["target"] == "h" for p in events)
+
     def test_overflow_to_hp(self):
         """伤害超过最高盾剩余：未吸收部分溢出扣本体，两盾俱碎."""
         eng = _engine()

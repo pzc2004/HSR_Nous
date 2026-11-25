@@ -244,6 +244,7 @@ class TestJsonRoundTrip:
         eng.setup()
         eng._apply_modifier_spec(eng.state.actors["ally"], {
             "modifier_id": "LIFECYCLE", "modifier_type": "buff",
+            "behavior_flags": ["DisableAction", "STAT_CTRL"],
             "on_remove": [{
                 "effect_type": "apply_modifier", "target": "self",
                 "modifier": {"modifier_id": "AFTER_REMOVE", "modifier_type": "buff"},
@@ -252,9 +253,84 @@ class TestJsonRoundTrip:
         restored = CombatEngine.load_state(
             compiled, json.loads(json.dumps(eng.save_state())))
         target = restored.state.actors["ally"]
+        seen = []
+        restored.bus.subscribe("after_remove_modifier",
+                               lambda et, p, c: seen.append(p["behavior_flags"]))
         restored._remove_modifier(target, "LIFECYCLE", "expire")
         assert "LIFECYCLE" not in target.modifiers
         assert "AFTER_REMOVE" in target.modifiers
+        assert seen == [["DisableAction", "STAT_CTRL"]]
+
+    def test_unique_target_binding_survives_json(self):
+        compiled = compile_encounter(_pela_build(), _pela_stage(),
+                                     template_roots=TEST_TEMPLATE_ROOTS)
+        eng = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+        eng.setup()
+        ally = eng.state.actors["ally"]
+        eng._hooks._run_hook_effect(ally, {
+            "effect_type": "set_dynamic_target", "dynamic_key": "SelectTarget",
+            "target": "self", "scope": "unique_name"}, {})
+        restored = CombatEngine.load_state(
+            compiled, json.loads(json.dumps(eng.save_state())))
+        target = restored.state.actors["ally"]
+        assert restored._expr.evaluate(
+            restored._expr.compile('unique_target("SelectTarget")', layer="effect"),
+            restored._hooks._hook_ctx(target, {}),
+            functions=restored._hooks._hook_functions(target)) == "ally"
+        assert restored._hooks._hook_target_states(
+            {"pool": "unique:SelectTarget"}, target, {}) == [target]
+
+    def test_battle_event_actor_and_modifier_survive_json(self):
+        compiled = compile_encounter(_pela_build(), _pela_stage(),
+                                     template_roots=TEST_TEMPLATE_ROOTS)
+        eng = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+        eng.setup()
+        ally = eng.state.actors["ally"]
+        eng._hooks._run_hook_effect(ally, {
+            "effect_type": "create_battle_event", "event_id": 20034,
+            "team": "TeamNeutral"}, {})
+        battle_event = eng.battle_events[20034]["actor_state"]
+        eng._apply_modifier_spec(battle_event, {
+            "modifier_id": "MARK", "modifier_type": "buff",
+            "behavior_flags": ["DisableAction"]}, ally)
+        save = json.loads(json.dumps(eng.save_state()))
+        restored = CombatEngine.load_state(compiled, save)
+        recovered = restored.battle_events[20034]["actor_state"]
+        assert recovered.actor.actor_id == battle_event.actor.actor_id
+        assert recovered.modifiers["MARK"].behavior_flags == ["DisableAction"]
+        assert recovered.modifiers["MARK"].source_id == "ally"
+        assert restored._hooks._hook_target_states(
+            {"pool": "unique:$battle_event:20034"}, restored.state.actors["ally"], {}
+        ) == [recovered]
+        assert json.loads(json.dumps(restored.save_state())) == save
+
+
+    def test_action_delay_locks_survive_json(self):
+        compiled = compile_encounter(_pela_build(), _pela_stage(),
+                                     template_roots=TEST_TEMPLATE_ROOTS)
+        eng = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+        eng.setup()
+        ally = eng.state.actors["ally"]
+        eng._hooks._run_hook_effect(ally, {
+            "effect_type": "lock_action_delay", "target": "self",
+            "lock_id": "s1", "whitelist_source": "self",
+            "whitelist_change_type": "decrease"}, {})
+        eng._apply_modifier_spec(ally, {
+            "modifier_id": "PROTECTION", "modifier_type": "buff",
+            "protected_weakness": ["fire"], "weakness_override": [],
+            "secret_weakness": ["wind"],
+            "custom_unselectable": {"OPPOSITE": ["light", "neutral"]}}, None)
+        restored = CombatEngine.load_state(
+            compiled, json.loads(json.dumps(eng.save_state())))
+        target = restored.state.actors["ally"]
+        assert restored._action_delay_change_allowed(target, "ally", "decrease")
+        assert not restored._action_delay_change_allowed(target, "ally", "increase")
+        assert not restored._action_delay_change_allowed(target, "other", "decrease")
+        assert target.modifiers["PROTECTION"].protected_weakness == ["fire"]
+        assert target.modifiers["PROTECTION"].weakness_override == []
+        assert target.modifiers["PROTECTION"].secret_weakness == ["wind"]
+        assert target.modifiers["PROTECTION"].custom_unselectable == {
+            "OPPOSITE": ["light", "neutral"]}
 
 
 class TestWaveSave:
@@ -516,3 +592,24 @@ def test_level_blackboard_roundtrip():
     assert restored._level_state_obj is not None
     assert restored._enemy_policy_state["$level"]["dynamic_values"]["SoldierCount01"] == 3
     assert "WeatherPhase01Flag" in restored._level_state_obj.modifiers
+
+
+
+def test_modifier_dynamic_values_roundtrip():
+    compiled = compile_encounter(_pela_build(), _pela_stage(),
+                                 template_roots=TEST_TEMPLATE_ROOTS)
+    eng = CombatEngine.from_compiled(compiled, mode=MODE_ROLL, seed=42)
+    eng.setup()
+    st = next(iter(eng.state.actors.values()))
+    eng._hooks._run_hook_effect(st, {
+        "effect_type": "apply_modifier", "target": "self",
+        "modifier": {"modifier_id": "InstancePayload", "modifier_type": "buff",
+                     "duration": 0, "max_stack": 1,
+                     "dynamic_values": {"MDF_Value": 2.5}}}, {})
+    save = json.loads(json.dumps(eng.save_state()))
+    restored = CombatEngine.load_state(compiled, save)
+    restored_st = restored.state.actors[st.actor.actor_id]
+    modifier = restored_st.modifiers["InstancePayload"]
+    assert modifier.dynamic_values == {"MDF_Value": 2.5}
+    assert restored._hooks._hook_amount(
+        "modifier_dynamic_of($self, 'InstancePayload', 'MDF_Value')", restored_st, {}) == 2.5
