@@ -45,9 +45,16 @@ def _load_table(name: str, tbgd_dir: Optional[str] = None) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+@lru_cache(maxsize=8)
+def _load_json_path(path_str: str) -> Any:
+    """按绝对路径缓存 JSON 整表（monster.json/fandom_enemy_data.json 等逐行查询源）."""
+    return json.loads(Path(path_str).read_text(encoding="utf-8"))
+
+
 def clear_data_cache() -> None:
     """数据缓存失效钩子（update 落盘后调用——同 build.loader 先例）."""
     _load_table.cache_clear()
+    _load_json_path.cache_clear()
     _instance_map.cache_clear()
     _template_map.cache_clear()
     _custom_value_tags.cache_clear()
@@ -720,7 +727,7 @@ def get_monster_meta(
     )
     if not path.exists():
         return None
-    data = json.loads(path.read_text(encoding="utf-8"))
+    data = _load_json_path(str(path))
     exact = data.get(str(enemy_id))
     if exact is not None:
         return exact
@@ -750,7 +757,7 @@ def get_enemy_mechanics(
     )
     if not path.exists():
         return None
-    data = json.loads(path.read_text(encoding="utf-8"))
+    data = _load_json_path(str(path))
     exact = data.get(page_title)
     if exact is None:
         exact = data.get(f"{page_title} (Boss)")
