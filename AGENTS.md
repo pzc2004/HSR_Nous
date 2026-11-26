@@ -10,24 +10,13 @@
 
 - 代码中一律用英文（`turn`、`cycle`、`wave`、`break_effect`）
 - 文档/注释中可使用中文（回合、轮次、波次、击破特攻）
-- 核心模块对应游戏世界观星神：
-
-| 模块 | 命名 | 官方描述 | 职责 |
-|------|------|---------|------|
-| 项目整体 | 博识尊 (Nous) | "原为解答宇宙而生的天体计算机，升格为星神" | 求解配队配装问题 |
-| Simulator | 翁法罗斯 (Amphoreus) | 博识尊的天体神经元——权杖 δ-me13 中运行的模拟世界，通过无数次循环实验求解"生命的第一因" | 通过重复模拟求解最优配装/配队 |
-| Agent | 阿基维利 (Akivili) | "不断开拓宇宙的未知边缘" | 探索新方案、规划决策 |
-| Memory | 浮黎 (Fuli) | "不偏不倚地记录一切，无私地保存每一个基本事实" | 存储和检索经验 |
-| data/ | 智库 (Data Bank) | 列车百科全书 | 角色/光锥/遗器/敌人数据 |
-
-> 星神名只给平级模块；引擎**内部组件**用泰坦级命名（janus 事件总线 / talanton 校验器 / oronyx 调试控制器 / georios 构建器 / phagousa modifier 体系 / aquila 边界层 / cerces 理性计算（AST/策略求值） / mnestia 呈现层 / nikador 伤害管线 / thanatos 死亡链 / zagreus 随机源 / kephale、demiurge 候补），名册与命名规则见 `src/hsr_nous/sim/README.md`。
 
 ## 项目结构速查
 
 ```
 src/hsr_nous/
 ├── common/        # 公共基座：路径 / 环境变量 / .env / IO 基元（零项目依赖，所有模块可 import）
-│   ├── paths.py   # 路径唯一事实源（repo_root/data_root/repo_data_dir；HSR_NOUS_DATA_DIR > 仓库 ./data）
+│   ├── paths.py   # 路径唯一事实源（repo/data/research 三类根；data 默认仓库 ./data，research 默认 ~/.local/share/hsr_nous，均可 env 覆盖）
 │   ├── env.py     # .env 手写解析 + load_repo_env（不覆盖已有环境变量）
 │   └── README.md  # 准入规则与 API 清单
 ├── pipeline/      # 数据访问层：下载 + 加载 + 查询 StarRailRes/Fandom 数据 — 独立，不 import 业务模块
@@ -40,6 +29,14 @@ src/hsr_nous/
 ├── adapters/      # 外部数据 → 仿真输入桥梁（模板生成器产 per-entity DSL YAML + 对象适配器）
 ├── sim/           # 纯战斗模拟器（只认识 sim_schema）
 │   └── policy_api.py  # 策略运行时（ScriptedPolicy / CompiledPolicyRuntime）
+├── research/      # 研究域总包：契约、协议、执行、权限、外部证据与只读呈现
+│   ├── schema/      # 纯数据契约 + canonical JSON（零项目依赖；docs 为研究规范）
+│   ├── protocol/    # paired-v1 固定协议、契约校验与候选生成（不执行模拟）
+│   ├── core/        # 执行、只读 artifact、可信计算、JSON 报告与后台 worker
+│   ├── permissions/ # CapabilityPolicy + ResearchGateway + MCP（外部权限边界）
+│   ├── web/         # 可选外部检索与证据（Search/Fetch provider + WebEvidenceStore）
+│   └── workbench/   # 研究台（任务/图表/证据下钻；代管本地聊天桥子进程：spawn+回环反代，不 import agents）
+├── agents/        # 外部 Agent harness 适配（DSH headless + 工具白名单；不直接制造可信结论）
 ├── ops/           # 生产运行时与批量流水线（DAG 执行器 + 生产 DAG——打标 annotator 首租）
 └── account/       # Mihoyo 账号集成（HoYoLAB API，keyring 优先）
 ```
@@ -63,11 +60,18 @@ tests/                 # 纯测试代码（零 YAML——模板正典已全部�
 
 | 模块 | 允许 import | 禁止 import |
 |------|------------|------------|
-| `common/` | 无 | `pipeline`, `sim_schema`, `adapters`, `sim`, `ops`, `account`, `llm`（公共基座是叶子层，零项目依赖） |
+| `common/` | 无 | `pipeline`, `sim_schema`, `adapters`, `sim`, `ops`, `account`, `llm`, `research`（公共基座是叶子层，零项目依赖） |
 | `pipeline/` | `common` | `sim_schema`, `sim` |
 | `sim_schema/` | `common` | `pipeline`, `sim`, `adapters` |
 | `adapters/` | `pipeline`, `sim_schema`, `account`（账号数据适配）, `llm`（LLM 统一接入层 tribios）, `common` | `sim`（只输出 sim_schema，不调用仿真） |
 | `sim/` | `sim_schema`, `common` | `pipeline`, `adapters` |
+| `research/schema/` | 无 | `research/protocol`, `research/core`, `sim`, `pipeline`, `adapters`（纯数据契约） |
+| `research/protocol/` | `research/schema` | `research/core`, `sim`, `pipeline`, `adapters`（固定协议解析与校验，不执行模拟） |
+| `research/core/` | `research/schema`, `research/protocol`, `sim`, `sim_schema`, `common` | `pipeline`, `adapters`（执行、证据、可信计算与报告层） |
+| `research/permissions/` | `research/core`, `research/schema`, `research/protocol`, `research/web`, `common` | `sim`, `pipeline`, `adapters`（外部权限网关） |
+| `research/web/` | `research/schema`, `common` | `research/core`, `research/permissions`, `sim`, `pipeline`, `adapters`（外部检索与证据层） |
+| `research/workbench/` | `research/schema`, `research/permissions`, `common`, `sim`（仅 `sim.web` 本地服务与孤儿看护） | `research/core`, `agents`, `pipeline`, `adapters`（只读呈现，不直接执行） |
+| `agents/` | `research/schema`, `research/permissions`, `common` | `sim`, `research/core`, `pipeline`, `adapters`（外部 harness 适配，可信执行只经网关） |
 | `ops/` | `llm`, `adapters`, `sim`, `pipeline`, `sim_schema`, `common` | — |
 | `account/` | `common` | `sim`, `pipeline`, `adapters` |
 | `llm/` | `common` | `pipeline`, `sim_schema`, `sim`, `adapters` |
@@ -88,7 +92,7 @@ httpx + 公共基座 `common`）；`adapters` 允许 import `llm`——标注流
 
 **关于 `common/` 的说明**：公共基座（零项目依赖、无业务语义的基建：路径解析 /
 环境变量 / `.env` / IO 基元）——唯一允许被**所有**模块 import 的叶子层，本身允许集为空。
-路径根（`repo_root`/`data_root`/`repo_data_dir`）与 `.env` 解析的单一事实源都在这里；
+路径根（`repo_root`/`data_root`/`repo_data_dir`/`research_root`）与 `.env` 解析的单一事实源都在这里；
 禁止在其它模块重新自持实现（`tests/test_doc_lint.py` 单一来源闸盯防）。
 
 ## 模块分类（命名与依赖归属）
@@ -100,7 +104,9 @@ httpx + 公共基座 `common`）；`adapters` 允许 import `llm`——标注流
 |------|------|------|------|
 | 公共基座 | `common/` | 路径 / 环境变量 / `.env` / IO 基元（无业务语义） | 平实英文（不做星神/泰坦命名） |
 | 核心域 | `sim_schema/`、`sim/` | 仿真数据模型与战斗引擎 | 星神名（翁法罗斯）/ 引擎内部件泰坦名 |
-| 外部接入 | `pipeline/`、`account/`、`llm/` | 各包一个外部系统（游戏数据 / 米游社 / LLM provider） | 目录平实英文；内部组件可挂泰坦名（如 llm=tribios） |
+| 研究域 | `research/`（schema、protocol、core、permissions、workbench） | 统一研究域：契约、协议、可信执行与证据、外部权限边界、只读研究台 | schema/permissions 平实英文；protocol/core/workbench 星神名（太一/克里珀/伊德莉拉） |
+| 外部接入 | `pipeline/`、`account/`、`llm/`、`research/web/` | 各包一个外部系统（游戏数据 / 米游社 / LLM provider / 检索服务） | 目录平实英文；内部组件可挂泰坦名（如 llm=tribios） |
+| Agent 接入 | `agents/` | DSH 外部进程、工具白名单与宿主复核 | 星神名（阿基维利） |
 | 桥接 | `adapters/` | 外部数据 → sim_schema | 平实英文 |
 | 应用编排 | `ops/` | 组合下层完成闭环 | 平实英文 |
 

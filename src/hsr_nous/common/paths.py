@@ -1,8 +1,11 @@
-"""公共路径解析：仓库根 / 数据根（全项目唯一事实源）.
+"""公共路径解析：仓库根 / 数据根 / 研究产物根（全项目唯一事实源）.
 
-解析优先级（逐层覆盖）：
+数据根解析优先级（逐层覆盖）：
 1. ``HSR_NOUS_DATA_DIR`` 环境变量（CI/多份数据并存/自定义位置）；
 2. 仓库 ``./data``（开发兜底）。
+
+研究产物根独立解析：``HSR_NOUS_RESEARCH_ROOT`` > ``XDG_DATA_HOME/hsr_nous``
+> ``~/.local/share/hsr_nous``；绝不默认写仓库或 CWD。
 
 两类数据命运不同：
 - **缓存级**（starrailres/stages/fandom/tbgd/sim_templates/提取产物……gitignored，
@@ -23,6 +26,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 #: 环境变量名（pipeline/sim_schema 曾各自镜像此名——已收敛到本层单一定义）
 DATA_DIR_ENV = "HSR_NOUS_DATA_DIR"
+RESEARCH_ROOT_ENV = "HSR_NOUS_RESEARCH_ROOT"
 
 
 def repo_root() -> Path:
@@ -39,3 +43,14 @@ def data_root() -> Path:
     """数据根目录：``HSR_NOUS_DATA_DIR`` 环境变量 > 仓库 ``./data``."""
     env = os.environ.get(DATA_DIR_ENV)
     return Path(env) if env else repo_data_dir()
+
+
+def research_root() -> Path:
+    """研究产物根：专用环境变量 > XDG 数据目录下的 ``hsr_nous``."""
+    env = os.environ.get(RESEARCH_ROOT_ENV)
+    if env:
+        return Path(env)
+    xdg_data_home = os.environ.get("XDG_DATA_HOME")
+    if xdg_data_home:
+        return Path(xdg_data_home) / "hsr_nous"
+    return Path.home() / ".local" / "share" / "hsr_nous"

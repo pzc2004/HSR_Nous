@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HSR_Nous · 研究台</title>
+<style>
+:root{--bg:#0f1117;--panel:#171a23;--panel2:#202534;--line:#30374b;--fg:#dbe1ed;--dim:#9199af;--gold:#e8b45a;--blue:#65a9f5;--green:#62c78a;--red:#ed7676}
+*{box-sizing:border-box;margin:0;padding:0}body{background:var(--bg);color:var(--fg);font:14px/1.55 "PingFang SC","Microsoft YaHei",system-ui,sans-serif;min-height:100vh}button,input{background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:7px 10px;font:inherit}button{cursor:pointer}button:hover:not(:disabled){border-color:var(--gold);color:var(--gold)}button:disabled{opacity:.42;cursor:not-allowed}h1{font-size:18px;color:var(--gold);letter-spacing:1px}h2{font-size:15px;margin-bottom:12px}h3{font-size:13px;margin:14px 0 8px}.dim{color:var(--dim)}.small{font-size:12px}.mono{font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.spacer{flex:1}.badge{display:inline-block;border:1px solid var(--line);border-radius:10px;padding:1px 7px;font-size:11px;color:var(--dim);white-space:nowrap}.badge.gold{color:var(--gold);border-color:var(--gold)}.badge.green{color:var(--green);border-color:var(--green)}.badge.red{color:var(--red);border-color:var(--red)}.card{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:14px;margin-bottom:12px}.empty{color:var(--dim);padding:18px 4px}.error{color:var(--red);white-space:pre-wrap}.link{color:var(--blue);border-color:transparent;background:transparent;padding:2px 4px;text-align:left}.primary{border-color:var(--gold);color:var(--gold)}
+header{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 18px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:4}header input{width:min(520px,100%);font-family:ui-monospace,Menlo,monospace;font-size:12px}#viewTabs{display:flex;gap:4px;margin-left:8px}.tab{border-color:transparent;color:var(--dim)}.tab.active{color:var(--gold);border-color:var(--gold)}.view{display:none}.view.active{display:block}#layout,#worldlineLayout{display:grid;grid-template-columns:300px minmax(0,1fr);max-width:1680px;margin:0 auto;min-height:calc(100vh - 62px)}aside{border-right:1px solid var(--line);padding:14px;background:#12151d}main{padding:16px;min-width:0}.task-card{display:block;width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:9px}.task-card.active{border-color:var(--gold)}.task-card .q{font-weight:600;margin-bottom:6px}.progress{height:7px;border-radius:4px;background:var(--panel2);overflow:hidden;margin:7px 0}.progress>i{display:block;height:100%;background:var(--blue)}.progress.done>i{background:var(--green)}.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}.metric{background:var(--panel2);border-radius:7px;padding:8px 10px}.metric .v{font-size:16px;font-weight:600;font-variant-numeric:tabular-nums}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:8px 7px;vertical-align:top}th{color:var(--dim);font-weight:500}tr.clickable{cursor:pointer}tr.clickable:hover{background:var(--panel2)}.chart{width:100%;height:auto;min-height:100px}.chart text{fill:var(--fg);font-size:11px}.chart .axis{stroke:var(--dim);stroke-width:1}.chart .ci{stroke:var(--blue);stroke-width:3}.chart .selected-ci{stroke:var(--gold);stroke-width:3}.chart .effect{fill:var(--blue)}.chart .selected-effect{fill:var(--gold)}.two-col{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.range{position:relative;height:10px;background:var(--panel2);border-radius:5px;margin:14px 4px 8px}.range .band{position:absolute;height:100%;background:#35567d;border-radius:5px}.range .mark{position:absolute;width:2px;height:16px;top:-3px;background:var(--gold)}.event-list{max-height:520px;overflow-y:auto}.event-row{display:flex;gap:8px;align-items:center;width:100%;text-align:left;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:6px 8px;margin-bottom:5px;font-size:12px}.event-row.active{border-color:var(--gold)}.event-row .ordinal{color:var(--dim);min-width:34px}.detail{max-height:620px;overflow:auto}pre{white-space:pre-wrap;word-break:break-word;background:#11151d;border:1px solid var(--line);border-radius:7px;padding:10px;font:11px/1.55 ui-monospace,Menlo,monospace;color:var(--dim)}details{margin-top:8px}summary{cursor:pointer;color:var(--dim)}.stat-effects{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:5px}.stat-effects div{background:var(--panel2);border-radius:5px;padding:5px 7px;font-size:12px}#toast{position:fixed;right:16px;bottom:16px;max-width:520px;background:#4c2529;color:#ffd4d4;border:1px solid var(--red);border-radius:7px;padding:10px 14px;display:none;z-index:10}
+.metric{min-width:0;overflow-wrap:anywhere}.metric .v{word-break:break-all}.chart-scroll{overflow-x:auto}.table-wrap table{min-width:560px}
+.worldline-player{display:block;width:100%;height:900px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+#chatLayout{display:grid;grid-template-columns:250px minmax(0,1fr) 280px;max-width:1680px;margin:0 auto;min-height:calc(100vh - 62px)}#chatView aside{overflow-y:auto}#sessionPane{border-right:1px solid var(--line)}#chatInspector{border-right:0;border-left:1px solid var(--line)}#chatMain{padding:16px;min-width:0;display:flex;flex-direction:column;gap:10px}#chatStatus{min-height:1.2em}#chatStream{flex:1;overflow-y:auto;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:12px;min-height:16rem;max-height:calc(100vh - 225px);white-space:pre-wrap;word-break:break-word}#composer{display:flex;gap:8px}#composer input{flex:1}.chat-msg{margin:6px 0;white-space:pre-wrap;word-break:break-word}.chat-msg.user{color:var(--blue)}.chat-sys{color:var(--dim);font-size:12px;margin:6px 0}.chat-error{color:var(--red);white-space:pre-wrap;margin:6px 0}.chat-thought{margin:6px 0 6px 12px}.chat-thought summary{cursor:pointer;color:var(--dim)}.chat-thought-text{color:var(--dim);font-style:italic;white-space:pre-wrap;margin:4px 0}.chat-tool{margin:6px 0 6px 12px}.chat-tool summary{cursor:pointer;color:var(--green)}.chat-tool .meta{color:var(--dim);font-size:12px;white-space:pre-wrap;word-break:break-word;margin:4px 0}.session-item{display:block;width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:9px 10px;margin-bottom:8px}.session-item.active{border-color:var(--gold)}.session-item .q{font-weight:600;margin-bottom:4px;overflow-wrap:anywhere}
+@media(max-width:900px){#layout,#worldlineLayout{grid-template-columns:1fr}#chatLayout{grid-template-columns:1fr}aside{border-right:0;border-bottom:1px solid var(--line);max-height:330px;overflow-y:auto}#chatInspector{border-left:0}main{padding:12px}.two-col{grid-template-columns:1fr}header{position:static}header input{width:100%;order:3}.chart{min-width:0}.table-wrap{overflow-x:auto}}
+</style>
+</head>
+<body>
+<header>
+  <h1>HSR_Nous · 研究台</h1><span class="badge">研究数据只读</span><span class="badge gold">simulated / pending_real_validation</span>
+  <div id="viewTabs"><button class="tab active" data-view="research">研究</button><button class="tab" data-view="worldlines">世界线</button><button class="tab" data-view="chat">聊天</button></div>
+  <div class="spacer"></div>
+  <input id="taskInput" class="mono" placeholder="输入 task_id 打开研究任务" aria-label="task_id">
+  <button id="openTask" class="primary">打开</button>
+</header>
+<div id="researchView" class="view active">
+  <div id="layout">
+    <aside><h2>研究任务</h2><div id="taskList" class="empty">正在加载…</div></aside>
+    <main>
+      <section id="overview" class="card"><div class="empty">请选择一项研究任务。</div></section>
+      <section id="candidates" class="card"></section>
+      <section id="trial" class="card"></section>
+      <section id="evidence" class="card"></section>
+    </main>
+  </div>
+</div>
+<div id="worldlineView" class="view">
+  <div id="worldlineLayout">
+    <aside><h2>世界线</h2><div id="worldlineList" class="empty">正在加载…</div></aside>
+    <main>
+      <section id="worldlineOverview" class="card"><div class="empty">请选择一条世界线。</div></section>
+      <section id="worldlineReplay" class="card"></section>
+      <section id="worldlineEvidence" class="card"></section>
+    </main>
+  </div>
+</div>
+<div id="chatView" class="view">
+  <div id="chatLayout">
+    <aside id="sessionPane">
+      <div class="row" style="margin-bottom:10px"><h2>会话</h2><div class="spacer"></div><button id="newSession" class="primary">新建会话</button></div>
+      <div id="sessionList" class="empty">正在加载…</div>
+      <p class="dim small" style="margin-top:10px">会话由幕后 DSH 经 ACP 桥承载；落盘会话可恢复，历史不回放。</p>
+    </aside>
+    <section id="chatMain">
+      <div id="chatStatus" class="dim small"></div>
+      <div id="chatStream"><div class="empty">选择左侧会话，或点「新建会话」开始。</div></div>
+      <div id="composer">
+        <input id="chatText" placeholder="输入消息…" aria-label="聊天输入">
+        <button id="chatSend">发送</button>
+        <button id="chatCancel" disabled>取消</button>
+      </div>
+      <p class="dim small">信任边界：Agent 只能调用 mcp__nous__* 白名单工具；Agent 文本不可信，可信结论以「研究」视图报告为准。</p>
+    </section>
+    <aside id="chatInspector"><h2>会话信息</h2><div id="inspectorBody" class="empty">未选择会话。</div></aside>
+  </div>
+</div>
+<div id="toast" role="alert"></div>
+<script>
+const TERMINAL = new Set(['completed','failed','cancelled']);
+const STATUS = {draft:'待启动',validated:'已校验',queued:'排队中',running:'运行中',validating:'验证中',completed:'已完成',failed:'失败',cancel_requested:'取消中',cancelled:'已取消',accepted:'已接受',inconclusive:'证据不足',rejected:'已拒绝',stale:'已过期'};
+const $ = id => document.getElementById(id);
+const state = {tasks:[],task:null,events:[],report:null,trialReport:null,selectedCandidate:null,currentDrilldown:null,run:null,detail:null,eventCursor:'',worldlines:[],worldline:null,worldlineDetail:null,worldlinesLoaded:false,selection:null,view:'research'};
+function esc(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function statusZh(value){return STATUS[value]||String(value??'—');}
+function fmt(value,digits=2){const n=Number(value);if(!Number.isFinite(n))return '—';const a=Math.abs(n);const d=a>=1000?0:a>=100?1:digits;return n.toLocaleString('zh-CN',{minimumFractionDigits:d,maximumFractionDigits:d});}
+function pct(value){const n=Number(value);return Number.isFinite(n)?`${(n*100).toFixed(1)}%`:'—';}
+function badge(text,kind=''){return `<span class="badge ${kind}">${esc(text)}</span>`;}
+function empty(text){return `<div class="empty">${esc(text)}</div>`;}
+async function api(path,body){const options=body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)};const response=await fetch(path,options);const data=await response.json().catch(()=>({detail:'服务返回了无效 JSON'}));if(!response.ok)throw new Error(data.detail||`HTTP ${response.status}`);return data;}
+function toast(error){const el=$('toast');el.textContent=String(error.message||error);el.style.display='block';clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.style.display='none',6000);}
+function taskHash(taskId){return `#/task/${encodeURIComponent(taskId)}`;}
+function taskFromHash(hash){const match=String(hash||'').match(/^#\/task\/([0-9a-f]{64})$/);return match?match[1]:null;}
+function worldlineHash(worldlineId){return `#/worldline/${encodeURIComponent(worldlineId)}`;}
+function worldlineFromHash(hash){const match=String(hash||'').match(/^#\/worldline\/([0-9a-f]{64})$/);return match?match[1]:null;}
+function effectChart(candidates){
+  const rows=(candidates||[]).filter(c=>c.holdout_adjusted&&c.holdout_adjusted.confidence_interval);
+  if(!rows.length)return '<div class="empty">当前没有可绘制的 holdout 修正比较。</div>';
+  const values=rows.flatMap(c=>{const ci=c.holdout_adjusted.confidence_interval;return [c.holdout_adjusted.effect,ci.lower,ci.upper].map(Number).filter(Number.isFinite).map(Math.abs);});
+  const max=Math.max(1,...values);const width=860,left=155,right=610,center=(left+right)/2,scale=(right-left)/2/max;
+  const x=value=>center+Number(value)*scale;const height=45+rows.length*54;
+  let svg=`<svg class="chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="候选 holdout 效应与修正置信区间"><line class="axis" x1="${center}" y1="18" x2="${center}" y2="${height-22}"/><text x="${center}" y="12" text-anchor="middle">0</text>`;
+  rows.forEach((c,i)=>{const y=42+i*54,ci=c.holdout_adjusted.confidence_interval,selected=c.selected?'selected-':'';const effect=c.holdout_adjusted.effect;
+    svg+=`<text x="4" y="${y+4}">#${esc(c.dev_rank)} ${esc(c.contract_id)}</text><line class="${selected}ci" x1="${x(ci.lower)}" y1="${y}" x2="${x(ci.upper)}" y2="${y}"/><circle class="${selected}effect" cx="${x(effect)}" cy="${y}" r="5"/><text x="${width-5}" y="${y+4}" text-anchor="end">${fmt(effect)} · CI [${fmt(ci.lower)}, ${fmt(ci.upper)}]</text>`;});
+  return svg+'</svg>';
+}
+function rangeChart(distribution){
+  if(!distribution)return '<div class="dim small">无有效分布</div>';
+  const min=Number(distribution.minimum),max=Number(distribution.maximum);if(!Number.isFinite(min)||!Number.isFinite(max))return '<div class="dim small">无有效分布</div>';
+  const span=max-min||1;const pos=v=>Math.max(0,Math.min(100,(Number(v)-min)/span*100));
+  return `<div class="range" title="min ${fmt(min)} / max ${fmt(max)}"><span class="band" style="left:${pos(distribution.p5)}%;width:${Math.max(0,pos(distribution.p95)-pos(distribution.p5))}%"></span><i class="mark" style="left:${pos(distribution.p50)}%"></i></div><div class="row small dim"><span>min ${fmt(min)}</span><span>p5 ${fmt(distribution.p5)}</span><span>p50 ${fmt(distribution.p50)}</span><span>p95 ${fmt(distribution.p95)}</span><span>max ${fmt(max)}</span></div>`;
+}
+function distributionBlock(distribution){if(!distribution)return '<div class="dim small">无有效分布</div>';return `<div class="row small"><span>mean <b>${fmt(distribution.mean)}</b></span><span>n <b>${esc(distribution.n)}</b></span></div>${rangeChart(distribution)}`;}
+function taskCard(task){const total=task.total_runs||0,done=task.completed_runs||0,p=total?Math.min(100,done/total*100):0;return `<button class="task-card ${state.task&&state.task.task_id===task.task_id?'active':''}" data-action="select-task" data-task="${esc(task.task_id)}"><div class="q">${esc(task.candidate_set.question)}</div><div class="row small"><span>${badge(statusZh(task.status),task.status==='completed'?'green':task.status==='failed'?'red':'')}</span><span class="dim">attempt ${esc(task.attempt)}</span></div><div class="progress ${task.status==='completed'?'done':''}"><i style="width:${p}%"></i></div><div class="small dim">${done}/${total} 局 · ${esc(task.task_id.slice(0,12))}…</div></button>`;}
+function renderTaskList(){const el=$('taskList');el.className='';el.innerHTML=state.tasks.length?state.tasks.map(taskCard).join(''):empty('此 research root 还没有候选任务。');}
+function renderOverview(){const t=state.task;if(!t){$('overview').innerHTML=empty('请选择一项研究任务。');return;}const total=t.total_runs||0,done=t.completed_runs||0,p=total?Math.min(100,done/total*100):0;const events=state.events.slice(-5).reverse();$('overview').innerHTML=`<h2>${esc(t.candidate_set.question)}</h2><div class="row small">${badge(statusZh(t.status),t.status==='completed'?'green':t.status==='failed'?'red':'')}${badge(t.artifact_status)}${badge(`attempt ${t.attempt}`)}${badge(t.candidate_set_id.slice(0,12)+'…')}</div><div class="progress ${t.status==='completed'?'done':''}"><i style="width:${p}%"></i></div><div class="summary"><div class="metric"><span class="dim small">进度</span><div class="v">${done}/${total}</div></div><div class="metric"><span class="dim small">task_id</span><div class="v mono small">${esc(t.task_id)}</div></div><div class="metric"><span class="dim small">最终报告</span><div class="v small">${esc(t.report_id||'尚未形成')}</div></div></div>${t.error?`<p class="error">${esc(t.error)}</p>`:''}<h3>最近事件</h3>${events.length?events.map(e=>`<div class="row small"><span class="dim">${esc(e.created_at)}</span>${badge(e.kind)}<span class="dim">${esc(e.contract_id||'')}</span></div>`).join(''):empty('尚无任务事件。')}`;}
+function candidateRows(report){return report.candidates.map(c=>{const dev=c.dev?fmt(c.dev.effect):'—',adj=c.holdout_adjusted;const ci=adj?adj.confidence_interval:null;return `<tr class="clickable" data-action="open-trial" data-trial="${esc(c.trial_id||'')}" data-report="${esc(c.report_id||'')}" data-contract="${esc(c.contract_id)}"><td>#${esc(c.dev_rank)} ${esc(c.contract_id)}</td><td>${dev}</td><td>${adj?fmt(adj.effect):'—'}</td><td>${ci?`[${fmt(ci.lower)}, ${fmt(ci.upper)}]`:'—'}</td><td>${c.selected?badge('入选','gold'):badge(statusZh(c.status))}<div class="small dim">${esc(c.selection_reason)}</div></td></tr>`;}).join('');}
+function renderCandidates(){const t=state.task;if(!t){$('candidates').innerHTML='';return;}if(!state.report){const rows=t.candidates.map(c=>{const result=c.result;const action=result&&result.report_id?`data-action="open-trial" data-trial="${esc(result.trial_id)}" data-report="${esc(result.report_id)}" data-contract="${esc(c.contract_id)}"`:'disabled';return `<tr><td>${esc(c.contract_id)}</td><td>${badge(statusZh(c.status))}</td><td>${c.completed_runs}/${c.total_runs}</td><td><button class="link" ${action}>查看已完成报告</button></td></tr>`;}).join('');$('candidates').innerHTML=`<h2>候选进度</h2><p class="dim small">任务尚未形成最终候选报告；当前只展示实际进度，不提前生成排名。</p><div class="table-wrap"><table><thead><tr><th>候选</th><th>状态</th><th>进度</th><th>报告</th></tr></thead><tbody>${rows}</tbody></table></div>`;return;}const r=state.report;$('candidates').innerHTML=`<h2>候选比较</h2><div class="row small">${badge(r.status,r.status==='accepted'?'green':'')}${badge(r.flags.validation,'gold')}<span class="dim">仅限当前候选集，不证明全局最优</span></div><h3>holdout 效应与 Bonferroni 修正 CI</h3><div class="chart-scroll">${effectChart(r.candidates)}</div><div class="table-wrap"><table><thead><tr><th>候选 / dev_rank</th><th>dev effect</th><th>holdout effect</th><th>修正 CI</th><th>状态与原因</th></tr></thead><tbody>${candidateRows(r)}</tbody></table></div>`;}
+function cohortCard(role,cohort,data){return `<div class="metric"><div class="row small"><b>${esc(role)} · ${esc(cohort)}</b><span class="dim">n=${esc(data.n)} · failed=${esc(data.failed)} · truncated=${esc(data.truncated)}</span></div>${distributionBlock(data.distribution)}</div>`;}
+function actorDamageRows(actorDamage){const rows=[];for(const role of ['baseline','variant']){const cohort=actorDamage[role]?.holdout||{};for(const [actorId,item] of Object.entries(cohort)){rows.push(`<tr><td>${esc(role)}</td><td>${esc(item.display_name||actorId)}</td><td>${esc(item.status)}</td><td>${esc(item.n)}</td><td>${item.distribution?fmt(item.distribution.mean):'—'}</td></tr>`);}}return rows.join('');}
+function renderTrial(){const r=state.trialReport;if(!r){$('trial').innerHTML='';return;}const cohorts=[];for(const role of ['baseline','variant'])for(const cohort of ['dev','holdout'])cohorts.push(cohortCard(role,cohort,r.cohorts[role][cohort]));const caveats=r.caveats||[];const failures=r.failure_reasons||[];$('trial').innerHTML=`<h2>单候选报告 · ${esc(state.selectedCandidate)}</h2><div class="row small">${badge(statusZh(r.claim.status),r.claim.status==='accepted'?'green':'')}${badge(r.flags.world)}${badge(r.flags.validation,'gold')}</div><p>${esc(r.conclusion)}</p>${failures.length?`<div class="error">${esc(failures.join('\n'))}</div>`:''}<h3>两臂分布</h3><div class="two-col">${cohorts.join('')}</div><h3>角色伤害（描述性，不参与结论判定）</h3><div class="table-wrap"><table><thead><tr><th>arm</th><th>角色</th><th>状态</th><th>n</th><th>mean</th></tr></thead><tbody>${actorDamageRows(r.actor_damage)}</tbody></table></div><h3>证据下钻</h3><div class="row">${r.evidence.drilldown.map((d,i)=>`<button data-action="open-run" data-index="${i}">${esc(d.arm_id)} · run</button>`).join('')}</div><details><summary>caveats（${caveats.length}）</summary>${caveats.map(c=>`<p class="small dim">${esc(c.level)} · ${esc(c.actor||'')} · ${esc(c.text)}</p>`).join('')}</details><details><summary>完整报告 JSON</summary><pre>${esc(JSON.stringify(r,null,2))}</pre></details>`;}
+function renderEvidence(){const r=state.run;if(!r){$('evidence').innerHTML='';return;}const record=r.evidence;const events=record.events||[],modifiers=record.modifiers||[];const detail=state.detail;$('evidence').innerHTML=`<h2>run 证据</h2><div class="row small">${badge(record.status)}${badge(`seed ${record.seed}`)}${badge(record.cohort)}${badge(record.arm_id)}</div><div class="summary"><div class="metric"><span class="dim small">total_damage</span><div class="v">${fmt(record.observed.total_damage)}</div></div><div class="metric"><span class="dim small">truncated</span><div class="v">${esc(record.observed.truncated)}</div></div><div class="metric"><span class="dim small">run_id</span><div class="v mono small">${esc(record.run_id)}</div></div></div><div class="two-col"><div><h3>事件（${events.length}）</h3><div class="event-list">${events.length?events.map((e,i)=>{const p=e.payload||{};return `<button class="event-row ${state.detail&&state.detail.kind==='event'&&state.detail.evidence.event_id===e.event_id?'active':''}" data-action="open-event" data-index="${i}"><span class="ordinal">#${esc(e.ordinal)}</span><span>${esc(p.kind||p.action_type||'event')}</span><span class="dim">${esc(p.source||p.actor||'')}${p.target?` → ${p.target}`:''}${p.amount!==undefined?` · ${fmt(p.amount)}`:''}</span></button>`;}).join(''):empty('此 run 没有事件。')}</div></div><div><h3>final modifiers（${modifiers.length}）</h3><div class="event-list">${modifiers.length?modifiers.map((m,i)=>{const d=m.details||{};return `<button class="event-row" data-action="open-modifier" data-index="${i}"><span>${esc(d.name||m.modifier_id)}</span><span class="dim">×${esc(d.stacks??'—')} · ${esc(d.duration??'—')}</span></button>`;}).join(''):empty('此 run 没有 final modifier。')}</div></div></div><div id="detailPanel">${detail?detailHtml(detail):''}</div><details><summary>完整 RunRecord</summary><pre>${esc(JSON.stringify(record,null,2))}</pre></details>`;}
+function detailHtml(result){const e=result.evidence||{};const d=e.details||e.payload||e;const rows=[];for(const [key,value] of Object.entries(d)){if(typeof value!=='object'||value===null)rows.push(`<div><span class="dim">${esc(key)}</span> ${esc(value)}</div>`);}return `<h3>${esc(result.kind)} · ${esc(result.status)}</h3>${result.navigation?`<p class="dim small">原面板已跳转至第 ${esc(result.navigation.turn)} 回合（回合级定位）</p>`:''}${result.reason?`<p class="dim">${esc(result.reason)}</p>`:''}<div class="stat-effects">${rows.join('')}</div><details open><summary>结构化详情</summary><pre>${esc(JSON.stringify(e,null,2))}</pre></details>${result.selection?`<details><summary>Selection</summary><pre>${esc(JSON.stringify(result.selection,null,2))}</pre></details>`:''}`;}
+async function selectTask(taskId){try{const nonce=(state.selectNonce||0)+1;state.selectNonce=nonce;const sameTask=state.task&&state.task.task_id===taskId;const task=await api(`/api/tasks/${encodeURIComponent(taskId)}`);if(nonce!==state.selectNonce)return;const eventData=await api(`/api/tasks/${encodeURIComponent(taskId)}/events`);const report=task.report_id?await api(`/api/tasks/${encodeURIComponent(taskId)}/report`):null;if(nonce!==state.selectNonce)return;state.task=task;state.events=eventData.events;state.eventCursor=state.events.length?state.events[state.events.length-1].event_id:'';state.report=report;if(!sameTask){state.trialReport=null;state.selectedCandidate=null;state.currentDrilldown=null;state.run=null;state.detail=null;}renderAll();}catch(error){toast(error);}}
+function renderAll(){renderTaskList();renderOverview();renderCandidates();renderTrial();renderEvidence();}
+async function loadTasks(selectFirst=true){try{state.tasks=await api('/api/tasks');renderTaskList();const fromHash=taskFromHash(location.hash);if(fromHash)await selectTask(fromHash);else if(selectFirst&&state.tasks.length)await selectTask(state.tasks[0].task_id);}catch(error){toast(error);}}
+async function openTrial(button){const trialId=button.dataset.trial,reportId=button.dataset.report;if(!trialId||!reportId){toast(new Error('该候选尚无完整报告'));return;}try{state.selectedCandidate=button.dataset.contract;state.trialReport=await api(`/api/trials/${encodeURIComponent(trialId)}/reports/${encodeURIComponent(reportId)}`);state.run=null;state.detail=null;renderTrial();renderEvidence();$('trial').scrollIntoView({behavior:'smooth',block:'start'});}catch(error){toast(error);}}
+async function openRun(index){try{const drilldown=state.trialReport.evidence.drilldown[index];state.currentDrilldown=drilldown;state.run=await api('/api/evidence',drilldown.run);state.detail=null;renderEvidence();$('evidence').scrollIntoView({behavior:'smooth',block:'start'});}catch(error){toast(error);}}
+async function openEvidence(kind,index){try{const link=state.currentDrilldown[kind][index];state.detail=await api('/api/evidence',link);renderEvidence();}catch(error){toast(error);}}
+// ---- 世界线只读视图（直接消费已校验的 worldline-v1 artifact）----
+function worldlinePlayerPath(worldlineId){return `/player/${encodeURIComponent(worldlineId)}/`;}
+function renderWorldlineReplay(){
+  const w=state.worldline,el=$('worldlineReplay');if(!w){state.worldlinePlayerId=null;el.innerHTML='';return;}
+  if(!w.final_save){state.worldlinePlayerId=null;el.innerHTML=`<h2>战斗模拟器面板</h2>${empty('failed 世界线没有 completed 终态证据，不创建战斗面板。')}`;return;}
+  if(state.worldlinePlayerId===w.worldline_id)return;
+  state.worldlinePlayerId=w.worldline_id;
+  const path=worldlinePlayerPath(w.worldline_id);
+  el.innerHTML=`<h2>战斗模拟器面板</h2><p class="dim small">直接复用 sim.web：单步、连续、0.5x/1x/2x/4x、回退、跳转、断点、终结技和检视均为原实现。操作只影响内存会话，不修改原 artifact。</p><p><a href="${path}" target="_blank" rel="noopener">在新标签打开原战斗面板 →</a></p><iframe id="worldlinePlayer" class="worldline-player" src="${path}" title="HSR_Nous 战斗模拟器"></iframe>`;
+}
+function worldlineCard(w){const o=w.observed||{},random=`${o.random_consumed??'—'}/${w.random_total??'—'}`;return `<button class="task-card worldline-card ${state.worldline&&state.worldline.worldline_id===w.worldline_id?'active':''}" data-action="select-worldline" data-worldline="${esc(w.worldline_id)}"><div class="q mono">${esc(w.worldline_id.slice(0,16))}…</div><div class="row small">${badge(statusZh(w.status),w.status==='completed'?'green':w.status==='failed'?'red':'')}${w.derived_from?badge('派生'):badge('独立')}</div><div class="small dim">${esc(o.outcome||'—')} · ${fmt(o.total_damage)} 伤害 · ${esc(o.turn_count??'—')} 回合</div><div class="small dim">随机 ${esc(random)} · 事件 ${esc(w.event_count)}${w.failure_reasons&&w.failure_reasons.length?` · ${esc(w.failure_reasons[0])}`:''}</div></button>`;}
+function renderWorldlineList(){const el=$('worldlineList');el.className='';el.innerHTML=state.worldlines.length?state.worldlines.map(worldlineCard).join(''):empty('此 research root 还没有世界线。');}
+function renderWorldline(){
+  const w=state.worldline;
+  if(!w){$('worldlineOverview').innerHTML=empty('请选择一条世界线。');$('worldlineReplay').innerHTML='';$('worldlineEvidence').innerHTML='';return;}
+  const o=w.observed||{},spec=w.spec||{},derived=spec.derived_from,caveats=w.caveats||[],failures=w.failure_reasons||[];
+  const randomTotal=(spec.random_values||[]).length,random=`${o.random_consumed??'—'}/${randomTotal}`;
+  $('worldlineOverview').innerHTML=`<h2>worldline-v1 · ${esc(w.worldline_id.slice(0,16))}…</h2><div class="row small">${badge(statusZh(w.status),w.status==='completed'?'green':w.status==='failed'?'red':'')}${badge(w.schema_version)}${badge('simulated / pending_real_validation','gold')}</div><div class="summary"><div class="metric"><span class="dim small">结果</span><div class="v">${esc(o.outcome||'—')}</div></div><div class="metric"><span class="dim small">total_damage</span><div class="v">${fmt(o.total_damage)}</div></div><div class="metric"><span class="dim small">回合 / action_value</span><div class="v">${esc(o.turn_count??'—')} / ${fmt(o.action_value)}</div></div><div class="metric"><span class="dim small">随机消费 / 声明</span><div class="v">${esc(random)}</div></div><div class="metric"><span class="dim small">worldline_id</span><div class="v mono small">${esc(w.worldline_id)}</div></div></div>${failures.length?`<h3>失败原因</h3><div class="error">${esc(failures.join('\n'))}</div>`:''}<h3>lineage</h3>${derived?`<button class="link" data-action="select-worldline" data-worldline="${esc(derived.worldline_id)}">父代 ${esc(derived.worldline_id)}</button><div class="small dim">${esc(derived.note||'无派生说明')}</div><div class="small mono dim">parent content_hash: ${esc(derived.content_hash)}</div>`:'<p class="dim small">独立世界线，无父代。</p>'}<details><summary>caveats（${caveats.length}）</summary>${caveats.length?caveats.map(c=>`<p class="small dim">${esc(c)}</p>`).join(''):empty('无 caveats。')}</details><details><summary>build / stage / 随机序列</summary><pre>${esc(JSON.stringify({build:spec.build,stage:spec.stage,random_values:spec.random_values},null,2))}</pre></details><details><summary>版本指纹</summary><pre>${esc(JSON.stringify(w.fingerprint,null,2))}</pre></details>`;
+  renderWorldlineReplay();
+  const events=w.events||[],modifiers=w.modifiers||[],detail=state.worldlineDetail;
+  $('worldlineEvidence').innerHTML=`<h2>世界线证据</h2><div class="two-col"><div><h3>事件（${events.length}）</h3><div class="event-list">${events.length?events.map((e,i)=>{const p=e.payload||{};return `<button class="event-row ${detail&&detail.kind==='event'&&detail.evidence.event_id===e.event_id?'active':''}" data-action="worldline-event" data-index="${i}"><span class="ordinal">#${esc(e.ordinal)}</span><span>${esc(p.kind||p.event_type||p.action_type||'event')}</span><span class="dim">${esc(p.source||p.source_id||p.actor||p.actor_id||'')}${(p.target||p.target_id)?` → ${esc(p.target||p.target_id)}`:''}${p.amount!==undefined?` · ${fmt(p.amount)}`:''}</span></button>`;}).join(''):empty('此世界线没有事件。')}</div></div><div><h3>final modifiers（${modifiers.length}）</h3><div class="event-list">${modifiers.length?modifiers.map((m,i)=>{const d=m.details||{};return `<button class="event-row" data-action="worldline-modifier" data-index="${i}"><span>${esc(d.name||m.modifier_id)}</span><span class="dim">×${esc(d.stacks??'—')} · ${esc(d.duration??'—')}</span></button>`;}).join(''):empty('此世界线没有 final modifier。')}</div></div></div><div id="worldlineDetailPanel">${detail?detailHtml(detail):''}</div>${w.final_save?`<details><summary>final_save</summary><pre>${esc(JSON.stringify(w.final_save,null,2))}</pre></details>`:'<p class="dim small">失败世界线没有 final_save。</p>'}<details><summary>完整 WorldlineArtifact</summary><pre>${esc(JSON.stringify(w,null,2))}</pre></details>`;
+}
+async function selectWorldline(worldlineId){try{const nonce=(state.worldlineSelectNonce||0)+1;state.worldlineSelectNonce=nonce;const same=state.worldline&&state.worldline.worldline_id===worldlineId;const artifact=await api(`/api/worldlines/${encodeURIComponent(worldlineId)}`);if(nonce!==state.worldlineSelectNonce)return;state.worldline=artifact;if(!same){state.worldlineDetail=null;state.selection=null;}renderWorldlineList();renderWorldline();}catch(error){toast(error);}}
+async function loadWorldlines(selectFirst=true){try{state.worldlines=await api('/api/worldlines');renderWorldlineList();const fromHash=worldlineFromHash(location.hash);if(fromHash)await selectWorldline(fromHash);else if(selectFirst&&state.worldlines.length)await selectWorldline(state.worldlines[0].worldline_id);else if(!state.worldlines.length)renderWorldline();}catch(error){toast(error);}}
+function worldlineEventTurn(events,index){let turn=0;for(let i=0;i<=index;i++){if(events[i]?.payload?.event_type==='turn_start')turn+=1;}return turn;}
+async function gotoWorldlineTurn(worldlineId,turn){
+  let lastError;
+  for(let attempt=0;attempt<3;attempt++){
+    try{return await api(`${worldlinePlayerPath(worldlineId)}api/goto`,{n:turn});}
+    catch(error){
+      lastError=error;
+      if(!/引擎忙/.test(error.message)||attempt===2)throw error;
+      await new Promise(resolve=>setTimeout(resolve,1000));
+    }
+  }
+  throw lastError;
+}
+function worldlineSelection(w,record,kind,index){return {type:kind==='events'?'event':'modifier',id:kind==='events'?record.event_id:record.modifier_id,project:'research',investigation:w.worldline_id,parent_context:{worldline_id:w.worldline_id,ordinal:index}};}
+async function openWorldlineEvidence(kind,index){
+  const records=kind==='events'?state.worldline.events:state.worldline.modifiers,event=records[index],selection=worldlineSelection(state.worldline,event,kind,index);
+  state.selection=selection;
+  state.worldlineDetail={kind:kind==='events'?'event':'modifier',status:'resolved',evidence:event,selection};renderWorldline();
+  if(kind!=='events'||!state.worldline.final_save)return;
+  const nonce=(state.worldlineEvidenceNonce||0)+1;
+  state.worldlineEvidenceNonce=nonce;
+  try{
+    const focused=await api('/api/focus',{selection});
+    const turn=focused.target.turn;
+    await gotoWorldlineTurn(state.worldline.worldline_id,turn);
+    if(nonce!==state.worldlineEvidenceNonce)return;
+    state.worldlineDetail.navigation={turn};state.worldlineDetail.selection=focused.selection;renderWorldline();
+  }catch(error){toast(new Error(`事件已打开，但原面板跳转失败：${error.message}`));}
+}
+async function focusEvidence(selection){
+  try{
+    const focused=await api('/api/focus',{selection});
+    state.selection=focused.selection;
+    await selectWorldline(focused.target.worldline_id);
+    if(focused.target.type==='worldline'){$('worldlineOverview').scrollIntoView({behavior:'smooth',block:'start'});return;}
+    await openWorldlineEvidence(focused.target.type==='event'?'events':'modifiers',focused.target.ordinal);
+    $('worldlineEvidence').scrollIntoView({behavior:'smooth',block:'start'});
+  }catch(error){toast(error);}
+}
+// ---- 聊天视图（ACP 桥；唯一前端是研究台，独立桥仅开发调试）----
+const LS_SID='hsr_nous.workbench.chat_last_session';
+const chat={available:false,sessions:[],sid:null,attached:false,es:null,inFlight:false,msgNode:null,thoughtDet:null,thoughtCount:0,toolNodes:{},remembered:null,typeBuf:'',toolGroup:null,toolCount:0,maxSeq:0,seen:new Set(),liveStream:false};
+// 打字机揭示（降级路径）：ACP 按整条 committed 消息提交（update 源自 committed
+// 事件，无 token 级流）；原生逐 token 流经 research_stream 插件的
+// agent_message_delta 直写（见 liveStream 分支）——无插件时把整段文本按 tick
+// 逐段揭示，观感接近流式；prompt 结束或思考/工具事件到来时 flushTypeBuf 保时序。
+function flushTypeBuf(){
+  if(!chat.typeBuf)return;
+  if(!chat.msgNode){chat.msgNode=chatEl('chat-msg');chatStream().appendChild(chat.msgNode);}
+  chat.msgNode.textContent+=chat.typeBuf;chat.typeBuf='';
+}
+setInterval(()=>{
+  if(!chat.typeBuf)return;
+  if(!chat.msgNode){chat.msgNode=chatEl('chat-msg');chatStream().appendChild(chat.msgNode);}
+  const n=Math.min(chat.typeBuf.length,8);
+  chat.msgNode.textContent+=chat.typeBuf.slice(0,n);chat.typeBuf=chat.typeBuf.slice(n);
+  const s=chatStream();s.scrollTop=s.scrollHeight;
+},30).unref?.(); // Node 逻辑闸需要进程可退出；浏览器定时器无 unref，?. 兜底
+function fmtTime(ts){const d=new Date(Number(ts)*1000);return Number.isNaN(d.getTime())?'—':d.toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});}
+function chatEl(cls,text){const d=document.createElement('div');d.className=cls;if(text!==undefined)d.textContent=text;return d;}
+function chatStream(){return $('chatStream');}
+async function loadChatSessions(){
+  const resp=await fetch('/chat/sessions');
+  if(resp.status===404||resp.status===503){chat.available=false;chat.sessions=[];renderSessionList();return;}
+  if(!resp.ok)throw new Error(`HTTP ${resp.status}`);
+  chat.available=true;chat.sessions=(await resp.json()).sessions;renderSessionList();
+}
+function renderSessionList(){
+  const el=$('sessionList');
+  if(!chat.available){
+    el.className='empty';
+    el.innerHTML='聊天桥未启用：启动 hsr-research-web 需要 HSR_NOUS_LLM_AGENTS_* 模型配置与 DSH（见 agents/README）。当前仅「研究」视图可用。';
+    $('newSession').disabled=true;$('chatText').disabled=true;$('chatSend').disabled=true;$('chatCancel').disabled=true;
+    $('chatStatus').textContent='聊天不可用';
+    return;
+  }
+  $('newSession').disabled=false;
+  if(!chat.sessions.length){el.className='empty';el.innerHTML='还没有会话，点「新建会话」开始。';return;}
+  el.className='';
+  el.innerHTML=chat.sessions.map(s=>{
+    const usage=s.usage?` · 上下文 ${esc(s.usage.used)}/${esc(s.usage.size)}`:'';
+    const time=s.created_at?fmtTime(s.created_at):'';
+    const title=s.title||('会话 '+esc(String(s.session_id).slice(0,8))+'…');
+    const mark=chat.remembered===s.session_id&&!chat.sid?' <span class="dim small">（上次）</span>':'';
+    return `<button class="session-item ${chat.sid===s.session_id?'active':''}" data-action="select-session" data-sid="${esc(s.session_id)}"><div class="q">${title}${mark}</div><div class="row small">${s.status==='active'?badge('活跃','green'):badge('可恢复')}<span class="dim">${time}${usage}</span></div></button>`;
+  }).join('');
+}
+function renderInspector(){
+  const el=$('inspectorBody');
+  const s=chat.sessions.find(x=>x.session_id===chat.sid);
+  if(!chat.sid||!s){el.className='empty';el.innerHTML=chat.available?'未选择会话。':'聊天桥未启用。';return;}
+  el.className='';
+  if(s.status==='resumable'){
+    el.innerHTML=`<h3>落盘会话</h3><div class="metric"><span class="dim small">session_id</span><div class="v mono small">${esc(s.session_id)}</div></div><p class="small dim">桥侧无此会话的历史记录；恢复后从空开始，历史不回放。</p><button class="primary" data-action="resume-session" data-sid="${esc(s.session_id)}">恢复会话</button>`;
+    return;
+  }
+  const usage=s.usage?`<div class="metric"><span class="dim small">最近上下文用量</span><div class="v">${esc(s.usage.used)}/${esc(s.usage.size)}</div></div>`:'<p class="small dim">尚无用量数据（等待 usage_update）。</p>';
+  el.innerHTML=`<h3>当前会话</h3><div class="metric"><span class="dim small">session_id</span><div class="v mono small">${esc(s.session_id)}</div></div>${usage}<p class="small dim">创建：${s.created_at?fmtTime(s.created_at):'—'}</p><p class="small dim">信任边界：Agent 只能调用 mcp__nous__* 白名单工具；Agent 文本不可信，结论以「研究」视图报告为准。</p><button class="link" data-action="switch-view" data-view="research">打开研究视图 →</button>`;
+}
+function setChatInFlight(on){
+  chat.inFlight=on;
+  $('chatSend').disabled=on||!chat.attached;$('chatCancel').disabled=!on;$('chatText').disabled=on||!chat.attached;
+  if(!on)$('chatStatus').textContent=chat.attached?('就绪（会话 '+String(chat.sid).slice(0,8)+'…）'):'';
+}
+function closeChatStream(){if(chat.es){chat.es.close();chat.es=null;}chat.attached=false;}
+function attachChatStream(sid,note){
+  closeChatStream();
+  chat.sid=sid;chat.toolNodes={};chat.msgNode=null;chat.thoughtDet=null;chat.thoughtCount=0;chat.typeBuf='';chat.toolGroup=null;chat.toolCount=0;chat.maxSeq=0;chat.seen=new Set();chat.liveStream=false;
+  chat.remembered=sid;localStorage.setItem(LS_SID,sid);
+  const stream=chatStream();stream.innerHTML='';
+  if(note)stream.appendChild(chatEl('chat-sys',note));
+  openEventStream();
+  chat.attached=true;
+  setChatInFlight(false);
+  renderSessionList();renderInspector();
+}
+function openEventStream(){
+  // 自管重连（EventSource 原生重试沿用构造时 URL，after= 会过期）：断开后按
+  // 当前 maxSeq 重开，重放只补新事件；会话切换后旧定时器因 sid/es 守卫不复活
+  if(chat.es){chat.es.close();chat.es=null;}
+  chat.es=new EventSource('/chat/sessions/'+encodeURIComponent(chat.sid)+'/events'+(chat.maxSeq?('?after='+chat.maxSeq):''));
+  chat.es.addEventListener('update',e=>renderChatUpdate(JSON.parse(e.data)));
+  chat.es.onopen=()=>{$('chatStatus').textContent=chat.inFlight?'Agent 运行中…':('就绪（会话 '+String(chat.sid).slice(0,8)+'…）');};
+  chat.es.onerror=()=>{
+    $('chatStatus').textContent='事件流断开（自动重连中）…';
+    const curSid=chat.sid;
+    if(chat.es){chat.es.close();chat.es=null;}
+    setTimeout(()=>{if(chat.attached&&chat.sid===curSid&&!chat.es)openEventStream();},3000);
+  };
+}
+async function showResumableSession(s){
+  closeChatStream();
+  chat.typeBuf='';chat.msgNode=null;chat.toolGroup=null;chat.toolCount=0;
+  chat.sid=s.session_id;chat.remembered=s.session_id;localStorage.setItem(LS_SID,s.session_id);
+  const stream=chatStream();stream.innerHTML='';
+  setChatInFlight(false);
+  renderSessionList();renderInspector();
+  // 先尝试从桥侧落盘日志重建历史（DSH 完整落盘，ACP resume 本身不重放）；
+  // 拉取失败/无日志则保留「历史不回放」降级提示
+  $('chatStatus').textContent='正在加载历史…';
+  let loaded=false;
+  try{
+    const resp=await fetch('/chat/sessions/'+encodeURIComponent(s.session_id)+'/history');
+    if(resp.ok){
+      const data=await resp.json();
+      (data.turns||[]).forEach(t=>{
+        stream.appendChild(chatEl('chat-msg'+(t.role==='user'?' user':''),(t.role==='user'?'你：':'Agent：')+t.text));
+      });
+      stream.appendChild(chatEl('chat-sys','——以上为历史，以下为继续——'));
+      loaded=true;
+    }
+  }catch(_){loaded=false;}
+  if(!loaded)stream.appendChild(chatEl('chat-sys','该会话已落盘（桥侧无历史记录）：恢复后从空开始，历史不回放。'));
+  $('chatStatus').textContent='待恢复';
+  stream.scrollTop=stream.scrollHeight;
+}
+function selectChatSession(sid){
+  const s=chat.sessions.find(x=>x.session_id===sid);
+  if(!s)return;
+  if(s.status==='resumable')showResumableSession(s);
+  else attachChatStream(sid,'');
+}
+function renderChatUpdate(update){
+  const stream=chatStream();
+  const kind=update.sessionUpdate;
+  // 桥侧 seq 去重：重连重放（after= 滞后或竞态）不重复渲染
+  if(update.seq!==undefined){
+    if(chat.seen.has(update.seq))return;
+    chat.seen.add(update.seq);
+    if(update.seq>chat.maxSeq)chat.maxSeq=update.seq;
+  }
+  if(kind==='agent_message_delta'){
+    // 原生 token 流（research_stream 插件）：直写跳过打字机；首个 delta 先冲掉
+    // 打字机缓冲，本轮 closed 前 chunk/delta 都直写
+    if(!chat.liveStream){flushTypeBuf();chat.liveStream=true;}
+    chat.toolGroup=null;
+    if(!chat.msgNode){chat.msgNode=chatEl('chat-msg');stream.appendChild(chat.msgNode);}
+    chat.msgNode.textContent+=update.text||'';
+  }else if(kind==='agent_message_chunk'){
+    chat.toolGroup=null; // Agent 开始说话 = 本轮工具调用结束，下一个突发开新组
+    if(!chat.msgNode){chat.msgNode=chatEl('chat-msg');stream.appendChild(chat.msgNode);}
+    if(chat.liveStream)chat.msgNode.textContent+=update.content&&update.content.text||'';
+    else chat.typeBuf+=update.content&&update.content.text||'';
+  }else if(kind==='agent_thought_chunk'){
+    flushTypeBuf();
+    // 思考过程默认折叠成一张卡片（摘要行显示段数），展开才见全文——每轮一张
+    if(!chat.thoughtDet){
+      chat.thoughtDet=document.createElement('details');chat.thoughtDet.className='chat-thought';
+      const sum=document.createElement('summary');chat.thoughtDet.appendChild(sum);chat.thoughtDet._sum=sum;
+      chat.thoughtCount=0;stream.appendChild(chat.thoughtDet);
+    }
+    chat.thoughtCount+=1;
+    chat.thoughtDet._sum.textContent='💭 思考过程（'+chat.thoughtCount+' 段，点击展开）';
+    chat.thoughtDet.appendChild(chatEl('chat-thought-text',update.content&&update.content.text||''));
+  }else if(kind==='tool_call'){
+    flushTypeBuf();
+    // 按轮聚合：同一突发里的多次工具调用收进一张默认折叠的组卡
+    // （"默认只显示用户与 Agent 对话"——明细点开才见）；Agent 开口即开新组
+    if(!chat.toolGroup){
+      chat.toolGroup=document.createElement('details');chat.toolGroup.className='chat-tool';
+      const gsum=document.createElement('summary');chat.toolGroup.appendChild(gsum);
+      chat.toolGroup._sum=gsum;chat.toolCount=0;
+      stream.appendChild(chat.toolGroup);
+    }
+    chat.toolCount+=1;
+    chat.toolGroup._sum.textContent='🔧 工具调用 ×'+chat.toolCount+'（点击展开）';
+    const det=document.createElement('details');det.className='chat-tool';
+    const title=(update.title||update.toolCallId||'tool')+(update.name?' · '+update.name:'');
+    const sum=document.createElement('summary');
+    sum.textContent='⚙ '+title+' ['+(update.status||'?')+']';
+    det.appendChild(sum);
+    det.appendChild(chatEl('meta',JSON.stringify(update.rawInput!==undefined?update.rawInput:{})));
+    chat.toolGroup.appendChild(det);
+    chat.toolNodes[update.toolCallId]={det,sum,base:title};
+  }else if(kind==='tool_call_update'){
+    const t=chat.toolNodes[update.toolCallId];
+    if(t){
+      t.sum.textContent='⚙ '+t.base+' ['+(update.status||'?')+']';
+      if(update.content)t.det.appendChild(chatEl('meta',JSON.stringify(update.content).slice(0,2000)));
+    }
+  }else if(kind==='usage_update'){
+    $('chatStatus').textContent='Agent 运行中… 上下文 '+update.used+'/'+update.size;
+    const s=chat.sessions.find(x=>x.session_id===chat.sid);
+    if(s){s.usage={used:update.used,size:update.size};renderInspector();}
+  }else if(kind==='prompt_closed'){
+    flushTypeBuf();
+    chat.liveStream=false; // 下一轮回归 chunk+打字机降级直到首个 delta 到来
+    if(update.error)stream.appendChild(chatEl('chat-error','错误：'+update.error));
+    else stream.appendChild(chatEl('chat-sys','— 本轮结束（'+(update.stopReason||'?')+'）—'));
+    setChatInFlight(false);
+    loadChatSessions().catch(()=>{});
+  }
+  stream.scrollTop=stream.scrollHeight;
+}
+async function newChatSession(){
+  const resp=await fetch('/chat/sessions',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+  if(!resp.ok){toast(new Error('建会话失败：HTTP '+resp.status));return;}
+  const sid=(await resp.json()).session_id;
+  await loadChatSessions();
+  attachChatStream(sid,'');
+}
+async function resumeChatSession(sid){
+  const resp=await fetch('/chat/sessions/'+encodeURIComponent(sid)+'/resume',{method:'POST'});
+  if(!resp.ok){
+    let detail='HTTP '+resp.status;
+    try{detail=(await resp.json()).detail||detail;}catch(_){}
+    toast(new Error('恢复失败：'+detail));
+    return;
+  }
+  await loadChatSessions();
+  attachChatStream(sid,'已恢复会话；ACP resume 不回放历史，新消息自此刻开始。');
+}
+async function sendChat(){
+  const text=$('chatText').value.trim();
+  if(!text||!chat.sid||!chat.attached)return;
+  $('chatText').value='';
+  const stream=chatStream();
+  stream.appendChild(chatEl('chat-msg user','你：'+text));
+  chat.msgNode=null;chat.thoughtDet=null;chat.thoughtCount=0;chat.liveStream=false;
+  setChatInFlight(true);
+  const resp=await fetch('/chat/sessions/'+encodeURIComponent(chat.sid)+'/prompt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+  if(resp.status===202)return;
+  let detail='HTTP '+resp.status;
+  try{detail=(await resp.json()).detail||detail;}catch(_){}
+  stream.appendChild(chatEl('chat-error','下发失败：'+detail));
+  setChatInFlight(false);
+}
+async function cancelChat(){
+  if(!chat.sid)return;
+  await fetch('/chat/sessions/'+encodeURIComponent(chat.sid)+'/cancel',{method:'POST'});
+}
+function switchView(view){
+  state.view=view;
+  document.querySelectorAll('#viewTabs .tab').forEach(b=>b.classList.toggle('active',b.dataset.view===view));
+  $('researchView').classList.toggle('active',view==='research');
+  $('worldlineView').classList.toggle('active',view==='worldlines');
+  $('chatView').classList.toggle('active',view==='chat');
+  $('taskInput').style.display=view==='worldlines'?'none':'';
+  $('openTask').style.display=view==='worldlines'?'none':'';
+  if(view==='research'&&!state.researchLoaded){state.researchLoaded=true;loadTasks();}
+  if(view==='worldlines'&&!state.worldlinesLoaded){state.worldlinesLoaded=true;loadWorldlines().catch(toast);}
+  if(view==='chat')loadChatSessions().catch(()=>{});
+}
+function bind(){
+  $('openTask').addEventListener('click',()=>{const id=$('taskInput').value.trim();if(taskFromHash(taskHash(id))===id){location.hash=taskHash(id);selectTask(id);}else toast(new Error('task_id 应为 64 位小写十六进制字符串'));});
+  $('taskInput').addEventListener('keydown',event=>{if(event.key==='Enter')$('openTask').click();});
+  document.querySelectorAll('#viewTabs .tab').forEach(b=>b.addEventListener('click',()=>switchView(b.dataset.view)));
+  $('newSession').addEventListener('click',()=>newChatSession().catch(toast));
+  $('chatSend').addEventListener('click',()=>sendChat().catch(toast));
+  $('chatText').addEventListener('keydown',event=>{if(event.key==='Enter')sendChat().catch(toast);});
+  $('chatCancel').addEventListener('click',()=>cancelChat().catch(toast));
+  document.addEventListener('click',event=>{
+    const button=event.target.closest('[data-action]');
+    if(!button||button.disabled)return;
+    const action=button.dataset.action;
+    if(action==='select-task'){location.hash=taskHash(button.dataset.task);selectTask(button.dataset.task);}
+    else if(action==='open-trial')openTrial(button);
+    else if(action==='open-run')openRun(Number(button.dataset.index));
+    else if(action==='open-event')openEvidence('events',Number(button.dataset.index));
+    else if(action==='open-modifier')openEvidence('modifiers',Number(button.dataset.index));
+    else if(action==='select-worldline'){location.hash=worldlineHash(button.dataset.worldline);selectWorldline(button.dataset.worldline);}
+    else if(action==='worldline-event')openWorldlineEvidence('events',Number(button.dataset.index));
+    else if(action==='worldline-modifier')openWorldlineEvidence('modifiers',Number(button.dataset.index));
+    else if(action==='select-session')selectChatSession(button.dataset.sid);
+    else if(action==='resume-session')resumeChatSession(button.dataset.sid).catch(toast);
+    else if(action==='switch-view')switchView(button.dataset.view);
+  });
+  window.addEventListener('hashchange',()=>{
+    const id=taskFromHash(location.hash),worldlineId=worldlineFromHash(location.hash);
+    if(id){switchView('research');if(!state.task||state.task.task_id!==id)selectTask(id);}
+    if(worldlineId){switchView('worldlines');if(!state.worldline||state.worldline.worldline_id!==worldlineId)selectWorldline(worldlineId);}
+  });
+  setInterval(()=>{if(state.view==='research'&&state.task&&!TERMINAL.has(state.task.status))selectTask(state.task.task_id);},2000);
+}
+async function init(){
+  bind();
+  chat.remembered=localStorage.getItem(LS_SID)||null;
+  try{await loadChatSessions();}catch(error){chat.available=false;renderSessionList();}
+  const fromHash=taskFromHash(location.hash),fromWorldline=worldlineFromHash(location.hash);
+  if(fromHash){switchView('research');await selectTask(fromHash);}
+  else if(fromWorldline){switchView('worldlines');await selectWorldline(fromWorldline);}
+  else if(chat.available&&chat.remembered&&chat.sessions.some(s=>s.session_id===chat.remembered)){switchView('chat');selectChatSession(chat.remembered);}
+  else switchView('research');
+}
+if(typeof document!=='undefined'&&typeof window!=='undefined'){document.addEventListener('DOMContentLoaded',init);}
+</script>
+</body>
+</html>
