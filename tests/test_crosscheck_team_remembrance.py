@@ -334,7 +334,7 @@ def _tm_hyacine(**cond):
 # L2 遐蝶 1407（对方 1400/Castorice.ts 全实现）——单人链 + 死龙链
 # ===========================================================================
 
-class TestCastoriceDuipai:
+class TestCastoriceCrosscheck:
     """遐蝶 E0：普攻/战技/骸爪双段/焰息连发 ramp/晦翼聚合——双锚+乘区读回."""
 
     def _ult(self, eng):
@@ -493,7 +493,7 @@ class TestCastoriceDuipai:
 # L2 长夜月 1413（对方 1400/Evernight.ts 全实现）——稳态链（战技×2 后）
 # ===========================================================================
 
-class TestEvernightDuipai:
+class TestEvernightCrosscheck:
     """长夜月 E0：普攻/忆灵技（忆质变档）/终结技/如露——双锚+dynamic 光环互对."""
 
     def _prep(self, eng):
@@ -642,7 +642,7 @@ class TestEvernightDuipai:
 # L2 风堇 1409（对方 1400/Hyacine.ts 全实现）——治疗 tally→伤害 转换链（新大陆）
 # ===========================================================================
 
-class TestHyacineDuipai:
+class TestHyacineCrosscheck:
     """风堇 E0：普攻/双段治疗（阴云莞尔两态）/雨过天晴/tally 直写基数/速度档."""
 
     def _skill(self, eng, cid="1409"):
@@ -802,7 +802,7 @@ class TestHyacineDuipai:
 # L2 昔涟 1415（对方 1400/Cyrene.ts 全实现）——涟漪链 + 德谬歌
 # ===========================================================================
 
-class TestCyreneDuipai:
+class TestCyreneCrosscheck:
     """昔涟 E0：普攻/涟漪强化普攻/Minuet（德谬歌基数 R-CY1 已收口三方相等）/三相速度档."""
 
     def _ripples(self, eng):

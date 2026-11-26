@@ -434,7 +434,7 @@ def _enter_transmigration(eng):
 # SKILL 段=无罅飞光/寒川映月同倍率 1.5 共段）——HP 倍率+朔望转魄族
 # ===========================================================================
 
-class TestJingliuDuipai:
+class TestJingliuCrosscheck:
     """镜流 E0（B1）：普攻/战技/进转魄链/寒川映月/月色叠层三方全等（B-TR③ 收官）/
     终结技死境 R-JL1/霜魄 R-JL2."""
 
@@ -604,7 +604,7 @@ def _opt_imbibitor(action: str, *, cond: dict | None = None,
 # BREAK 三行动注册）——强化普攻四档+擎手喝破叠层族
 # ===========================================================================
 
-class TestImbibitorDuipai:
+class TestImbibitorCrosscheck:
     """饮月 E0：普攻四档（0/1/2/3 耗）/擎手喝破叠层逐档三方全等（B-TR③ 收官）/
     终结技叠层窗/盘龙再临 R-IL1."""
 
@@ -755,7 +755,7 @@ def _opt_blade(action: str, *, cond: dict | None = None):
 # ——耗血循环+HELLSCAPE 换技能族
 # ===========================================================================
 
-class TestBladeDuipai:
+class TestBladeCrosscheck:
     """刃 E0（B1）：普攻/HELLSCAPE 强化普攻三方全等（B-TR③ 收官）/天赋追击
     R-BL1 双档（空池 1.04/HELLSCAPE 2.1/2.08）/终结技 tally 链段数差在案总和
     三方全等."""
@@ -918,7 +918,7 @@ def _opt_fuxuan(action: str, *, cond: dict | None = None):
 # ——穷观阵慧明辐射族（HP 倍率生存位）
 # ===========================================================================
 
-class TestFuXuanDuipai:
+class TestFuXuanCrosscheck:
     """符玄 E0：普攻裸发三方全等（B-TR③ 收官）/慧明链（self HP×1.06+CR 0.357）
     普攻/终结技三方全等."""
 
@@ -1020,7 +1020,7 @@ def _opt_luocha(action: str, *, cond: dict | None = None):
 # BREAK 注册）——结界治疗族（E0 无伤相关条件件）
 # ===========================================================================
 
-class TestLuochaDuipai:
+class TestLuochaCrosscheck:
     """罗刹 E0：普攻/终结技三方全等（B-TR③ 收官——E0 无 buff 裸链）."""
 
     def test_basic(self, optimizer_driver):
@@ -1088,7 +1088,7 @@ def _opt_huohuo(action: str, *, cond: dict | None = None, base_energy: float = 1
 # BREAK 注册）——禳命增益+治疗族（R-HH1 终结技排自身差）
 # ===========================================================================
 
-class TestHuohuoDuipai:
+class TestHuohuoCrosscheck:
     """藿藿 E0（B1）：普攻三方全等（B-TR③ 收官）/终结技增益链 R-HH1 排自身差
     +160 能量门控双 ally 对账."""
 
@@ -1184,7 +1184,7 @@ def _opt_argenti(action: str, *, cond: dict | None = None):
 # 强化终结技折叠段）——升格叠层+双阈值终结技族
 # ===========================================================================
 
-class TestArgentiDuipai:
+class TestArgentiCrosscheck:
     """银枝 E0：普攻/战技/终结技（90）/升格 CR 叠层三方全等/强化终结技（180）
     R-AG2 折叠爬坡差/勇气低血场 R-AG1."""
 
@@ -1337,7 +1337,7 @@ def _opt_ruanmei(action: str, *, cond: dict | None = None, be: float = RM_BE):
 # BE 转换）——弦外音/结界光环族（B-RM① 大行迹三件收编后全链对拍）
 # ===========================================================================
 
-class TestRuanMeiDuipai:
+class TestRuanMeiCrosscheck:
     """阮•梅 E0：普攻裸发三方全等/弦外音增伤链/结界抗穿链三方全等（B-TR③+B-RM①
     双收官）/BE 转换注入档+R-RM1 门控差."""
 
@@ -1483,7 +1483,7 @@ def _opt_sparkle(action: str, *, cond: dict | None = None):
 # CD 转换）——梦游鱼暴伤+谜诡易伤族
 # ===========================================================================
 
-class TestSparkleDuipai:
+class TestSparkleCrosscheck:
     """花火 E0（B1）：普攻（夜幕 ATK×1.45 常驻）三方全等（B-TR③ 收官）/梦游鱼
     自指链（CD 转换+抗穿）/谜诡幻景易伤链三方全等."""
 
@@ -1610,7 +1610,7 @@ def _enter_combustion(eng):
 # 附段）——完全燃烧超击破族（B-FF①/B-FF② 双收官后全链对拍）
 # ===========================================================================
 
-class TestFireflyDuipai:
+class TestFireflyCrosscheck:
     """流萤 E0（B1 现役）：普攻裸发/完全燃烧强化普攻/强化战技（B-FF② BE 转换
     段）三方全等/击破场超击破 R-FF1."""
 

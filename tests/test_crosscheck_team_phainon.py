@@ -350,7 +350,7 @@ def _tm_terra(**cond):
 # L2 白厄 1408（对方 1400/Phainon.ts 全实现）——非变身链
 # ===========================================================================
 
-class TestPhainonDuipai:
+class TestPhainonCrosscheck:
     """白厄 E0 非变身：普攻/战技全等（双锚+乘区读回）+ 变身本体双无伤."""
 
     def test_panel_echo(self, optimizer_driver):
@@ -585,7 +585,7 @@ class TestPhainonTransformed:
 # L2 刻律德菈 1412 本人（basic/ult 双段全等——见者 CR 100% 修复后首验）
 # ===========================================================================
 
-class TestCerydraDuipai:
+class TestCerydraCrosscheck:
     """刻律德菈 E0：普攻/终结技三方全等（atkToCd dynamic 未挂驱动，732.7<2000
     门控两侧同灭；spdBuff +20 速度无伤害消费）."""
 
@@ -628,7 +628,7 @@ class TestCerydraDuipai:
 # L2 星期日 1313 本人（basic 单段全等——增益件均为队友链/非伤害）
 # ===========================================================================
 
-class TestSundayDuipai:
+class TestSundayCrosscheck:
     def test_basic(self, optimizer_driver):
         eng, log = _make_logged(compile_encounter(
             {"build": {"team": [{"character_template": "1313", "level": 80}],
@@ -648,7 +648,7 @@ class TestSundayDuipai:
 # L2 丹恒•腾荒 1414 本人（basic/ult 全等 + 护盾段双锚 + 龙灵强化追击）
 # ===========================================================================
 
-class TestTerraDuipai:
+class TestTerraCrosscheck:
     """腾荒 E0：普攻/终结技全等；终结技盾段与对方 ShieldDamageFunction 双锚；
     强化龙灵追击主段全等 + 同袍附加两笔 T-TE1 单锚."""
 

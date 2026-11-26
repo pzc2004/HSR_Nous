@@ -100,7 +100,7 @@ def _optimizer_crit_scenario(atk_kw: Dict[str, float], element: str,
     }
 
 
-class TestCritDuipai:
+class TestCritCrosscheck:
     @pytest.mark.parametrize(
         "name,atk_kw,element,enemy_res,weak,hand",
         CRIT_SCENARIOS,
@@ -241,7 +241,7 @@ SUPER_BREAK_SCENARIOS = [
 ]
 
 
-class TestSuperBreakDuipai:
+class TestSuperBreakCrosscheck:
     @pytest.mark.parametrize(
         "name,kw,weak,enemy_res,hand",
         SUPER_BREAK_SCENARIOS,
@@ -375,7 +375,7 @@ ELATION_SCENARIOS = [
 ]
 
 
-class TestElationDuipai:
+class TestElationCrosscheck:
     @pytest.mark.parametrize(
         "name,kw,hand",
         ELATION_SCENARIOS,
@@ -510,7 +510,7 @@ DOT_SCENARIOS = [
 ]
 
 
-class TestDotDuipai:
+class TestDotCrosscheck:
     @pytest.mark.parametrize(
         "name,kw,hand",
         DOT_SCENARIOS,
@@ -574,7 +574,7 @@ def _engine_damage(action: Action, n_enemies: int = 2) -> float:
     return eng.run().total_damage
 
 
-class TestMultiTargetDuipai:
+class TestMultiTargetCrosscheck:
     def test_blast_total_vs_optimizer_sum(self, optimizer_driver):
         """blast 主 1.0/副 0.5：我方引擎总伤 == optimizer（主单发 + 副单发）."""
         blast = Action(action_id="b", name="扩散", action_type="basic", target_type="blast",

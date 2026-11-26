@@ -404,7 +404,7 @@ def _opt_ashveil(action: str, *, cond: dict | None = None):
 # L2 姬子•启行 1510（对方 1500/HimekoNova.ts 全实现）——助战族+Starblazer 序列
 # ===========================================================================
 
-class TestHimekoNovaDuipai:
+class TestHimekoNovaCrosscheck:
     """姬子•启行 E0：面板回显/普攻/旗语战技/助战 3.28 聚合/裁决增伤链/终结技
     Starblazer 双模式（Beam/Pulse 分段+全 Beam 先手序列+Pulse 混插序列 R-HN1
     段数读法差+致命/锁血立即 Final）——双锚+乘区读回."""
@@ -658,7 +658,7 @@ class TestHimekoNovaDuipai:
 # L2 千冶•刃 1507（对方 1500/MortenaxBlade.ts 全实现）——HP 倍率结界族
 # ===========================================================================
 
-class TestMortenaxBladeDuipai:
+class TestMortenaxBladeCrosscheck:
     """千冶•刃 E0（≠刃 1205，SP 消歧在案）：常态普攻/结界主链（Zone+Fury+Balefire）
     /R-MB1 虚无分叉结构差/强化普攻/150714/满充 150709 R-MB2 倍率读法差."""
 
@@ -770,7 +770,7 @@ class TestMortenaxBladeDuipai:
 # L2 远坂凛 1508（对方 1500/RinTohsaka.ts 全实现）——Gem 经济+强化战技互斥
 # ===========================================================================
 
-class TestRinTohsakaDuipai:
+class TestRinTohsakaCrosscheck:
     """远坂凛 E0：秉持优雅 ATK_P 换算链首接/普攻/普通战技/强化战技 R-RT3 弹射
     结构差/终结技 R-RT2 易伤时序差/天赋暴伤 R-RT1 结构差."""
 
@@ -897,7 +897,7 @@ class TestRinTohsakaDuipai:
 # L2 吉尔伽美什 1509（对方 1500/Gilgamesh.ts 全实现）——兴致经济+连携追击
 # ===========================================================================
 
-class TestGilgameshDuipai:
+class TestGilgameshCrosscheck:
     """吉尔伽美什 E0：王霸竞逐 ATK_P 链/普攻/王来承认战技/终结技 11 段聚合/
     兴致→暴伤层链/R-GG2 王来背负归属差/R-GG3 溢出段结构差/连携追击 R-GG1."""
 
@@ -1044,7 +1044,7 @@ class TestGilgameshDuipai:
 # L2 不死途 1504（对方 1500/Ashveil.ts 全实现）——饲饵标记+婪酣追加族
 # ===========================================================================
 
-class TestAshveilDuipai:
+class TestAshveilCrosscheck:
     """不死途 E0：饲饵减防光环/普攻/战技饲饵追加段/终结技主链（强化 FUA+婪酣追加）
     /R-AV1 头狼② FUA 暴伤结构差/R-AV2 婪酣模型差."""
 

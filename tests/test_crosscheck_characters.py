@@ -199,7 +199,7 @@ def _opt_herta(action: str, *, eidolon: int = 0, conditionals: dict | None = Non
     }
 
 
-class TestHertaDuipai:
+class TestHertaCrosscheck:
     """黑塔 E0 全技能逐段对拍：basic/skill/ult/FUA/秘技 五路全等（双锚：对方 + 手算）."""
 
     def test_panel_echo(self, optimizer_driver):
@@ -429,7 +429,7 @@ def _opt_acheron(action: str, *, eidolon: int = 0, conditionals: dict | None = N
     }
 
 
-class TestAcheronDuipai:
+class TestAcheronCrosscheck:
     """黄泉 E0：普攻/战技全等 + 大招 13 段全链全等（双锚 + 乘区读回）."""
 
     def test_panel_echo(self, optimizer_driver):
@@ -575,7 +575,7 @@ class TestAcheronKnownDivergence:
             "值件重烘 0.3×3=0.9")
 
 
-class TestAcheronE4Duipai:
+class TestAcheronE4Crosscheck:
     """黄泉 E4 星魂链对拍（E1 钉 false 隔离待收项）：E3 大招随档 lv12 +
     E4 大招易伤 8% 双方各自通道全等."""
 
