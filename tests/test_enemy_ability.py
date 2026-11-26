@@ -13601,6 +13601,45 @@ def test_real_damage_stance_translates_reduce_toughness():
     assert any("ForceStanceDamage=false" in i["reason"] for i in rejected["unsupported"])
 
 
+@_need_ability
+def test_cross_variant_skillparam_hash_resolves_from_local_skill_slot():
+    """B48/#545：共享 Ability 引用的 SkillParam 哈希只在别的变体 Config 声明时，
+    全语料反查表给唯一槽位映射，值取加载 Config 自身技能 param_list；槽越界仍拒。"""
+    from hsr_nous.pipeline.enemies.skillparam_hash_table import SKILLPARAM_HASH_TABLE
+    hashed = next(h for h, slot in SKILLPARAM_HASH_TABLE.items() if slot == ("Skill01", 0))
+    task = {
+        "$type": "RPG.GameCore.DamageStance",
+        "StanceDamageType": {"DamageType": "Imaginary"},
+        "DefenderTargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+        "StanceValue": {"IsDynamic": True, "PostfixExpr": {
+            "OpCodes": "AQAR", "FixedValues": [], "DynamicHashes": [hashed]}},
+        "ForceStanceDamage": True, "IgnoreMuteBreak": True,
+    }
+    # 加载 Config 无该哈希 Floats 声明，但有 Skill01 Index0 槽 → 反查铺底解析
+    sources = {
+        "character_config": {"SkillList": [{
+            "Name": "Skill01", "SkillType": "Skill",
+            "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "A"}]},
+        "abilities": {"A": {"Name": "A", "OnStart": [task]}},
+        "modifiers": {},
+    }
+    out = AbilityCompiler(
+        "fake", [{"skill_id": "s1", "trigger_key": "Skill01", "param_list": [50]}],
+        sources).compile_skill("Skill01")
+    reduces = [e for h in out["hooks"] for e in h.get("effects", [])
+               if e.get("effect_type") == "reduce_toughness"]
+    assert reduces and reduces[0]["amount"] == 50
+
+    # 槽越界（本 Config Skill01 无 Index0）→ 仍显式拒绝，不拉外变体技能
+    out2 = AbilityCompiler(
+        "fake", [{"skill_id": "s1", "trigger_key": "Skill01", "param_list": []}],
+        sources).compile_skill("Skill01")
+    assert any("未知 DynamicHash" in i["reason"] for i in out2["unsupported"])
+
+    # 真实 3003014（Skill05 含 Index4）跨变体哈希解析后全通过
+    assert _real_compiler("3003014").compile_enemy()["ok"]
+
+
 def test_reduce_stance_ratio_uses_max_toughness_and_targets_last_summons():
     from tests._builders import engine_vs_dummy, make_dummy
 

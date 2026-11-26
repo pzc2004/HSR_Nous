@@ -897,6 +897,17 @@ class AbilityCompiler:
             params = skill.get("param_list") or []
             if isinstance(slot, int) and 0 <= slot < len(params):
                 out[int(raw_hash)] = params[slot]
+        # 跨变体 SkillParam 铺底（B48/#545）：共享 Ability 引用的哈希可能只在别的变体
+        # Config 声明。全语料反查表给唯一 (TriggerKey, Index) 槽位映射（0 冲突），值仍取
+        # 加载 Config 自身技能 param_list——技能缺失/槽越界不解析，不拉外变体技能行。
+        # 自身 Floats 声明优先（已在 out 的哈希跳过）。
+        from hsr_nous.pipeline.enemies.skillparam_hash_table import SKILLPARAM_HASH_TABLE
+        for hashed, (trigger, slot) in SKILLPARAM_HASH_TABLE.items():
+            if hashed in out:
+                continue
+            params = (self.skills.get(trigger) or {}).get("param_list") or []
+            if isinstance(slot, int) and 0 <= slot < len(params):
+                out[hashed] = params[slot]
         return out
 
     def _issue(self, ctx: _Context, path: str, node_type: str, reason: str) -> None:
