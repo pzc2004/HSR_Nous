@@ -6517,7 +6517,8 @@ class AbilityCompiler:
                                 continue
                             task_type = str(task.get("$type"))
                             if task_type not in {"RPG.GameCore.StackProperty",
-                                                 "RPG.GameCore.StackStatusResistance"}:
+                                                 "RPG.GameCore.StackStatusResistance",
+                                                 "RPG.GameCore.StackWeakResistance"}:
                                 if task_type in TASK_HANDLERS:
                                     runtime_stack_tasks.append((task, branch_condition))
                                 else:
@@ -6527,6 +6528,23 @@ class AbilityCompiler:
                             if task_type == "RPG.GameCore.StackProperty" \
                                     and task.get("Property") == "RallyHP":
                                 runtime_stack_tasks.append((task, branch_condition))
+                                continue
+                            if task_type == "RPG.GameCore.StackWeakResistance":
+                                if self._alias(task) not in {"", "Caster", "ModifierOwnerEntity"}:
+                                    self._issue(ctx, path, task_type, "条件分支仅支持父件自身的弱点抵抗")
+                                    continue
+                                entries = task.get("StackResistanceList") or []
+                                if not entries:
+                                    self._issue(ctx, path, task_type, "StackWeakResistance 缺抗性列表")
+                                for index, entry in enumerate(entries):
+                                    element = _element(entry.get("DamageType"))
+                                    value = self._value(entry.get("Value"), ctx,
+                                                        f"{path}/StackResistanceList/{index}/Value", symbols)
+                                    if element is None or value is None:
+                                        self._issue(ctx, path, task_type,
+                                                    f"抗性元素/数值未注册：{entry.get('DamageType')}")
+                                        continue
+                                    branch_values[branch_name][f"res_{element}"] = value
                                 continue
                             if task_type == "RPG.GameCore.StackStatusResistance":
                                 if (self._alias(task) not in {"", "Caster", "ModifierOwnerEntity"}

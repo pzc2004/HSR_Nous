@@ -16055,6 +16055,14 @@ def test_character_config_inherits_parent_dynamic_values():
 
 
 @_need_ability
+def test_conditional_stack_weak_resistance_compiles():
+    for enemy_id in ("3022011", "3025013"):
+        real = _real_compiler(enemy_id).compile_enemy()
+        assert not any(issue["node_type"] == "RPG.GameCore.StackWeakResistance"
+                       for issue in real["unsupported"]), (enemy_id, real["unsupported"])
+
+
+@_need_ability
 def test_show_target_hp_bar_is_presentation_only_but_fields_still_reject():
     task = {"$type": "RPG.GameCore.ShowTargetHPBar",
             "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "ModifierOwnerEntity"}}
