@@ -186,6 +186,7 @@ IGNORED_TASK_TYPES = frozenset({
     "RPG.GameCore.SaveModelWhenDead",
     "RPG.GameCore.SetIronTombInfinityHPUI",
     "RPG.GameCore.SetMonsterHPTotalSeg",  # 血条分段显示；不写 HP 或阶段阈值
+    "RPG.GameCore.NotifyDeadPartSelected",  # 客户端死亡部位选中通知；不写战斗状态
     "RPG.GameCore.SetMonsterPhasePointPrefab",
     "RPG.GameCore.TriggerAnimStateOnModifierCustomEvent",
     # —— UI、音频、镜头、模型与特效节点（原始字段核证） ——

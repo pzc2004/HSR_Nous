@@ -16055,6 +16055,14 @@ def test_character_config_inherits_parent_dynamic_values():
 
 
 @_need_ability
+def test_dead_part_selected_notification_is_presentation():
+    real = _real_compiler("3012030").compile_enemy()
+    assert not any(issue["node_type"] == "Modifier"
+                   and "W3_DeathPart_Sgin_Modifier" in issue["reason"]
+                   for issue in real["unsupported"]), real["unsupported"]
+
+
+@_need_ability
 def test_conditional_stack_weak_resistance_compiles():
     for enemy_id in ("3022011", "3025013"):
         real = _real_compiler(enemy_id).compile_enemy()
