@@ -325,6 +325,9 @@ TASK_HANDLERS = {
     "RPG.GameCore.SetDynamicValueByBattleTargetParam": "_compile_battle_target_param",
     "RPG.GameCore.SetDynamicValueByProperty": "_compile_property_value",
     "BIEFKHPDHPI": "_compile_obfuscated_property_value",
+    "JONKKMAJCAH": "_compile_obfuscated_empty_placeholder",
+    "PHKBMFDEOOK": "_compile_obfuscated_empty_placeholder",
+    "DBLFKIDDKDO": "_compile_obfuscated_empty_placeholder",
     "RPG.GameCore.SetMonsterPhase": "_compile_monster_phase",
     "RPG.GameCore.SetMonsterViewPhase": "_compile_monster_view_phase",
     "RPG.GameCore.ApplyMonsterPhaseOverrideConfig": "_compile_empty_phase_override",
@@ -1749,6 +1752,13 @@ class AbilityCompiler:
         if set(task) != {"$type"}:
             self._issue(ctx, path, str(task.get("$type")),
                         "ApplyOperation 非空操作对象/效果未注册")
+
+    def _compile_obfuscated_empty_placeholder(self, task: Dict[str, Any], ctx: _Context,
+                                              path: str, stack: Tuple[str, ...]) -> None:
+        # 全语料键集严格只有 $type 的混淆空占位（#546，与 #535 ApplyOperation 同形）。
+        if set(task) != {"$type"}:
+            self._issue(ctx, path, str(task.get("$type")),
+                        "混淆空占位仅接受无字段形态；出现参数仍需注册语义")
 
     def _compile_show_target_hp_bar(self, task: Dict[str, Any], ctx: _Context,
                                     path: str, stack: Tuple[str, ...]) -> None:

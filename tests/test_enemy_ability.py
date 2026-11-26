@@ -16208,6 +16208,19 @@ def test_empty_apply_operation_is_placeholder_but_fields_still_reject():
 
 
 @_need_ability
+def test_obfuscated_empty_placeholders_zero_effect_but_fields_reject():
+    for name in ("JONKKMAJCAH", "PHKBMFDEOOK", "DBLFKIDDKDO"):
+        out = _task_skill({"$type": name})
+        assert out["ok"] and not out["unsupported"]
+        assert not any(hook.get("effects") for hook in out["hooks"])
+        rejected = _task_skill({"$type": name, "Unknown": 1})
+        assert not rejected["ok"]
+        assert any(issue["node_type"] == name for issue in rejected["unsupported"])
+    real = _real_compiler("3025010").compile_enemy()
+    assert not any(issue["node_type"] == "JONKKMAJCAH" for issue in real["unsupported"])
+
+
+@_need_ability
 def test_modifier_custom_event_connects_trigger_and_target_listener():
     from hsr_nous.sim.compile.compiled import CompiledHook
     from tests._builders import engine_vs_dummy, make_dummy
