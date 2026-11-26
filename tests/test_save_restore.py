@@ -594,7 +594,6 @@ def test_level_blackboard_roundtrip():
     assert "WeatherPhase01Flag" in restored._level_state_obj.modifiers
 
 
-
 def test_modifier_dynamic_values_roundtrip():
     compiled = compile_encounter(_pela_build(), _pela_stage(),
                                  template_roots=TEST_TEMPLATE_ROOTS)
@@ -613,3 +612,16 @@ def test_modifier_dynamic_values_roundtrip():
     assert modifier.dynamic_values == {"MDF_Value": 2.5}
     assert restored._hooks._hook_amount(
         "modifier_dynamic_of($self, 'InstancePayload', 'MDF_Value')", restored_st, {}) == 2.5
+
+
+def test_restore_missing_runtime_field_clear_error():
+    """存档缺运行期字段须抛清晰 ValueError（非 KeyError 谜语）。
+
+    SAVE_VERSION 恒 1 不随字段演进升级，旧档过版本闸后硬取 d[fname] 原会 KeyError；
+    守卫把缺字段转成明确诊断，指路迁移通道。
+    """
+    from hsr_nous.sim.save_load import _restore_engine_fields, _ENGINE_RUNTIME_FIELDS
+    fields = list(_ENGINE_RUNTIME_FIELDS)
+    d = {k: None for k in fields[1:]}   # 缺第一个字段
+    with pytest.raises(ValueError, match="存档缺运行期字段"):
+        _restore_engine_fields(object(), d)
