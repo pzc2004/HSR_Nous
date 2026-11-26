@@ -35,7 +35,7 @@ ENGINE_EFFECT_TYPES = frozenset({
     "gain_resource",     # 自定义资源 +=（发 on_resource_gain）
     "set_resource",      # 自定义资源直接设值
     "set_dynamic_value", # 任意 actor_id 动态值直接设值（dynamic_key + amount，可存档）
-    "loop_effects",     # 动态次数执行嵌套 effects（已收编写入、modifier 与直伤循环的编译产物）
+    "loop_effects",     # 循环执行嵌套 effects（count 定次数 / condition 逐轮重求值二选一）
     "set_modifier_dynamic_value", # 具名 modifier 实例动态值 Set/Add（缺失实例跳过）
     "set_dynamic_target", # 动态目标绑定（dynamic_key + target，可选 owner/unique_name scope）
     "modify_shield",     # ModifyShield/ModifyShieldMax 的 Set 盾值/上限改写

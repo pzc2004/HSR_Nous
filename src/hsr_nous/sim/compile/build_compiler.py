@@ -272,7 +272,7 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "set_resource": frozenset({"resource_id", "amount"}),
     "clear_attached_weakness": frozenset({"weak_list"}),
     "set_dynamic_value": frozenset({"dynamic_key", "amount", "amount_target"}),
-    "loop_effects": frozenset({"count", "effects"}),
+    "loop_effects": frozenset({"count", "condition", "effects"}),
     "set_modifier_dynamic_value": frozenset({"modifier_id", "dynamic_key", "amount", "mode"}),
     "create_battle_event": frozenset({"event_id", "team"}),
     "emit_phase_custom_event": frozenset({"phase_event", "include_limbo", "param_entity"}),
@@ -2034,6 +2034,11 @@ class BuildCompiler:
                 nested = eff.get("effects")
                 if not isinstance(nested, list):
                     raise ValueError(f"{e_desc} loop_effects 的 effects 必须是数组")
+                has_count = "count" in eff
+                has_condition = "condition" in eff
+                if has_count == has_condition:
+                    raise ValueError(
+                        f"{e_desc} loop_effects 的 count 与 condition 必须二选一")
                 self._validate_effects(
                     nested, f"{e_desc} loop_effects", extra_self_fields=extra_self_fields,
                     param_ctx=param_ctx, resources_ctx=resources_ctx,

@@ -276,6 +276,7 @@ TASK_HANDLERS = {
     "RPG.GameCore.LoseHP": "_compile_lose_hp_absolute",
     "RPG.GameCore.ModifyLoseHPData": "_compile_modify_lose_hp",
     "RPG.GameCore.LoopExecuteTaskList": "_compile_loop",
+    "RPG.GameCore.ConditionLoopExecuteTaskList": "_compile_condition_loop",
     "RPG.GameCore.WaitFor": "_compile_wait_for",
     "RPG.GameCore.ApplyOperation": "_compile_apply_operation",
     "RPG.GameCore.ShowTargetHPBar": "_compile_show_target_hp_bar",
@@ -1593,6 +1594,22 @@ class AbilityCompiler:
             return
         if count is None:
             return
+        nested = self._compile_runtime_loop_body(
+            task.get("TaskList") or [], ctx, path, stack, "动态次数循环",
+            str(task.get("$type")))
+        if nested is None:
+            return
+        self._add_effect(ctx, {
+            "effect_type": "loop_effects", "count": count, "effects": nested,
+        })
+
+    def _compile_runtime_loop_body(self, tasks: List[Dict[str, Any]], ctx: _Context,
+                                   path: str, stack: Tuple[str, ...],
+                                   reason_label: str, node_type: str) -> Optional[List[Dict[str, Any]]]:
+        """动态/条件循环共用体编译：allowed 闸 + in_dynamic_loop 子语境 + 分支条件合一.
+
+        返回嵌套 effects（可能为空列表）；含未收编机制任务记拒因并返回 None。
+        """
         allowed = {"RPG.GameCore.SetDynamicValue", "RPG.GameCore.DefineDynamicValue",
                    "RPG.GameCore.AddModifier", "RPG.GameCore.RemoveModifier",
                    "RPG.GameCore.LoseHPByRatio", "RPG.GameCore.ForceKill",
@@ -1614,18 +1631,17 @@ class AbilityCompiler:
             return all(allowed_loop_task(child_row)
                        for field in fields for child_row in row.get(field) or [])
 
-        tasks = task.get("TaskList") or []
         if not tasks or any(not allowed_loop_task(row) for row in tasks):
-            self._issue(ctx, path, str(task.get("$type")), "动态次数循环含未收编机制任务")
-            return
+            self._issue(ctx, path, node_type, f"{reason_label}含未收编机制任务")
+            return None
         child = replace(ctx, damages=[], effects=[], pre_effects=[], hit_effects=[],
                         lifecycle_hooks=[], summons=[], retarget_damage=False,
                         retarget_damage_records=[], condition="true", live_condition="true",
                         in_dynamic_loop=True)
         self._compile_tasks(tasks, child, f"{path}/RuntimeLoop/TaskList", stack)
         if child.damages or child.summons or child.hit_effects:
-            self._issue(ctx, path, str(task.get("$type")), "动态次数循环含未收编机制任务")
-            return
+            self._issue(ctx, path, node_type, f"{reason_label}含未收编机制任务")
+            return None
         ctx.lifecycle_hooks.extend(child.lifecycle_hooks)
         nested = []
         for effect in [*child.pre_effects, *child.effects]:
@@ -1635,8 +1651,26 @@ class AbilityCompiler:
                 clean["condition"] = self._and_condition(
                     branch_condition, str(clean.get("condition") or "true"))
             nested.append(clean)
+        return nested
+
+    def _compile_condition_loop(self, task: Dict[str, Any], ctx: _Context,
+                                path: str, stack: Tuple[str, ...]) -> None:
+        """ConditionLoopExecuteTaskList（Predicate+TaskList，无次数）→ 条件驱动 loop_effects.
+
+        谓词编为条件表达式逐轮重求值；体复用动态循环同一 allowed 闸（#544）。
+        WithInterval 间隔变体不在本通道，仍走未注册拒因。
+        """
+        condition = self._predicate_expr(task.get("Predicate") or {}, ctx,
+                                         f"{path}/Predicate", allow_written=True)
+        if condition is None:
+            return
+        nested = self._compile_runtime_loop_body(
+            task.get("TaskList") or [], ctx, path, stack, "条件循环",
+            str(task.get("$type")))
+        if nested is None:
+            return
         self._add_effect(ctx, {
-            "effect_type": "loop_effects", "count": count, "effects": nested,
+            "effect_type": "loop_effects", "condition": condition, "effects": nested,
         })
 
     def _compile_obfuscated_control_mapping(self, task: Dict[str, Any], ctx: _Context,

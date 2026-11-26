@@ -1551,6 +1551,19 @@ class HookRuntime:
                         runtime.setdefault("dynamic_targets", {})[str(eff["dynamic_key"])] = \
                             t2.actor.actor_id
         elif t == "loop_effects":
+            if "condition" in eff:
+                # 条件驱动循环（ConditionLoopExecuteTaskList，#544）：逐轮重求值，
+                # 读得到帧内写后读；谓词不收敛撞安全上限显式报错，不静默截断。
+                condition = eff["condition"]
+                index = 0
+                while bool(self._hook_amount(condition, st, payload)):
+                    if index >= 10000:
+                        raise ValueError("条件循环超过安全上限 10000 轮（谓词未收敛）")
+                    nested_payload = {**payload, "loop_index": index}
+                    for nested in eff.get("effects") or []:
+                        self._run_hook_effect(st, nested, nested_payload)
+                    index += 1
+                return
             count = self._hook_amount(eff["count"], st, payload)
             if not math.isfinite(count) or count < 0 or int(count) != count:
                 raise ValueError(f"动态循环次数必须是非负有限整数，得到 {count!r}")

@@ -4247,6 +4247,74 @@ def test_dynamic_loop_executes_nested_dynamic_writes():
     assert not any("循环次数" in item["reason"] for item in real["unsupported"])
 
 
+def test_condition_loop_repeats_while_predicate_true():
+    from hsr_nous.sim.compile.build_compiler import BuildCompiler
+    from tests._builders import engine_vs_dummy, make_dummy
+
+    out = _task_skill({
+        "$type": "RPG.GameCore.ConditionLoopExecuteTaskList",
+        "Predicate": {
+            "$type": "RPG.GameCore.ByCompareDynamicValue",
+            "DynamicKey": {"Value": "Total"},
+            "CompareType": "Less",
+            "CompareValue": {"IsDynamic": False, "FixedValue": {"Value": 3}},
+        },
+        "TaskList": [{
+            "$type": "RPG.GameCore.SetDynamicValueByAddValue", "Key": {"Value": "Total"},
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+            "AddValue": {"IsDynamic": False, "FixedValue": {"Value": 1}},
+        }],
+    })
+    assert out["ok"] and not out["unsupported"]
+    effect = out["hooks"][0]["effects"][0]
+    assert effect["effect_type"] == "loop_effects"
+    assert "condition" in effect and "count" not in effect
+    BuildCompiler()._validate_effects([effect], "模板 X")
+
+    eng = engine_vs_dummy(enemies=[make_dummy("source")])
+    source = eng.state.actors["source"]
+    eng._enemy_policy_state["source"] = {"dynamic_values": {"Total": 0}}
+    eng._hooks._run_hook_effect(source, effect, {})
+    assert eng._enemy_policy_state["source"]["dynamic_values"]["Total"] == 3
+
+    # 谓词初假 → 零轮零写入
+    eng._enemy_policy_state["source"]["dynamic_values"]["Total"] = 5
+    eng._hooks._run_hook_effect(source, effect, {})
+    assert eng._enemy_policy_state["source"]["dynamic_values"]["Total"] == 5
+
+    # 体不改谓词状态 → 撞安全上限显式报错，不静默死循环
+    stuck = _task_skill({
+        "$type": "RPG.GameCore.ConditionLoopExecuteTaskList",
+        "Predicate": {
+            "$type": "RPG.GameCore.ByCompareDynamicValue",
+            "DynamicKey": {"Value": "Flag"}, "CompareType": "Less",
+            "CompareValue": {"IsDynamic": False, "FixedValue": {"Value": 1}},
+        },
+        "TaskList": [{
+            "$type": "RPG.GameCore.SetDynamicValueByAddValue", "Key": {"Value": "Other"},
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+            "AddValue": {"IsDynamic": False, "FixedValue": {"Value": 1}},
+        }],
+    })
+    assert stuck["ok"] and not stuck["unsupported"]
+    eng._enemy_policy_state["source"]["dynamic_values"] = {"Flag": 0, "Other": 0}
+    with pytest.raises(ValueError, match="安全上限"):
+        eng._hooks._run_hook_effect(source, stuck["hooks"][0]["effects"][0], {})
+
+    # count 与 condition 互斥键闸
+    with pytest.raises(ValueError, match="二选一"):
+        BuildCompiler()._validate_effects(
+            [{"effect_type": "loop_effects", "effects": []}], "模板 X")
+    with pytest.raises(ValueError, match="二选一"):
+        BuildCompiler()._validate_effects(
+            [{"effect_type": "loop_effects", "count": 1, "condition": "1 == 1",
+              "effects": []}], "模板 X")
+
+    real = _real_compiler("8013145").compile_enemy()
+    assert not any(item["node_type"] == "RPG.GameCore.ConditionLoopExecuteTaskList"
+                   for item in real["unsupported"])
+
+
 def test_dynamic_loop_executes_direct_damage_each_iteration():
     from hsr_nous.sim.compile.build_compiler import BuildCompiler
     from hsr_nous.sim_schema.config_ai import dynamic_value_hash
