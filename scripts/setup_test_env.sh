@@ -82,6 +82,20 @@ else
   .venv/bin/playwright install chromium
 fi
 
+# 功能冒烟（不只信安装器 exit 0）：rolldown 真打包 + chromium 真启动。
+# npm optional-deps bug 会漏原生 binding 仍 exit 0；浏览器下载成功≠能启动。
+echo "功能冒烟：rolldown driver 构建 / chromium 启动"
+.venv/bin/python -c "from hsr_nous.ops.annotator.oracle_report import ensure_driver; assert ensure_driver() is not None, 'rolldown driver 构建失败（原生 binding 缺失？重装 optimizer node_modules）'"
+.venv/bin/python -c "
+from playwright.sync_api import sync_playwright
+try:
+    with sync_playwright() as p:
+        p.chromium.launch().close()
+    print('chromium 启动 ok')
+except Exception as exc:
+    print(f'警告：chromium 无法启动（浏览器测试将跳过）：{exc}；需要时跑 playwright install --with-deps chromium')
+"
+
 printf 'Python: '; .venv/bin/python --version
 printf 'Node: '; node --version
 printf 'Playwright: '; .venv/bin/python -c \
