@@ -594,6 +594,18 @@ def test_stat_dot_and_compare_bp():
     assert not interpreter._predicate(
         {"$type": "RPG.GameCore.ByContainBehaviorFlag", "Flag": "STAT_DOT"},
         engine.state.actors["enemy"])
+    assert interpreter._predicate(
+        {"$type": "RPG.GameCore.ByContainBehaviorFlag", "Flag": "STAT_DOT_Electric"},
+        engine.state.actors["hero"])
+    assert not interpreter._predicate(
+        {"$type": "RPG.GameCore.ByContainBehaviorFlag", "Flag": "STAT_DOT_Electric"},
+        engine.state.actors["enemy"])
+    engine.state.actors["enemy"].modifiers["STEALTH"] = Modifier(
+        modifier_id="STEALTH", name="Stealth", modifier_type="buff",
+        behavior_flags=["Stealth"])
+    assert interpreter._predicate(
+        {"$type": "RPG.GameCore.ByContainBehaviorFlag", "Flag": "Stealth"},
+        engine.state.actors["enemy"])
     engine.state.skill_points = 2
     assert interpreter._predicate({
         "$type": "RPG.GameCore.ByCompareBP", "CompareType": "LessEqual",

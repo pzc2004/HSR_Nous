@@ -104,8 +104,8 @@ variable_bindings:
 | `$last.xxx` | hook effects 链中上一个 effect 的主数值结果（`deal_damage`/`heal` 记 `actual_amount` 合计；`remove_modifier` 记 `removed_count` 实际摘除总数，含 0） | 仅 hook effect 数值槽与 effect `condition` | **已接线**（2026-09-06——`23_event_hook_system.md` §23.7；链首引用字段按求值失败口径） |
 | `$team.xxx` | 跨 actor 聚合：我方全员逐值列表（`atk` / `hp` / `max_hp` / `spd` / `energy` / `broken` / `actor_id`，all_allies 同口径）——外套白名单聚合函数（`max($team.atk)` / `sum($team.broken)` / `count($team.atk)`） | hook condition / policy 表达式 | **已接线**（2026-09-07，`engine.team_namespace()` 注入 hook ctx 与 policy ctx） |
 | `$modifier.xxx`（`modifier_id` / `source`） | modifier 相关事件的 payload 件（`source`=施加者——挂在他人身上的 modifier 引用施加者） | hook condition / effect 表达式（modifier 事件语境） | **已接线**（2026-09-06——命名空间已注册；`after_remove_modifier` payload 已带 `source`，实例反查兜底） |
-| `$snapshot.xxx` | 施加者攻击侧快照包（`atk`=施加者攻击快照 + `ability_multiplier`/`dmg_boost_multi`/`ehr_multi` 等 dot_snapshot_ctx 键）——施加时刻存件，跳伤时只读 | **仅 dot_ratio 跳伤时求值表达式**（`04_modifier.md` dot 字段节） | **已接线**（2026-09-22——DoT 双通道合并，`pipeline._dot_tick_expr_ctx` 注入；其余语境无注入点，编译闸 `_check_dot_tick_expr` 拦截语境外引用） |
-| `$mod` | `remove_modifier` 的 `filter` 中绑定的待审 modifier 实例（字段：`modifier_id` / `modifier_type` / `debuff_kind` / `control_kind` / `dispellable` + 合成 `kind`——免疫判定同口径 `debuff_kind or (control if control_kind else modifier_type)`） | 仅 `remove_modifier.filter` | **已接线**（2026-09-07——长夜月 141304 天赋"驱散控制类 debuff"族，见 `05_effects.md` §移除 modifier） |
+| `$snapshot.xxx` | 施加者攻击侧快照包（`atk`=施加者攻击快照、`max_hp`=施加者有效生命上限快照 + `ability_multiplier`/`dmg_boost_multi`/`ehr_multi` 等 dot_snapshot_ctx 键）——施加时刻存件，跳伤时只读 | **仅 dot_ratio 跳伤时求值表达式**（`04_modifier.md` dot 字段节） | **已接线**（2026-09-22——DoT 双通道合并，`pipeline._dot_tick_expr_ctx` 注入；其余语境无注入点，编译闸 `_check_dot_tick_expr` 拦截语境外引用） |
+| `$mod` | `remove_modifier` 的 `filter` 中绑定的待审 modifier 实例（字段：`modifier_id` / `modifier_type` / `debuff_kind` / `control_kind` / `dispellable` / `behavior_flags` + 合成 `kind`——免疫判定同口径 `debuff_kind or (control if control_kind else modifier_type)`；单旗标摘除写 `'<flag>' in $mod.behavior_flags`） | 仅 `remove_modifier.filter` | **已接线**（2026-09-07——长夜月 141304 天赋"驱散控制类 debuff"族，见 `05_effects.md` §移除 modifier） |
 
 > **dot_ratio 跳伤时求值语境**（2026-09-22，闭合三命名空间 + 内建数学函数）：
 > `$self`=持有者现值（挂 modifier 的敌方——有效面板，同 `_SELF_NS_FIELDS` 白名单）、
@@ -139,20 +139,25 @@ variable_bindings:
 | `min_by(collection, key)` | 返回集合中 `key` 最小的元素（如 `min_by(enemies, 'stacks')`，集合参数可用 `enemies` / `allies`；用于 target 表达式） | 未实现（写了编译期炸） |
 | `unique_sources(resource_id)` | 资源的来源去重计数（需资源声明 `provenance: true`，见 `16_custom_resources.md` §16.13；"当前持有"口径，耗尽清空重计） | **已实现**（2026-09-06，hook 表达式函数白名单） |
 | `has_modifier(target, modifier_id, source="")` | 目标是否持有指定 modifier 实例；可选 `source` 按施加者 `source_id` 窄化（空串=全部来源，目标/来源查无均返回 0。Unicorn `CasterFilter` 目标过滤是首个实例） | 已实现 |
+| `has_behavior_flag(target, flag)` | 目标当前任一 modifier 的 `behavior_flags` 是否含指定原始旗标；只读取旗标载体，不从可选性、控制或 DoT 状态反推。敌人 `ByContainBehaviorFlag` 中无专门语义映射的原始旗标（如 `Stealth`、`MuteHitH`）共用此直译通道，查无 actor 返回 `0.0` | **已实现**（2026-11-17，hook 表达式函数白名单） |
 | `modifier_source(target, modifier_id)` | 目标所持指定 modifier 的原施加者 `source_id`；查无 actor 或实例返回空串。用于死亡前 `CasterFilter` / 转移时读取回调件来源，不把携带者误当施加者 | **已实现**（2026-10-21，hook 表达式函数白名单） |
+| `modifier_kind(target, modifier_id)` | 目标所持指定 modifier 的实际类别：`debuff_kind or control_kind or modifier_type`；查无 actor 或实例返回空串。供 Remodifier.StatusTypeMask 等按实例类别过滤的通道 | **已实现**（hook 表达式函数白名单） |
 | `character_id(target)` | 目标角色实例 ID 的模板段（与 ConfigAI 相同，去掉 `__` 后的阶段/关卡实例后缀；查无 actor 返回空串。`ByCompareCharacterID` 的逐目标直译通道） | **已实现**（2026-10-21，hook 表达式函数白名单） |
 | `monster_id(target)` | 目标怪物实例 ID 的模板段（与 ConfigAI 相同，去掉 `__` 后的阶段/关卡实例后缀；查无 actor 返回空串。`ByCompareMonsterID` 的逐目标直译通道） | **已实现**（2026-10-21，hook 表达式函数白名单） |
 | `monster_rank(target)` | 目标的怪物等级数值（与 ConfigAI 同一份 `MONSTER_RANK_VALUES`：Minion=1 / MinionLv2=2 / Elite=3 / LittleBoss=4 / BigBoss=5；无 policy 或未知等级返回 0。`ByCompareMonsterRank` 的直译通道） | **已实现**（2026-10-21，hook 表达式函数白名单） |
 | `controlled(target, kind="")` | 目标是否**受控**——持有任一控制类 modifier（合成 `kind == "control"` 口径，与硬免疫判定 / `$mod.kind`（本表上方命名空间行）同漏斗：`debuff_kind == 'control'` 或 `control_kind` 非空或 `modifier_type == 'control'`；可选第二参数按 `control_kind` 精确过滤，如 `controlled($event.source, 'dominate')`；目标不在场返回 `0.0`，与 `has_modifier` 缺省同口径。长夜月 1141307"忆质 ≥16 且不受控才可用"是首个真实实例（action `available_if` 宿主，2026-09-07 同批落地） | **已实现**（2026-09-07，hook 表达式函数白名单——hook/`available_if`/条件光环三宿主；可选 kind 过滤后续收编） |
 | `action_disabled(target)` | 目标是否持有任一 `prevent_action` modifier（与 ConfigAI `DisableAction` 及回合行动阶段同口径；不等于 `controlled`——支配/暴怒可无禁行动件，非控制类 modifier 也可禁行动。敌方 Ability `ByContainBehaviorFlag` / `AbortBehaviorFlags` 直译通道；查无 actor 返回 `0.0`） | **已实现**（2026-10-21，hook 表达式函数白名单） |
+| `immune_debuff(target)` | 目标是否持有已启用的全减益免疫件：`grants_immune` 同时含 `debuff` / `dot` / `control`，与敌人原始 `ImmuneDebuff` 同口径；单独控制免疫不算。目标解析同 `has_modifier`，查无 actor 返回 `0.0` | **已实现**（2026-11-16，hook 表达式函数白名单） |
+| `unique_target(name)` | 返回全局 UniqueName 当前绑定的 actor_id；名称未绑定返回空串。与目标代数 `pool: "unique:<name>"` 共用 `$level.dynamic_targets`，用于敌人 `TargetFetchUniqueNameEntity` 和 `_BattleEvent_<名称>` 别名；是否仍存活由 `actor_alive` 等谓词另行判定 | **已实现**（2026-11-16，hook 表达式函数白名单） |
 | `stacks(target, modifier_id)` | 目标持有的指定 modifier 层数（目标无该 modifier 时返回 **0**——缺省值语义钉死；priority 选择器的 key 表达式等，后期增补）。hook 层目标解析与 `has_modifier` 同通道（actor_id / ActorState / 目标代数 `$it` 命名空间——**跨 actor 读**；昔涟 1141519「天空」层数门控是首个跨 actor 实例，2026-09-07 放开） | 已实现 |
 | `modifier_duration(target, modifier_id)` | 目标持有的指定 modifier **剩余时长**（目标解析与 `stacks` 同通道；查无 actor 或无该 modifier 返回 `0.0`。敌方 Ability `ByCompareModifierValue.ValueType=LifeTime` 直译通道，金人惩戒模式剩余一回合时退出是首个实例） | **已实现**（2026-10-20，hook 表达式函数白名单） |
 | `sum_stacks(modifier_id, side="enemy")` | 当前在场单位指定 modifier 的**总层数**（`side` 只取 `"ally"`（我方）/ `"enemy"`（敌方，默认）/ `"all"`（双阵营），其他值运行期报错；死亡/放逐单位不计）。用于跨单位聚合同类计数资源；720-Degree Review 将 Grunt 的 Performance Point 汇总给 Team Leader 是首个实例 | **已实现**（2026-10-20，hook 表达式函数白名单） |
 | `enemies_alive()` | 当前存活敌人数（"敌方全体行动完毕"类阈值条件的计数源——反击/叠层族；与 `stacks` 同宿主通道，已落地） | 已实现 |
 | `damageable_enemies()` | 仍可被削减生命值的敌人数（存活且无任何 `hp_lock` 件——官方"敌方无法被继续削减生命值"判定源，与 `enemies_alive` 同宿主通道；1510 姬子•启行「拓星者」致命/锁血立即最后一击首实例） | **已实现**（2026-09-23，hook 表达式函数白名单） |
+| `hp_locked(target)` | 目标是否持有任一 `hp_lock` modifier；与死亡链锁血钳制及 `damageable_enemies` 共用同一判定，查无 actor 返回 `0.0`。敌人 `ByTargetLockHP` 的直译通道 | **已实现**（2026-11-23，hook 表达式函数白名单） |
 | `broken_of(target)` | 目标是否处于弱点击破状态（`ActorState.broken` 直读——击破查询正式通道：素裳剑势必触发段/杰帕德/饮月"击破关联"族与飞霄 1220 终结技逐击切换首实例；目标解析与 `has_modifier` 同通道——actor_id / ActorState / `$self` / 目标代数 `$it` 反查，查无返回 0） | **已实现**（2026-09-14，hook 表达式函数白名单） |
 | `count(x)` | 列表/集合长度（命中目标数计数——缇宝境界"每命中 1 目标 1 段"族；宿主实现 `sim/hooks.py`） | 已实现 |
-| `count_selected(pool, where="true")` | 按目标代数 `pool → where` 过滤后的存活目标数（与 effect `target` 共用求值器；`pool` 取 `self` / `allies` / `enemies` / `all`，不支持 `$event` 池。Unicorn Skill03 标记目标计数与动态补标是首个实例） | **已实现**（2026-10-21，hook 表达式函数白名单） |
+| `count_selected(pool, where="true", include_unselectable=false)` | 按目标代数 `pool → where` 过滤后的存活目标数（与 effect `target` 共用求值器；字符串 `pool` 取 `self` / `allies` / `enemies` / `all`，不支持 `$event` 池；`where` 继承当前 `$event` / `$self`，可按事件主目标做左右站位或 modifier 过滤；第三参为真时保留不可选单位。也接受目标代数 dict/JSON，支持 `$event` 池与 concat，缺事件字段的子项按 0 候选；`include_dead: true` 时保留死亡实体，含 `$event.targets` / `$event.hit_targets`。Retarget 空候选判断用此形态，剔除 mode/take/order_by，不消耗随机流） | **已实现**（2026-10-21，hook 表达式函数白名单；2026-11-17 补齐事件命名空间、不可选标志透传与目标规格计数） |
 | `count_modifier(modifier_id, ...)` | 持有任一指定 modifier 的**存活单位数**；多个 ID 按 OR 匹配，同一单位不重复计数；可选 `side="ally"`（默认）/ `"enemy"` / `"all"`。Sixfold Plenilune 在攻击开始时快照锁定与候补标记的目标数，是首个实例 | **已实现**（2026-10-20，hook 表达式函数白名单） |
 | `debuff_count(target)` / `debuff_count(target, source)` | 目标当前 debuff 总数（求值期现场数，单一事实源；替代 host 计数资源+成对 hook 手工对账）。口径 = 游戏「负面状态」——debuff/dot/control 全计（与硬免疫判定 `$mod.kind` 同漏斗：`debuff_kind or (control if control_kind else modifier_type) != 'buff'`）；按 modifier 实例数，`stacks` 不展开（同源覆盖/异源并存口径）。`source` 参（2026-10-12）：非空时窄化为「指定施加者（modifier `source_id`）施加的负面效果」计数——23047 魂迷「装备者施加的负面效果」/24003「装备者施加的 DoT」来源检索族首实例；空串 = 全口径。目标解析与 `has_modifier` 同通道，查无返回 `0.0` | **已实现**（2026-09-16，hook/`available_if`/条件光环/目标代数/hit_condition 命中域五宿主同槽——21001/23007/23020 按数增益族首实例；`source` 参 2026-10-12 同槽扩编） |
 | `has_debuff(target)` | 目标是否持有任意 debuff（存在性谓词；`debuff_count(target) > 0` 的语义糖——落地名 `has_debuff`，与 `debuff_count` 同口径同通道） | **已实现**（2026-09-16，五宿主同槽——117 死水 2pc「受负面状态影响的敌人」首实例） |
@@ -163,7 +168,7 @@ variable_bindings:
 | `count_where(collection, condition)` | 集合中满足条件的元素数（逐元素绑定 `$it`；如 `count_where($event.targets, has_weakness($it, 'fire')) >= 2`——银河沦陷日族） | 未实现（写了编译期炸） |
 | `max_over(collection, expr, condition?)` | 集合逐元素求值取最大值（与 count_where/min_by 同形；可选 condition 逐元素过滤。如 `max_over(enemies, "stacks($it, 'MOD_JQ_ASHEN')")`——椒丘/记忆主族；`max_over(enemies, "stacks($it, 'MOD_X')", "abs($it.position - $event.target.position) <= 1")`——相邻集合 = 位置算术，大黑塔族） | 未实现（写了编译期炸） |
 | `resource_of(target, resource_id)` | 读取**他人**资源的当前值（跨 actor 资源读取唯一通道——provenance 聚合/persist/跨 actor 联动共用；`$resource` 仅自身。目标不在场/无该资源返回 `0.0`，与 `hp_of` 缺省同口径） | **已实现**（2026-09-07，hook 表达式函数白名单——长夜月 1413 忆灵技读忆师 Memoria（1141301/1141307 倍率基数）是首个真实实例，按"首个真实实例到达时再收"收编；目标解析与 `hp_of` 同通道） |
-| `dynamic_of(target, dynamic_key)` | 读取目标 **ConfigAI 动态值**（运行态优先，其次经 `CONFIG_AI_INITIAL_DYNAMIC_VALUES` 核定的初值；`AIFlag`/`AICounter`/`AICounter_01` 缺省为 1，其他键缺省为 0。保留键 `current_phase` 读取敌方当前阶段，缺省为 1。目标不在场返回 0，与 `resource_of` 同目标解析通道） | **已实现**（2026-10-20，hook/`available_if` 表达式函数白名单——布洛妮娅（幻象）强化时额外召唤首个实例） |
+| `dynamic_of(target, dynamic_key)` | 读取目标动态值（任意 actor_id 的运行态优先，其次经 `CONFIG_AI_INITIAL_DYNAMIC_VALUES` 核定的初值；`AIFlag`/`AICounter`/`AICounter_01` 缺省为 1，其他键缺省为 0。保留键 `current_phase` 读取敌方当前阶段，缺省为 1。目标不在场返回 0，与 `resource_of` 同目标解析通道） | **已实现**（2026-10-20，hook/`available_if` 表达式函数白名单——布洛妮娅（幻象）强化时额外召唤首个实例） |
 | `actor_type_of(target)` | 目标的 actor 类别（`character` / `monster` / `summon`——"我方目标"过滤写 `actor_type_of($it) != 'monster'`；目标不在场返回 `""`，与 `has_modifier` 缺省同口径） | **已实现**（2026-09-07，hook 表达式函数白名单——风堇 1140903 族） |
 | `path_of(target)` | 目标的**命途**（英文 canonical key——`Actor.path` 已接线字段的 hook 条件消费口；"对同谐命途角色施放时不触发 X"族写 `path_of($event.target) != 'harmony'`，星期日 131302 同谐限制首实例；目标不在场/无命途返回 `""`，与 `actor_type_of` 缺省同口径） | **已实现**（2026-09-09，hook 表达式函数白名单） |
 | `has_summon(target)` | 目标当前是否**持有在场召唤物**（存活未放逐、`summoner_id` 反指目标——"若目标持有召唤物则 X"存在性判定族，星期日 131302 增伤额外 +50% 首实例；目标不在场返回 `0.0`，false-y 安全缺省同口径） | **已实现**（2026-09-09，hook 表达式函数白名单） |
@@ -171,11 +176,29 @@ variable_bindings:
 | `actor_alive(target)` | 目标当前是否**在场**（存活未放逐——"在场"判定正式通道；离场不离字典（dismiss 后 actor 仍在 `state.actors` 但 `alive=False`），`actor_type_of` 查表不含存活态故单独立谓词）。召唤物在场查询唯一事实源——`1222 _fy_on_field` / `1407 _nw_on_field` 手工记账闩绝育收编（死亡牵连/复活路径手账错位病灶）；先按完整 actor_id 精确反查，查无再按 `__` 前的模板基础 ID 回查（兼容关卡实例后缀）；查无/已离场/放逐返回 `0.0` | **已实现**（2026-09-17，五宿主同槽——灵砂余烬回响门控/遐蝶换技能互斥 `available_if` 首实例） |
 | `hp_of(target)` | 目标的**当前** HP（跨 actor 面板读取——`$self.hp` 仅自身、`$team.hp` 仅聚合列表无 per-id 索引；目标不在场返回 `0.0`，与 `actor_type_of` 缺省同口径。遐蝶 1140703 死龙替身"任意队友承伤降至 1"的阈值判定族） | **已实现**（2026-09-07，hook 表达式函数白名单） |
 | `max_hp_of(target)` | 目标的**有效生命上限**（跨 actor 面板读取——effective 口径与 `$self.max_hp` 同通道；目标不在场返回 `0.0`。昔涟 1141503 忆灵 HP% 同步（`hp_of / max_hp_of` 求百分比）族） | **已实现**（2026-09-07，hook 表达式函数白名单） |
+| `energy_of(target)` / `max_energy_of(target)` | 目标的**当前能量** / **能量上限**（分别直读 `ActorState.current_energy` 与 `Actor.stats.max_energy`；目标解析与 `hp_of` 同通道，查无返回 `0.0`。敌方 `CurrentSP`/`MaxSP` 的直译通道） | **已实现**（2026-11-17，hook 表达式函数白名单） |
+| `special_sp_of(target)` / `max_special_sp_of(target)` | 目标的当前特殊充能 / 上限（分别直读 `ActorState.special_sp` 与 `Actor.stats.max_special_sp`；源为 CharacterConfig.CurrentSpecialSP/MaxSpecialSP） | **已实现**（hook 表达式函数白名单） |
 | `toughness_of(target)` | 目标的**当前韧性**（`ActorState.toughness` 直读——敌方 Ability `CurrentStance` 直译通道；目标解析与 `hp_of` 同通道，查无返回 `0.0`） | **已实现**（hook 表达式函数白名单） |
+| `action_delay_of(target)` | 目标剩余行动条占一整条的比例（调度器 `remaining / 10000`，与 `SetActionDelay.NormalizedValue` 同口径；查无目标或调度器返回 `0.0`） | **已实现**（hook 表达式函数白名单） |
 | `$level`（命名空间） | **关卡级共享黑板**（决策卡 #31——伪 ActorState，不占站位/目标池；`dynamic_of($level, key)` 读写关卡动态值、`has_modifier($level, ...)` 关卡级 modifier） | **已实现**（2026-11-14） |
+| `$light_team` / `$dark_team`（命名空间） | **两阵营共享载体**（TargetFetchTeamEntity——独立伪 ActorState，不占站位/普通目标池；modifier、动态值与队伍盾分别保存，不混用 `$level`） | **已实现**（2026-11-17） |
 | `monster_unique_id(target)` | 怪物 **UniqueID**（= 模板 ID // 10，决策卡 #30 词表实证；实例 __ 后缀归一化与 `monster_id` 同通道，非数值 id 返回 `0.0`）——敌方 `ByCompareMonsterUniqueID` 谓词直译通道 | **已实现**（2026-11-14，hook 表达式函数白名单） |
+| `battle_event_exists(event_id)` | EventID 是否已注册（`ByCompareBattleEventID` 直译通道——战斗事件注册表查询，决策卡 #44） | **已实现**（2026-11-16，hook 表达式函数白名单） |
+| `in_elation_time()` | 当前是否正在阿哈时刻主体执行中（`ByIsInElationTime` 直译通道；正常结束与异常退出均复位） | **已实现**（2026-11-17，hook 表达式函数白名单） |
+| `turn_owner_action_phase_end()` | 当前回合是否已过行动阶段、进入回合末结算区间（`ByTurnOwnerActionPhaseEnd` 直译通道；下一回合开始复位，不等于 on_action_end） | **已实现**（2026-11-17，hook 表达式函数白名单） |
+| `stage_id()` | 当前 `Encounter.encounter_id`（数字字符串转数值，供 `ByCompareStageID` 相等/区间比较） | **已实现**（hook 表达式函数白名单） |
+| `max_skill_points()` | 当前队伍战技点上限，复用引擎统一上限读取通道（含上限覆写），供 SetDynamicValueByMaxBP 使用 | **已实现**（hook 表达式函数白名单） |
+| `current_turn_state(state)` | InsertAbilityActionPhase/InsertUltraSkillExecuting 读取当前执行帧，无执行帧为假；ModifierPhase1Begin 读取非倒计时回合的开始结算窗口，进入行动阶段前复位，供 ByCurrentTurnState 使用 | **已实现**（hook 表达式函数白名单） |
+| `turn_owner_has_action_in_turn()` | 当前回合归属者正在行动，或已完成本回合行动阶段；供 ByTurnOwnerHasActionInTurn 使用 | **已实现**（hook 表达式函数白名单） |
+| `is_top_action_delay_target(target, team="", avatar_only=False)` | 目标是否为指定阵营行动条预览的首位；team=dark/light，缺省不限阵营；avatar_only=true 时跳过非 character（召唤物/忆灵），供 AvatarNextTurnOwnerEntity；只读 scheduler.preview，不推进状态 | **已实现**（hook 表达式函数白名单） |
+| `target_unselectable(target, side="")` | 目标选择通道是否被 summon_flags 禁用；side=dark/light 分别检查 enemy_targetable/ally_targetable，缺省任一侧禁用即真；供 ByIsTargetUnselectable 与 SourceEntity 使用 | **已实现**（hook 表达式函数白名单） |
+| `monster_id_equals(target, raw_id)` | 目标的怪物模板段 ID 是否等于数值 raw_id；raw_id 取整后转字符串，与 monster_id 同归一化，供动态 TargetMonsterID 比较 | **已实现**（hook 表达式函数白名单） |
+| `stance_count_of(target)` | 目标韧性条总数：主条 + 全部声明/机制追加条；供 ByCompareStanceCount 读取 | **已实现**（hook 表达式函数白名单） |
+| `modifier_max_stacks(target, modifier_id)` | 目标持有的 modifier 的 `max_stack`（MaxLayer 读取；查无目标或 modifier 返回 `0.0`） | **已实现**（hook 表达式函数白名单） |
+| `modifier_dynamic_of(target, modifier_id, dynamic_key)` | 目标持有的指定 modifier **实例**的 DynamicValues；表达式以来源持有者与来源实例（含 `$modifier.stacks`）为语境求值。与 ConfigAI 角色级动态值隔离，查无目标、modifier 或键返回 `0.0` | **已实现**（2026-11-17，敌方 SetDynamicValueByCopying.FromModifierName 首实例） |
 | `has_pending_one_more(target)` | 目标是否有**挂起的额外回合**（`ByTurnOwnerHasPendingOneMore` 直译通道——scheduler 额外回合队列查询） | **已实现**（2026-11-15，hook 表达式函数白名单） |
 | `turn_owner_of()` | **当前回合归属者** actor_id（`ByIsTurnOwnerEntity` 的全语境直译通道——不再限回合/行动事件，引擎逐回合跟踪） | **已实现**（2026-11-15，hook 表达式函数白名单） |
+| `wave_index()` | **当前波次索引**（`CurWaveIndex` 直译通道，与引擎 `current_wave` 同值；用于比较前后波次是否变化） | **已实现**（2026-11-16，hook 表达式函数白名单） |
 | `position_delta(target, reference)` / `neighbor_of(reference, offset)` | 目标与参照的**同侧站位差** / 参照的**邻居 actor_id**（offset=-1 左邻/+1 右邻）——CasterLeft/RightEntity 等左右邻目标别名的直译通道；不同侧/查无/无邻返回 0/""（决策卡 #35） | **已实现**（2026-11-15，hook 表达式函数白名单） |
 | `position_of(target, team)` / `side_size(target, team)` | 目标的**站位索引**（同侧存活列表序，1 起——与 blast 相邻判定同口径）/ 该侧存活单位数；`team` = `'dark'`（敌方）/ `'light'`（我方）；目标不在该侧/查无返回 `0.0`（false-y 安全缺省）。敌方 `ByIsTeamLocationIndexType` 谓词的直译通道（决策卡 #28） | **已实现**（2026-11-02，hook 表达式函数白名单） |
 | `count_team(path=..., group=...)` | 队伍编成计数：我方**角色**（`actor_type == 'character'`，忆灵/召唤物不计）中命途为 `path` 的人数（**含阵亡**——"队伍中"是编成口径与存活无关；关键字参数 `path` 必填，英文 canonical key 如 `'remembrance'`。长夜月 1413103「天亮了，雨落了」按「记忆」命途人数变档、昔涟 1415102「岁月的旅人」进战产追忆族）。`group` 参（2026-09-10）：分组计数（`in_group` 同口径——`faction:xxx` 查 `groups` 声明 / `path:<name>` 自动映射）；与 `path` 同给 = **析取**（命途匹配**或**分组命中——1415102「黄金裔或记忆命途」析取支首实例） | **已实现**（2026-09-07，hook 与条件光环（`enable_if`/`stat_exprs`）双宿主——`04_modifier.md` §4.16） |
@@ -191,6 +214,9 @@ variable_bindings:
 | `has_shield(target)` | 目标是否持有护盾实例（`ActorState.shields` 非空直读——逐目标持盾判定通道；128 隐士 4pc「持盾友方暴伤」/21053 持盾增伤族。目标解析与 `has_modifier` 同通道，查无返回 `0.0`） | **已实现**（2026-09-23，hook 表达式函数白名单） |
 | `has_shield(target, source)` | 上式的 source 窄化形：持有**指定施加者**提供的护盾才计（隐士 4pc「装备者提供的护盾」字面口径） | **已实现**（2026-09-23，同上） |
 | `shielded_count()` | 场上持有护盾的**角色**数（非怪 actor，`ActorState.shields` 非空计数——has_shield 的计数聚合形；21043 两个人的演唱会「每有一名持有护盾的角色增伤」族首实例） | **已实现**（2026-09-23，hook 表达式函数白名单——hit_stat_exprs 命中域同槽） |
+| `shield_of(target, modifier_id="")` | 目标当前护盾剩余值合计；第二参非空时只计关联该 modifier 的实例，查无目标或实例返回 `0.0`。敌方 `SetDynamicValueByModifierValue.CurrentShield` 与 `SetDynamicValueByProperty.Value=Shield` 的直译通道，支持 `$light_team`/`$dark_team` 队伍共享盾 | **已实现**（2026-11-17，hook 表达式函数白名单） |
+| `target_lists_intersect(first_json, second_json)` | 对两个 JSON 目标代数分别求值，按 `actor_id` 判定是否存在共同实体；`FirstTargetAliveOnly=false` / `SecondTargetAliveOnly=false` 在编译期转为 `include_dead`，不使用名称或人数近似 | **已实现**（2026-11-17，`ByTargetListIntersects` 直译通道） |
+| `target_in_selected(spec_json, target)` | 先对 JSON 目标代数完整求值，再按实体 ID 判断 target 是否属于结果；目标表达式在调用方语境解析，可安全用于逐候选谓词，不将成员过滤提前施加到 `index/take` 之前 | **已实现**（2026-11-17，`ByCompareTarget` 集合比较通道） |
 | `is_adjacent(target, ref)` | 目标是否与参照目标**相邻**（blast 扩散相邻判定正式通道——与引擎 blast 目标解析同口径：站位=编队序、相邻=同侧**存活**列表索引 ±1；敌方池=存活敌人，我方池=存活且 `enemy_targetable` 的我方单位）。两参各自按 `has_modifier` 同通道解析（actor_id / ActorState / `$self` / 目标代数 `$it` 反查）；查无 actor / 不同侧 / 同一体 / 任一不在存活池返回 `0.0`。blade 主/邻双系数段（官方「主目标 X×tally、相邻 Y×tally」族——1205 刃终结技 tally 相邻段首实例，1205 E1/1212 E1 主/邻区分挡因同族收编）的目标代数 `where` 落点：`{pool: "enemies", where: "is_adjacent($it, $event.target)"}` | **已实现**（2026-09-24，hook 表达式函数白名单） |
 
 > 2026-08-14 / 2026-08-15 / 2026-08-18 落地
@@ -301,29 +327,57 @@ target 字段支持字符串预注册选择器或参数字典。
 
 上表字符串选择器与下节参数化选择器全部**脱糖为代数**——两通道（hook effect `target` /
 policy `target_rules.selector`）共用一台求值器（`sim/target_algebra.py`）：`pool → where →
-order_by → take → mode`。存量模板零改动；新逻辑直接写代数 dict：
+order_by → index → take → mode`。存量模板零改动；新逻辑直接写代数 dict：
 
 ```yaml
 # hook 通道（pool 显式）
 target: {pool: "enemies", where: "$it.broken", order_by: "-$it.hp", take: 2, mode: "random"}
 ```
 
+- `concat`：仅 hook 通道的拼接节点，按子目标原顺序展开并保留重复项；外层可再以
+  `where` / `order_by` / `index` / `take` / `mode` 过滤、排序或截取完整拼接结果，`pool` 与
+  `include_*` 仍只能放在各子目标。TargetSequence 可把它作为基座再接 TargetFilter 等操作；
+  `count_selected` 的目标规格形态可计数，缺事件字段的子项按 0 候选。
+  已解析别名之间的 `+` 也脱糖为该节点；子目标无法完整解析时保留拒因，不把 `-` 当作拼接。
+  别名中的 `" - "` 与 `TargetCompute(Minus)` 同义：在左目标完整结果上追加
+  `not target_in_selected(右目标, $it)`，先排除右集合再执行后续操作；既有具名排除规则优先。
+  `Remodifier.CasterFilter(Caster)` 复用 `has_modifier($it, id, $self.actor_id)` 过滤施加者，不按目标自身所属阵营近似。
 - `pool`（仅 hook 通道；policy 池 = 调用方候选集，写 `pool` 键编译期炸）：`self` / `allies` /
-  `enemies` / `all` / `$event.<字段>`（含 `$event.targets` / `$event.hit_targets` 列表通道）
+  `enemies` / `enemy_targets`（敌方攻击的我方候选，按 `enemy_targetable` 过滤）/ `all` / `all_with_battle_events` / `battle_events` / `last_summons`（最近一次 SummonMonster 任务实际入场的实体组）/ `unselectable`（仅不可选单位与战斗事件）/ `$event.<字段>`（含 `$event.targets` / `$event.hit_targets` 列表通道；单实体字段接受 actor_id 或命中域 ActorState，统一解析为状态对象）/
+  `$level` / `$light_team` / `$dark_team`（关卡/队伍伪实体）/
+  `unique:<名称>`（读取 `SetTargetUniqueName` 写入的全局唯一目标；未绑定返回空池）
+- `include_dead`：可选布尔，缺省 `false`。为 `true` 时 allies/enemies/all 池保留死亡实体，
+  供 `DispelStatus(OnlyAlive=false)` 等清除类任务使用；普通攻击/增益目标不得借此绕开存活闸。
+- `include_unselectable`：可选布尔，缺省 `false`。为 `true` 时保留存活但不可选中的单位，
+  供明确声明 `WithAll…Unselectable` 的上游别名使用；默认目标池的可选性过滤不变。
+- `include_summons`：可选布尔，缺省 `false`。为 `true` 时在 `where` 之后追加基目标的召唤物，
+  已存在于基列表的实体不重复；随后再执行 `order_by` / `index` / `take` / `mode`，对应 `.WithServant` 后缀。
+  外层 `.RemoveServant` 按 `not $it.summoner_id` 过滤；若基目标带 include_summons，则用单子项 concat 保证过滤发生在召唤展开之后。
+  `AllTeammate - MMonster_*` 则编译为排除持有对应 modifier 的敌方队友。
 - `where`：白名单表达式（`$it` 绑定候选——面板/`actor_id`/`name`（官方实体名，Left/Right Hand 等具名目标族）/`broken`/`hp`/`shield`（当前护盾
   值 = 护盾栈剩余合计，2026-09-08 补——丹恒•腾荒 1414103 峥嵘"当前护盾值最低的我方目标"族
   首实例，配 `order_by: "$it.shield"` + `take: 1`）/`summoner_id`（召唤物反指召唤者，
   2026-09-09 补——"召唤物 of X"寻址写 `$it.summoner_id == $event.target`，星期日 131302
-  召唤物同行立即行动首实例；非召唤物为空串）直读 + `has_modifier($it, …)` 反查；
+  召唤物同行立即行动首实例；非召唤物为空串）/`enemy_targetable`/`ally_targetable`
+  （目标可选标记，缺省均为真；`RemoveUnselectable` 显式过滤）直读 + `has_modifier($it, …)` 反查；
   **hook 通道 `where`/`order_by` 注入 `$event`**（与 hook condition 同 payload 命名空间，
   2026-09-09 接线——policy 通道无事件语境不注入）；legacy 平铺键
   `target_hp` / `target_hp_pct` / `target_broken` 兼容）
 - `order_by`：白名单表达式，`-` 前缀降序；**全序纪律**：同值按池序（站位序）决胜；
+  `TargetSortByModifierValue(Layer)` 编译为 `stacks($it.actor_id, …)`；
+  `TargetShuffle` 在排序前预洗牌（`pre_shuffle`），只影响同值顺序，不破坏极值选择；
   特殊键 `formation` / `-formation` = 池序原样 / 反转编队序（左右横扫族，不参与表达式编译）
+- `index`：非负整数，在过滤、排序后精确选择一个零基位置，越界返回空列表；`.SelectN` 是
+  一基编队位置语法，编译为 `index=N-1`，`TargetIndex(IndexStrict)` 则直接使用其零基 `IndexValue`。
 - `take`：`"all"` | ≥1 整数 | 返回非负整数的 effect 表达式（取前 N；`"first"` = `take: 1` 降糖；
   表达式在每次效果执行时只求值一次，允许返回 0，Unicorn 按已标记人数动态补标是首个实例）
 - `mode`：`deterministic`（按序取）/ `random`（roll 由 zagreus 抽 N，同 seed 复现；
-  expected 确定化口径 = 按序取前 N 不掷骰）
+  expected 确定化口径 = 按序取前 N 不掷骰）/ `shuffle`（roll 即使全取也做全排列，
+  expected 保持原序）/ `taunt_or_random`（仅 hook、仅 `take: 1`：
+  强制嘲讽/锁定优先，否则 roll 均匀抽取、expected 取首个候选；保留 `where` 过滤，不读嘲讽值权重。
+  敌方 `TauntOrRandomEnemy` 及其 RemoveServant 变体走此通道）/ `taunt_or_aggro`
+  （同样仅 hook、仅 `take: 1`，但回退按有效嘲讽值加权；expected 取权重最高者。
+  `TauntOrAggroEnemy` 走此通道，对应上游 `RandomByAggroWhenFail` 缺省形态）
 - **语义边界**：bounce / repeat（弹射、随机 N 次治疗）归结算层多段实例，**不进**本代数
   （"选谁"与"选几次"分家）
 - 实例：敌方 "Deals … to 3 random targets"（`take: 3, mode: "random"`）；按修饰符点名
@@ -401,7 +455,7 @@ DSL 表达式按使用位置分为两层白名单：
 | 位置 | 允许函数 | 说明 |
 |------|---------|------|
 | **全局公式** (`sim_schema/rulebook.yaml`) | effect 层全部 + `random()` + `lookup_table()` | `random()` 均匀随机数 `[0,1)`，仅公式层可用，避免单个 effect 内引入不可控随机性；`lookup_table()` 查模板内嵌表（`variable_bindings` 主通道） |
-| **effect 表达式** (`amount` / `condition` / `target_filter` / `enable_if` / `stat_exprs` / `hit_stat_exprs` 等) | `min()`, `max()`, `abs()`, `round()`, `clamp()`, `sum()`, `chance()`, `in_zone()`, `stacks()`, `sum_stacks()`, `modifier_duration()`, `enemies_alive()`, `damageable_enemies()`, `has_modifier()`, `modifier_source()`, `count()`, `count_selected()`, `count_modifier()`, `unique_sources()`, `mechanic_chance()`, `actor_type_of()`, `hp_of()`, `max_hp_of()`, `toughness_of()`, `resource_of()`, `dynamic_of()`, `count_team()`, `stat_of()`, `base_stat_of()`, `controlled()`, `action_disabled()`, `path_of()`, `has_summon()`, `in_group()`, `who_has()`, `character_id()`, `monster_id()`, `monster_rank()`, `element_of()`, `elation_of()`, `broken_of()`, `has_debuff()`, `debuff_count()`, `dot_count()`, `actor_alive()`, `weakness_count()`, `has_stat_penalty()`, `has_shield()`, `shielded_count()`, `dot_value()`, `is_adjacent()`, `has_weakness()`, `dot_kind()`, `summoner_of()`, `roll()` | 宿主实现：内建数学函数（expression.py `_builtins`）+ 引擎注入（`sim/hooks.py`：stacks/enemies_alive/has_modifier/count 等；条件光环域宿主见 `04_modifier.md` §4.16）；`sum()` 用于聚合（如 `sum($team.taunt)`）；随机判定通过 `chance()` 显式表达，禁 `random()`；`roll()` 为执行帧级随机绑定（一次行动执行内首采后续零消耗，hook 级 condition 只读已绑定——语义分域见 `23_event_hook_system.md` §23.15）；§22.4 函数表中已登记但本层未列出的函数**未实现**（写了编译期炸），语义见 §22.4 函数表 |
+| **effect 表达式** (`amount` / `condition` / `target_filter` / `enable_if` / `stat_exprs` / `hit_stat_exprs` 等) | `min()`, `max()`, `abs()`, `round()`, `clamp()`, `sum()`, `chance()`, `in_zone()`, `stacks()`, `sum_stacks()`, `modifier_duration()`, `modifier_max_stacks()`, `modifier_dynamic_of()`, `enemies_alive()`, `damageable_enemies()`, `hp_locked()`, `has_modifier()`, `modifier_source()`, `modifier_kind()`, `count()`, `count_selected()`, `count_modifier()`, `unique_sources()`, `mechanic_chance()`, `stage_id()`, `actor_type_of()`, `hp_of()`, `max_hp_of()`, `energy_of()`, `max_energy_of()`, `toughness_of()`, `action_delay_of()`, `resource_of()`, `dynamic_of()`, `count_team()`, `stat_of()`, `base_stat_of()`, `controlled()`, `action_disabled()`, `immune_debuff()`, `unique_target()`, `path_of()`, `has_summon()`, `in_group()`, `who_has()`, `character_id()`, `monster_id()`, `monster_rank()`, `element_of()`, `elation_of()`, `broken_of()`, `has_debuff()`, `debuff_count()`, `dot_count()`, `actor_alive()`, `weakness_count()`, `has_stat_penalty()`, `has_shield()`, `shielded_count()`, `dot_value()`, `is_adjacent()`, `target_lists_intersect()`, `target_in_selected()`, `has_weakness()`, `dot_kind()`, `summoner_of()`, `roll()` | 宿主实现：内建数学函数（expression.py `_builtins`）+ 引擎注入（`sim/hooks.py`：stacks/enemies_alive/has_modifier/count 等；条件光环域宿主见 `04_modifier.md` §4.16）；`sum()` 用于聚合（如 `sum($team.taunt)`）；随机判定通过 `chance()` 显式表达，禁 `random()`；`roll()` 为执行帧级随机绑定（一次行动执行内首采后续零消耗，hook 级 condition 只读已绑定——语义分域见 `23_event_hook_system.md` §23.15）；§22.4 函数表中已登记但本层未列出的函数**未实现**（写了编译期炸），语义见 §22.4 函数表 |
 
 所有位置都禁止：文件 I/O、网络、反射、任意 Python 内置函数。
 

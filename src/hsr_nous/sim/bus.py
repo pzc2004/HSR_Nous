@@ -25,6 +25,7 @@ DEFAULT_CONTRACT: Dict[str, str] = {
     "on_cycle_start": "emit",   # 轮次开始（发射已接线于 engine._tick_cycle，契约表补登记）
     "on_cycle_end": "emit",     # 轮次结束（同上）
     "on_extra_turn": "emit",
+    "before_action": "emit",  # 目标解析后、SP/能量/伤害及其他效果结算前
     "on_action": "emit",
     "on_action_end": "emit",  # 行动结算完毕（帧提交后）——怪物 OnActionEnd 回调族的挂载点，与 on_action（施放广播）前后两锚
     "before_take_damage": "waterfall",
@@ -35,15 +36,24 @@ DEFAULT_CONTRACT: Dict[str, str] = {
     "before_actor_exit": "emit",  # 离场前（alive=False 之前——生前结算族挂载点：遐蝶 1140706 晦翼自爆）
     "actor_exit": "emit",
     "actor_enter": "emit",
+    "battle_event_create": "emit",
+    "monster_phase_changed": "emit",
+    "monster_phase_change_begin": "emit",
+    "monster_phase_change_end": "emit",
+    "modifier_custom_event": "emit",
+    "on_stance_countdown": "emit",
     "on_toughness_damage": "emit",
     "toughness_recovered": "waterfall",  # 敌方回合开始韧性恢复结算前（cancel=阻止本次恢复、保持击破——残梅绽族）
     "on_gain_energy": "waterfall",  # before_gain：能量获得量可被改写
+    "on_energy_change": "emit",     # 能量实际变化后（before/after——敌方 OnSPChange 通道）
     "on_resource_gain": "emit",     # 自定义资源获得后（银行转移/阈值触发族的挂载点）
     "before_consume": "waterfall",  # 资源消耗前（改写消耗量/取消——火花 climax 抵扣族的挂载点）
     "after_consume": "emit",        # 资源消耗后（绯英 after_gain 对偶/记账族的挂载点）
     "before_drain": "waterfall",    # drain_hp 逐目标扣减前（改写扣量/取消——遐蝶 E2 炽意抵扣族的挂载点）
     "battle_end": "emit",           # 战斗终止（termination reason 见 23.4；结构化日志终局锚点）
     "on_skill_point_change": "emit",  # 战技点增减（before/after——结构化日志 SP 槽取数点）
+    "on_unselectable_start": "emit",  # 任一侧目标选择状态由可选转不可选
+    "on_unselectable_end": "emit",    # 任一侧目标选择状态由不可选恢复可选
     "on_become_target": "emit",     # 成为技能目标（140804"成为目标获火种/队友给暴伤"族的挂载点）
     "on_state_change": "emit",      # 形态进入/退出（大行迹/境界族的挂载点）
     "on_break": "emit",
@@ -53,8 +63,10 @@ DEFAULT_CONTRACT: Dict[str, str] = {
     "after_remove_modifier": "emit",
     "on_immune": "emit",
     "on_resist": "emit",
+    "on_ultimate_prepare": "emit",
     "on_ultimate": "emit",
     "shield_absorbed": "emit",  # 护盾逐实例吸收（payload 带 shield_id/amount/remaining/source/target）
+    "shield_changed": "emit",   # 获得/吸收/破裂后的统一状态变更事件
     "shield_broken": "emit",    # 护盾后台破裂（级联摘除关联 modifier，reason=shield_broken）
     "on_revive": "emit",        # 死亡检查触发复活（消费复活件，按百分比回拉 HP）
     "on_hp_lock": "emit",       # 锁血钳制（伤害致死被 hp_lock 钳 1 血——"无法被继续削减生命值"族挂载点）
@@ -72,17 +84,23 @@ DEFAULT_CONTRACT: Dict[str, str] = {
 DEFAULT_PAYLOAD_FIELDS: Dict[str, frozenset] = {
     "actor_enter": frozenset({'actor', 'actor_type', 'reason', 'wave_index'}),
     "actor_exit": frozenset({'actor', 'reason'}),
-    "after_apply_modifier": frozenset({'modifier_id', 'modifier_type', 'source', 'stat', 'target'}),
-    "after_being_hit": frozenset({'absorbed', 'action_id', 'action_type', 'actor_type', 'amount', 'damage_type', 'hit_targets', 'is_critical', 'primary_target', 'seg_index', 'source', 'target'}),
+    "after_apply_modifier": frozenset({'behavior_flags', 'modifier_id', 'modifier_type', 'source', 'stat', 'target'}),
+    "after_being_hit": frozenset({'absorbed', 'action_id', 'action_type', 'actor_type', 'amount', 'block_damage_triggered', 'damage_custom_name', 'damage_tags', 'damage_type', 'hit_targets', 'is_critical', 'is_indirect', 'max_hit_split_count', 'primary_target', 'seg_index', 'source', 'split', 'target'}),
     "after_consume": frozenset({'actor', 'amount', 'current', 'resource_id'}),
-    "after_remove_modifier": frozenset({'modifier_id', 'reason', 'source', 'target'}),
+    "after_remove_modifier": frozenset({'behavior_flags', 'modifier_id', 'reason', 'source', 'target'}),
+    "battle_event_create": frozenset({'actor', 'event_id', 'source', 'team'}),
+    "monster_phase_changed": frozenset({'actor', 'from_phase', 'to_phase'}),
+    "monster_phase_change_begin": frozenset({'actor', 'param_entity', 'targets'}),
+    "monster_phase_change_end": frozenset({'actor', 'param_entity', 'targets'}),
+    "modifier_custom_event": frozenset({'dynamic_key', 'event_type', 'source', 'target', 'value'}),
     "battle_end": frozenset({'reason'}),
     "before_actor_exit": frozenset({'actor', 'reason'}),
     "before_consume": frozenset({'actor', 'amount', 'reason', 'resource_id'}),
     "before_drain": frozenset({'action_id', 'amount', 'floor', 'reason', 'source', 'target'}),
-    "before_take_damage": frozenset({'action_id', 'action_type', 'amount', 'damage_type', 'is_critical', 'source', 'target'}),
-    "on_action": frozenset({'action_id', 'action_type', 'actor', 'actor_type', 'insert', 'sp_consumed', 'tag', 'target', 'target_type'}),
-    "on_action_end": frozenset({'action_id', 'action_type', 'actor', 'actor_type', 'insert'}),
+    "before_take_damage": frozenset({'action_id', 'action_type', 'amount', 'block_damage_triggered', 'damage_custom_name', 'damage_tags', 'damage_type', 'is_critical', 'is_indirect', 'source', 'split', 'target'}),
+    "before_action": frozenset({'action_id', 'action_type', 'actor', 'actor_type', 'insert', 'target', 'targets', 'target_type'}),
+    "on_action": frozenset({'action_id', 'action_type', 'actor', 'actor_type', 'insert', 'sp_consumed', 'tag', 'target', 'targets', 'target_type'}),
+    "on_action_end": frozenset({'action_id', 'action_type', 'actor', 'actor_type', 'insert', 'hit_targets'}),
     "aha_instant_end": frozenset({'actors', 'consumed', 'extra'}),
     "aha_instant_start": frozenset({'actors', 'consumed', 'extra'}),
     "before_battle_start": frozenset({'encounter'}),
@@ -95,6 +113,7 @@ DEFAULT_PAYLOAD_FIELDS: Dict[str, frozenset] = {
     "on_dot_retrigger": frozenset({'modifier_id', 'target'}),
     "on_extra_turn": frozenset({'actor'}),
     "on_gain_energy": frozenset({'action_id', 'actor', 'amount', 'err_exempt', 'reason', 'source'}),
+    "on_energy_change": frozenset({'after', 'before', 'reason', 'source', 'target'}),
     "on_hp_decrease": frozenset({'action_type', 'amount', 'damage_type', 'is_critical', 'reason', 'source', 'target'}),
     "on_hp_increase": frozenset({'action_id', 'amount', 'excess', 'reason', 'source', 'target'}),
     "on_hp_lock": frozenset({'action_id', 'source', 'target'}),
@@ -105,13 +124,18 @@ DEFAULT_PAYLOAD_FIELDS: Dict[str, frozenset] = {
     "on_resource_gain": frozenset({'actor', 'amount', 'current', 'overflow', 'resource_id'}),
     "on_revive": frozenset({'hp', 'percent', 'source', 'target'}),
     "on_skill_point_change": frozenset({'after', 'before', 'consumer', 'reason', 'turn'}),
+    "on_unselectable_start": frozenset({'ally_targetable', 'enemy_targetable', 'source', 'target'}),
+    "on_unselectable_end": frozenset({'ally_targetable', 'enemy_targetable', 'source', 'target'}),
     "on_state_change": frozenset({'actor', 'from_state', 'to_state'}),
+    "on_stance_countdown": frozenset({'ignore_mute_break', 'source', 'target'}),
     "on_toughness_damage": frozenset({'amount', 'bar_index', 'source', 'target'}),
     "on_turn_end": frozenset({'actor', 'kind'}),
     "on_turn_start": frozenset({'actor', 'kind'}),
+    "on_ultimate_prepare": frozenset({'action', 'source'}),
     "on_ultimate": frozenset({'action', 'source', 'target'}),
     "on_wave_start": frozenset({'wave_index'}),
     "shield_absorbed": frozenset({'amount', 'remaining', 'shield_id', 'source', 'target'}),
+    "shield_changed": frozenset({'amount', 'reason', 'remaining', 'shield_id', 'source', 'target'}),
     "shield_broken": frozenset({'shield_id', 'source', 'target'}),
     "toughness_recovered": frozenset({'amount', 'target'}),
 }

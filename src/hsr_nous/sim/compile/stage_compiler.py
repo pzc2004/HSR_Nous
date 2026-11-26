@@ -26,7 +26,8 @@ _STAGE_KEYS = frozenset({
 #: inline 敌人合法键
 _ENEMY_KEYS = frozenset({
     "enemy_template", "actor_id", "name", "level", "hp", "atk", "def", "spd",
-    "max_toughness", "toughness_bars", "taunt", "weakness", "resistance", "policy", "groups",
+    "max_toughness", "max_special_sp", "toughness_bars", "taunt", "weakness", "resistance", "policy", "groups",
+    "initial_special_sp",
 })
 
 #: 敌人序列/冷却策略合法键（v1 不开放其他 AI 字段）
@@ -41,11 +42,12 @@ _WAVE_KEYS = frozenset({"wave_index", "enemies"})
 _TERMINATION_KEYS = frozenset({"mode", "max_action_value"})
 
 #: 敌人模板 base_stats / actions 合法键（模板=生成物，错拼在此炸而不是静默取缺省）
-_ENEMY_TPL_BASE_KEYS = frozenset({"hp", "atk", "def", "spd", "max_toughness", "toughness_bars", "effect_res"})
+_ENEMY_TPL_BASE_KEYS = frozenset({"hp", "atk", "def", "spd", "max_toughness", "max_special_sp", "toughness_bars", "effect_res"})
 _ENEMY_TPL_ACTION_KEYS = frozenset({
     "action_id", "name", "action_type", "target_type", "damage_type",
     "scaling", "scaling_blast", "toughness_dmg", "toughness_dmg_blast",
     "energy_gain", "energy_grant", "instances", "instance_variants", "prefer_target", "split", "available_if",
+    "damage_custom_name",
     "resource_gain", "instances_from_resource", "instances_base", "instances_per_point",
     "instances_cap", "scaling_from_resource", "scaling_per_point", "consume_all_resource",
 })
@@ -94,6 +96,7 @@ def _parse_enemy_actions(items: Any, *, where: str) -> List[Any]:
                                if a.get("instance_variants") is not None else None),
             prefer_target=str(a.get("prefer_target", "")),
             split=str(a.get("split", "")),
+            damage_custom_name=str(a.get("damage_custom_name", "")),
             available_if=str(a.get("available_if", "")),
             resource_gain={k: float(v) for k, v in (a.get("resource_gain") or {}).items()},
             instances_from_resource=str(a.get("instances_from_resource", "")),
@@ -221,6 +224,7 @@ class StageCompiler:
                 hp=float(base.get("hp", 0.0)), atk=float(base.get("atk", 0.0)),
                 def_=float(base.get("def", 0.0)), spd=float(base.get("spd", 100.0)),
                 max_toughness=float(base.get("max_toughness", 0.0)),
+                max_special_sp=float(base.get("max_special_sp", 0.0)),
                 toughness_bars=[float(x) for x in (base.get("toughness_bars") or [])],
                 effect_res=float(base.get("effect_res", 0.0)),
                 taunt=float(spec.get("taunt", 100.0)),
@@ -238,6 +242,7 @@ class StageCompiler:
                 name=spec.get("name") or tpl.get("name", tpl["enemy_id"]),
                 actor_type="monster", level=level,
                 stats=stats,
+                initial_special_sp=float(tpl.get("initial_special_sp", 0.0)),
                 groups=list(tpl.get("groups") or []),
             )
             capabilities = tpl.get("capabilities") or {}
@@ -270,6 +275,7 @@ class StageCompiler:
             def_=float(spec.get("def", 0.0)),
             spd=float(spec.get("spd", 100.0)),
             max_toughness=float(spec.get("max_toughness", 0.0)),
+            max_special_sp=float(spec.get("max_special_sp", 0.0)),
             toughness_bars=[float(x) for x in (spec.get("toughness_bars") or [])],
             taunt=float(spec.get("taunt", 100.0)),
         )
@@ -283,6 +289,7 @@ class StageCompiler:
             actor_type="monster",
             level=level,
             stats=stats,
+            initial_special_sp=float(spec.get("initial_special_sp", 0.0)),
             groups=list(spec.get("groups") or []),
         )
         policy = _parse_enemy_policy(spec.get("policy"), where=f"{e_desc} policy")
@@ -362,6 +369,10 @@ class StageCompiler:
                 namespaced = dict(eff)
                 if eff.get("summon_id") in mapping:
                     namespaced["summon_id"] = mapping[str(eff["summon_id"])]
+                if isinstance(eff.get("summon_variants"), dict):
+                    namespaced["summon_variants"] = {
+                        key: mapping.get(str(value), str(value))
+                        for key, value in eff["summon_variants"].items()}
                 if isinstance(eff.get("options"), list):
                     # random_choice 的嵌套 summon 也须与定义同步改名。
                     namespaced["options"] = [_namespace_effect(option) for option in eff["options"]]

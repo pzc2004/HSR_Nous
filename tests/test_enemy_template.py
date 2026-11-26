@@ -903,12 +903,14 @@ class TestEnemyAIConfig:
             "MonsterSkillConfig.json": [],
             "EliteGroup.json": [],
             "HardLevelGroup.json": [],
+            "BattleTargetConfig.json": [],
         }
         configs = {
             "Config/ConfigAI/A.json": {"AIName": "A"},
             "Config/ConfigAI/B.json": {"AIName": "B"},
         }
-        for filename in enemies_update.GLOBAL_MODIFIER_FILES:
+        for filename in (*enemies_update.GLOBAL_MODIFIER_FILES,
+                         *enemies_update.GLOBAL_TASK_LIST_FILES):
             configs[filename] = {}
         calls = []
 

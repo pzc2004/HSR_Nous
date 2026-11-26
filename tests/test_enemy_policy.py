@@ -1627,6 +1627,10 @@ def test_eulogy_on_kill_applies_vulnerability_stacks(
     (tmp_path / "enemies").mkdir()
     (tmp_path / "enemies" / f"{enemy_id}.yaml").write_text(
         yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    for summon_id in {spec["enemy_template"] for spec in template.get("summons") or []}:
+        (tmp_path / "enemies" / f"{summon_id}.yaml").write_text(
+            yaml.safe_dump(generate_enemy_template(summon_id),
+                           allow_unicode=True, sort_keys=False), encoding="utf-8")
     dummy = {
         "enemy_id": "dummy", "name": "假人", "level": 80,
         "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 100, "max_toughness": 30},
@@ -1867,6 +1871,10 @@ def test_war_gear_retriggers_wind_shear(tmp_path):
     (tmp_path / "enemies").mkdir()
     (tmp_path / "enemies" / "8024011.yaml").write_text(
         yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    for summon_id in {spec["enemy_template"] for spec in template.get("summons") or []}:
+        (tmp_path / "enemies" / f"{summon_id}.yaml").write_text(
+            yaml.safe_dump(generate_enemy_template(summon_id),
+                           allow_unicode=True, sort_keys=False), encoding="utf-8")
     build = {"build": {
         "team": [{
             "actor_id": "hero", "name": "测试员", "inline": True,

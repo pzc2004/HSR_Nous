@@ -108,7 +108,7 @@ _ACTION_KEYS = frozenset({
     "instance_variants", "segment_choice",
     "resource_gain", "ult_cost_resource", "ult_cost_amount", "ult_quick_cast",
     "ult_consume_amount",
-    "split", "act_now_targets", "apply_modifiers", "assist_cost_resource",
+    "split", "is_indirect", "damage_tags", "damage_custom_name", "act_now_targets", "apply_modifiers", "assist_cost_resource",
     "instances_from_resource", "instances_base", "instances_per_point", "instances_cap",
     "scaling_from_resource", "scaling_per_point", "consume_all_resource",
     "cleanse_self", "level_key", "prefer_target",
@@ -116,7 +116,7 @@ _ACTION_KEYS = frozenset({
 })
 
 #: 段级变体合法键（消费点：_compile_action_list 变体校验 + 引擎 _execute_action 覆写）
-_VARIANT_KEYS = frozenset({"target_type", "scaling", "damage_type", "toughness_dmg"})
+_VARIANT_KEYS = frozenset({"target_type", "scaling", "scaling_blast", "damage_type", "toughness_dmg"})
 
 #: 元素词表（内部小写；toughness_scope 列表元素/damage_type 同词表）
 #: ——唯一事实源已上提 sim_schema/action.py ELEMENTS（hook 动态元素求值校验同读），本地别名沿用
@@ -130,7 +130,7 @@ _SELF_NS_FIELDS = frozenset({
     "atk", "def_", "spd", "crit_rate", "crit_dmg", "break_effect", "effect_hit",
     "effect_res", "max_toughness", "toughness_bars", "energy_regen", "taunt",
     "def_pen", "res_pen", "vulnerability", "heal_bonus", "shield_bonus",
-    "break_efficiency_boost", "weakness_break_efficiency_boost",
+    "break_efficiency_boost", "weakness_break_efficiency_boost", "toughness_taken",
     "dmg_bonus", "weakness", "resistance", "summoner_id", "summon_flags",
     "taunt_eff", "elation",
 })
@@ -142,12 +142,12 @@ _MODIFIER_SPEC_KEYS = frozenset({
     "modifier_id", "name", "modifier_type", "duration", "stacks", "max_stack",
     "stack_mode", "stacks_value", "singleton_group", "dispellable", "stat_effects",
     "scaling_effects", "override_effects", "hit_condition",
-    "enable_if", "stat_exprs",  # 条件光环（04_modifier §4.16 已落地原语）
+    "enable_if", "stat_exprs", "override_exprs",  # 条件光环（04_modifier §4.16 已落地原语）
     "hit_stat_exprs",  # 命中域表达式值（04_modifier §hit_condition——per-hit 值槽）
-    "weakness_add", "grants_immune",
-    "tick_anchor", "effect_scope", "hp_lock", "block_damage", "fixed_hp_bars", "revive_percent", "moon_cocoon",
-    "forced_taunt", "toughness_lock", "lock_on", "prevent_action", "remove_on_source_death", "remove_on_source_exit", "shield", "target", "target_resource",
-    "max_override", "debuff_kind", "control_kind", "on_apply", "on_remove",
+    "weakness_add", "weakness_override", "secret_weakness", "protected_weakness", "grants_immune", "behavior_flags",
+    "tick_anchor", "effect_scope", "hp_lock", "allow_negative_hp", "block_damage", "fixed_hp_bars", "revive_percent", "moon_cocoon",
+    "forced_taunt", "toughness_lock", "custom_unselectable", "lock_on", "prevent_action", "locked_action_types", "remove_on_source_death", "remove_on_source_exit", "shield", "target", "target_resource",
+    "max_override", "dynamic_values", "debuff_kind", "control_kind", "on_apply", "on_remove",
     "dot_element", "dot_ratio", "dot_ratio_expr", "dot_base_chance",  # DoT 运行时载体（modifier_type=="dot"——dot_source_atk/dot_snapshot_ctx 由引擎施加时结算，不经声明；dot_ratio/dot_base_chance 字符串值走 param() 取档，hook 侧现场求值烘焙）
 })
 
@@ -270,44 +270,65 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "gain_resource": frozenset({"resource_id", "amount", "source"}),
     "absorb_modifier": frozenset({"modifier_name", "resource_id"}),
     "set_resource": frozenset({"resource_id", "amount"}),
+    "clear_attached_weakness": frozenset({"weak_list"}),
     "set_dynamic_value": frozenset({"dynamic_key", "amount", "amount_target"}),
-    "set_dynamic_target": frozenset({"dynamic_key", "target"}),
+    "loop_effects": frozenset({"count", "condition", "effects"}),
+    "set_modifier_dynamic_value": frozenset({"modifier_id", "dynamic_key", "amount", "mode"}),
+    "create_battle_event": frozenset({"event_id", "team"}),
+    "emit_phase_custom_event": frozenset({"phase_event", "include_limbo", "param_entity"}),
+    "emit_modifier_custom_event": frozenset({"event_type", "dynamic_key", "value"}),
+    "set_dynamic_target": frozenset({"dynamic_key", "target", "owner", "scope"}),
+    "modify_shield": frozenset({"max", "modifier_ids", "amount", "mode", "allow_expand_max"}),
     "bind_roll": frozenset({"roll_key", "scale"}),
     "once_per_battle": frozenset({"latch_id"}),
     "refund_bank": frozenset({"resource_id"}),
     "gain_skill_point": frozenset({"amount", "overflow_to"}),
     "set_sp_max": frozenset({"amount"}),
+    "set_skill_point": frozenset({"amount"}),
     "refill_skill_point": frozenset({"from_resource"}),
     "gain_energy": frozenset({"amount", "err_exempt"}),
     "consume_energy": frozenset({"amount"}),
+    "set_energy": frozenset({"amount"}),
+    "modify_special_sp": frozenset({"amount"}),
     "heal_self": frozenset({"ratio"}),
     "heal": frozenset({"ratio", "amount"}),
-    "set_hp_to_percent": frozenset({"percent", "amount"}),
+    "set_hp_to_percent": frozenset({"percent", "amount", "source"}),
     "drain_hp": frozenset({"amount", "drain_ratio", "heal_target", "floor", "into_resource"}),
-    "summon": frozenset({"summon_id", "position"}),
+    "summon": frozenset({"summon_id", "summon_id_source", "summon_variants", "position", "summon_group"}),
     "dismiss_summon": frozenset({"summon_id"}),
     "leave_battle": frozenset({"reason"}),
     "remove_shield": frozenset({"target"}),
     "apply_modifier": frozenset({"modifier", "apply_chance", "source"}),
     "deal_damage": frozenset({"scaling_atk", "scaling_hp", "amount", "category", "damage_type",
-                              "toughness_dmg", "toughness_scope", "action_type",
+                              "toughness_dmg", "toughness_scope", "action_type", "is_indirect", "damage_tags", "damage_custom_name",
                               "punchline_source", "elation", "ignore_shield", "energy_grant"}),
     "barrage_damage": frozenset({"scaling_atk", "repeat_scaling_atk", "instances_expr",
                                  "damage_type", "toughness_dmg", "energy_grant", "action_type"}),
     "random_choice": frozenset({"options"}),
     "trigger_action": frozenset({"action_id", "scaling_atk", "caster", "action_type",
                                  "pool_override"}),
-    "remove_modifier": frozenset({"modifier_id", "reason", "filter", "max_count"}),
+    "remove_modifier": frozenset({"modifier_id", "reason", "filter", "max_count", "order"}),
     "break_damage": frozenset({"element", "ratio"}),
     "trigger_dot": frozenset({"scope", "dot_element", "ratio"}),
     "adjust_duration": frozenset({"modifier_id", "delta"}),
     "add_toughness_bar": frozenset({"amount"}),
     "restore_toughness": frozenset(),
+    "exit_break_state": frozenset(),
+    "reset_stance": frozenset({"amount", "mode"}),
+    "clear_protected_weakness": frozenset({"weak_list"}),
+    "clear_secret_weakness": frozenset({"weak_list"}),
+    "set_targetable": frozenset({"enemy_targetable", "ally_targetable"}),
     "reduce_toughness": frozenset({"amount", "floor", "damage_type"}),
+    "trigger_break": frozenset({"damage_type", "ignore_mute_break"}),
+    "trigger_stance_countdown": frozenset({"ignore_mute_break"}),
     "grant_extra_turn": frozenset(),
     "immediate_action": frozenset(),
+    "set_action_delay": frozenset({"amount", "near_target"}),
     "delay_action": frozenset({"amount", "apply_chance"}),
     "advance_action": frozenset({"amount"}),
+    "lock_action_delay": frozenset({"lock_id", "locked", "whitelist_source", "whitelist_change_type"}),
+    "set_team_location": frozenset({"position", "reference"}),
+    "record_formation_index": frozenset(),
     "adjust_stacks": frozenset({"modifier_id", "delta"}),
     "modify_amount": frozenset({"amount"}),
     "activate_ultimate": frozenset(),
@@ -355,12 +376,12 @@ _DOT_TICK_MARKER_RE = re.compile(r"\$(snapshot|modifier)\b")
 #: dot_ratio_expr 跳伤求值语境闭合键表（与 pipeline._dot_tick_expr_ctx 注入集同义——
 #: 改一边同步另一边；语境外引用/非内建函数调用编译期炸，不落到运行期）：
 #: - `$self.<field>`：持有者现值——复用 `_SELF_NS_FIELDS` 白名单（下方闸内引用）
-#: - `$snapshot.<field>`：施加者攻击侧快照包（dot_snapshot_ctx 键 + atk=dot_source_atk）
+#: - `$snapshot.<field>`：施加者攻击侧快照包（dot_snapshot_ctx 键 + atk/max_hp）
 #: - `$modifier.<field>`：modifier 自身实例公开字段
 _DOT_TICK_SNAPSHOT_FIELDS = frozenset({
     "atk", "ability_multiplier", "dmg_boost_multi", "ind_dmg_boost_multi",
     "final_dmg_multi", "weaken_multi", "ehr_multi", "be_multi",
-    "source_level", "def_pen", "res_pen",
+    "source_level", "def_pen", "res_pen", "max_hp",
 })
 _DOT_TICK_MODIFIER_FIELDS = frozenset({
     "stacks", "duration", "max_stack", "modifier_id", "dot_element",
@@ -519,7 +540,7 @@ TARGET_TYPES = frozenset({
 ULT_TIMINGS = frozenset({"before_action", "after_action", "never"})
 
 #: modifier 枚举字段（引擎 stack_mode/tick_anchor/effect_scope 实现集，state.py 注释同口径）
-STACK_MODES = frozenset({"refresh", "independent", "replace", "set"})
+STACK_MODES = frozenset({"refresh", "independent", "replace", "replace_keep_duration", "set", "multiple"})
 TICK_ANCHORS = frozenset({"owner_turn_end", "owner_turn_start", "on_action", "source_turn_end",
                           "source_turn_start"})
 EFFECT_SCOPES = frozenset({"self", "team"})
@@ -536,7 +557,7 @@ _DURATION_DICT_KEYS = frozenset({"value", "tick_on", "until"})
 DURATION_TICK_ON = frozenset({"$modifier.source"})
 
 #: shield 数值块合法键（04_modifier §4.15——accumulate/cap 具名累积池族）
-_SHIELD_BLOCK_KEYS = frozenset({"scaling", "flat", "accumulate", "cap"})
+_SHIELD_BLOCK_KEYS = frozenset({"scaling", "flat", "accumulate", "cap", "modifier_id"})
 #: shield cap 子块合法键（multiplier × scaling/flat 按 shield 公式求值）
 _SHIELD_CAP_KEYS = frozenset({"scaling", "flat", "multiplier"})
 
@@ -826,12 +847,12 @@ _KNOWN_STAT_KEYS = frozenset({
     # effective_stats 基础产出键
     "hp", "atk", "def_", "def", "spd", "crit_rate", "crit_dmg", "def_pen", "res_pen",
     "vulnerability", "energy_regen", "break_effect", "break_efficiency_boost",
-    "weakness_break_efficiency_boost", "effect_hit", "effect_res", "taunt", "taunt_eff",
+    "weakness_break_efficiency_boost", "toughness_taken", "effect_hit", "effect_res", "taunt", "taunt_eff",
     "heal_bonus", "shield_bonus",
     # pct 族（_PCT_BASE）+ 增伤通槽
     "hp_pct", "atk_pct", "def_pct", "spd_pct", "all_dmg",
     # 引擎/pipeline 读取的扩展槽（命中穿透/受疗/嘲讽加成）
-    "effect_res_pen", "incoming_heal", "aggro_boost",
+    "effect_res_pen", "incoming_heal", "aggro_boost", "recoverable_hp_reduction", "recoverable_hp_delta",
     # 超击破体系（通用 settle "super_break" 路由直读）：转换倍率池 / 超击破增伤池
     "super_break_modifier", "super_break_dmg_boost",
     # 欢愉体系（StatBlock.elation 面板，21_elation §21.1）
@@ -887,7 +908,7 @@ _DEAD_STAT_KEYS: Dict[str, str] = {
     "dot_dmg_boost": "dmg_dot_dmg_boost（DoT 增伤桶键——裸键落顶层面板无消费端=死键；dmg_ 前缀才入桶，21008 猎物视线先例）",
     "all_type_res": "（无消费端——全抗件待收，1006/1015/1106/1203 同案，勿写）",
     "def_shred": "def_pct 负值（1015 先例）",
-    "cc_res": "（控制特化抵抗无通道——type_res 无实例源不新造；1213 饮月/1217 藿藿同案）",
+    "cc_res": "（旧键仍禁——控制类型抵抗写 control_type_res，经 hit_chance 的 type_res 乘区消费）",
 }
 
 
@@ -1426,6 +1447,8 @@ class BuildCompiler:
                                            where=f"{a_desc} instance_variants")
                     _check_mapping_list(iv.get("scaling"), where=f"{a_desc} instance_variants",
                                         field="scaling")
+                    _check_mapping_list(iv.get("scaling_blast"), where=f"{a_desc} instance_variants",
+                                        field="scaling_blast")
             ts = a.get("toughness_scope")
             if ts:
                 # 削韧作用域："all" 或元素列表——其余写法编译期炸
@@ -1447,30 +1470,54 @@ class BuildCompiler:
                 except Exception as e:
                     raise ValueError(f"{a_desc} 的 available_if 表达式非法：{e}") from e
                 _check_self_ns_fields(available_if, where=f"{a_desc} available_if")
-            scaling = a.get("scaling") or []
+            def compile_number_or_expression(value: Any, where: str) -> Any:
+                if isinstance(value, str):
+                    value = sub(value, where=where)
+                    try:
+                        return float(value)
+                    except ValueError:
+                        self.expr.compile(value, layer="effect")
+                return value
+
+            def compile_scaling_rows(rows: Any, field: str) -> List[Dict[str, Any]]:
+                return [{key: compile_number_or_expression(value, f"{a_desc} {field}[{key!r}]")
+                         for key, value in row.items()} for row in rows or []]
+
+            scaling = compile_scaling_rows(a.get("scaling"), "scaling")
             actions.append(Action(
                 action_id=a["action_id"],
                 name=a.get("name", a["action_id"]),
                 action_type=a["action_type"],
                 target_type=a.get("target_type", "single"),
                 damage_type=a.get("damage_type"),
-                scaling=[{k: float(v) for k, v in s.items()} for s in scaling],
+                scaling=scaling,
                 energy_cost=int(a.get("energy_cost", 0)),
                 energy_gain=(int(v) if (v := a.get("energy_gain")) is not None else None),
                 energy_grant=float(a.get("energy_grant", 0.0)),
                 skill_point_cost=int(a.get("skill_point_cost", 0)),
                 skill_point_gain=int(a.get("skill_point_gain", 0)),
-                toughness_dmg=float(a.get("toughness_dmg", 0.0)),
+                toughness_dmg=compile_number_or_expression(
+                    a.get("toughness_dmg", 0.0), f"{a_desc} toughness_dmg"),
                 toughness_scope=([str(e).lower() for e in a["toughness_scope"]]
                                  if isinstance(a.get("toughness_scope"), list)
                                  else str(a.get("toughness_scope", "")).lower()),
-                scaling_blast=([{k: float(v) for k, v in s.items()} for s in sb]
+                scaling_blast=(compile_scaling_rows(sb, "scaling_blast")
                                if (sb := a.get("scaling_blast")) else None),
-                toughness_dmg_blast=(float(v) if (v := a.get("toughness_dmg_blast")) is not None else None),
+                toughness_dmg_blast=(compile_number_or_expression(v, f"{a_desc} toughness_dmg_blast")
+                                     if (v := a.get("toughness_dmg_blast")) is not None else None),
                 instances=int(a.get("instances", 1)),
                 segment_confirm=bool(a.get("segment_confirm", False)),  # 逐段确认
                 # 段级变体 + 逐击选招：变体键闸 + target_type 枚举闸（词表外拼错编译期炸）
-                instance_variants=([None if iv is None else dict(iv)
+                instance_variants=([None if iv is None else {
+                    **iv,
+                    **({"scaling": compile_scaling_rows(iv["scaling"], "instance_variants.scaling")}
+                       if iv.get("scaling") is not None else {}),
+                    **({"scaling_blast": compile_scaling_rows(
+                        iv["scaling_blast"], "instance_variants.scaling_blast")}
+                       if iv.get("scaling_blast") is not None else {}),
+                    **({"toughness_dmg": compile_number_or_expression(
+                        iv["toughness_dmg"], "instance_variants.toughness_dmg")}
+                       if iv.get("toughness_dmg") is not None else {})}
                                     for iv in a["instance_variants"]]
                                    if a.get("instance_variants") is not None else None),
                 segment_choice=bool(a.get("segment_choice", False)),
@@ -1481,6 +1528,9 @@ class BuildCompiler:
                 ult_quick_cast=bool(a.get("ult_quick_cast", False)),
                 manual_trigger=bool(a.get("manual_trigger", False)),
                 split=str(a.get("split", "")),
+                is_indirect=bool(a.get("is_indirect", False)),
+                damage_tags=[int(tag) for tag in a.get("damage_tags") or []],
+                damage_custom_name=str(a.get("damage_custom_name", "")),
                 act_now_targets=str(a.get("act_now_targets", "")),
                 assist_cost_resource=str(a.get("assist_cost_resource", "")),  # 助战技额度资源
                 apply_modifiers=[dict(m) for m in a.get("apply_modifiers") or []],
@@ -1635,15 +1685,19 @@ class BuildCompiler:
         _check_keys(spec, _MODIFIER_SPEC_KEYS, where=where)
         # 容器类型闸（编译期抓形状错，反馈须能被标注自愈环消费——漏到运行期就是
         # TypeError/AttributeError 谜语：1207 grants_immune:true、1504 stat_effects:list 病例）
-        for k in ("stat_effects", "scaling_effects", "override_effects", "shield"):
+        for k in ("stat_effects", "scaling_effects", "override_effects", "override_exprs",
+                  "shield", "dynamic_values"):
             v = spec.get(k)
             if v is not None and not isinstance(v, dict):
                 raise ValueError(f"{where} 的 {k} 须为 mapping，实得 {type(v).__name__}")
-        for k in ("weakness_add", "grants_immune"):
+        for k in ("weakness_add", "weakness_override", "secret_weakness", "protected_weakness", "grants_immune"):
             v = spec.get(k)
             if v is not None and not isinstance(v, (list, tuple)):
                 raise ValueError(f"{where} 的 {k} 须为 list，实得 {type(v).__name__}")
         _check_weakness(spec.get("weakness_add"), where=f"{where} weakness_add")
+        _check_weakness(spec.get("weakness_override"), where=f"{where} weakness_override")
+        _check_weakness(spec.get("secret_weakness"), where=f"{where} secret_weakness")
+        _check_weakness(spec.get("protected_weakness"), where=f"{where} protected_weakness")
         if spec.get("dot_element"):
             _check_enum(spec["dot_element"], _ELEMENTS, where=where, field="dot_element")
         _check_grants_immune_literal(spec.get("grants_immune"), where)
@@ -1746,6 +1800,7 @@ class BuildCompiler:
         # 病族闸：死键硬闸（stat_effects/stat_exprs/hit_stat_exprs 共用——命中即炸带正解）
         _check_dead_stat_keys((spec.get("stat_effects") or {}).keys(), f"{where} stat_effects")
         _check_dead_stat_keys((spec.get("stat_exprs") or {}).keys(), f"{where} stat_exprs")
+        _check_dead_stat_keys((spec.get("override_exprs") or {}).keys(), f"{where} override_exprs")
         _check_dead_stat_keys((spec.get("hit_stat_exprs") or {}).keys(), f"{where} hit_stat_exprs")
         for stat, v in list((spec.get("stat_effects") or {}).items()):
             if isinstance(v, str):
@@ -1760,6 +1815,22 @@ class BuildCompiler:
                 spec["stat_exprs"][stat] = sub(v, where=f"{where} stat_exprs[{stat!r}]")
                 _check_no_hook_chance(spec["stat_exprs"][stat],
                                       f"{where} stat_exprs[{stat!r}]")
+        for stat, v in list((spec.get("override_exprs") or {}).items()):
+            if isinstance(v, str):
+                spec["override_exprs"][stat] = sub(v, where=f"{where} override_exprs[{stat!r}]")
+                _check_no_hook_chance(spec["override_exprs"][stat],
+                                      f"{where} override_exprs[{stat!r}]")
+        for key, v in list((spec.get("dynamic_values") or {}).items()):
+            if not isinstance(key, str) or not key:
+                raise ValueError(f"{where} 的 dynamic_values 键须为非空字符串")
+            if isinstance(v, str):
+                v2 = sub(v, where=f"{where} dynamic_values[{key!r}]")
+                try:
+                    spec["dynamic_values"][key] = float(v2)
+                except ValueError:
+                    spec["dynamic_values"][key] = v2
+                    _check_no_hook_chance(v2, f"{where} dynamic_values[{key!r}]")
+                    self.expr.compile(v2, layer="effect")
         for stat, v in list((spec.get("hit_stat_exprs") or {}).items()):
             if isinstance(v, str):
                 spec["hit_stat_exprs"][stat] = sub(v, where=f"{where} hit_stat_exprs[{stat!r}]")
@@ -1815,7 +1886,7 @@ class BuildCompiler:
             raise ValueError(f"{where} 的 max_override 须为正数（覆写后的资源上限值）")
         # override 互斥（13_validator §13.3）：同一 modifier 同一 stat 不得同时携带
         # override 与 flat/scaling（语义互相覆盖=静默写废一边）
-        ovl = set(spec.get("override_effects") or {})
+        ovl = set(spec.get("override_effects") or {}) | set(spec.get("override_exprs") or {})
         if ovl:
             clash = ovl & (set(spec.get("stat_effects") or {})
                            | set(spec.get("scaling_effects") or {}))
@@ -1823,6 +1894,16 @@ class BuildCompiler:
                 raise ValueError(
                     f"{where} override 互斥：stat {sorted(clash)} 同时出现在 override_effects"
                     f" 与 flat/scaling（同 modifier 只许一种写法，见 04_modifier §4.2）")
+        for field in ("duration", "max_stack"):
+            value = spec.get(field)
+            if isinstance(value, str):
+                value = sub(value, where=f"{where} {field}")
+                spec[field] = value
+                try:
+                    self.expr.compile(value, layer="effect")
+                except Exception as e:
+                    raise ValueError(f"{where} 的 {field} 表达式非法：{e}") from e
+                _check_self_ns_fields(value, where=f"{where} {field}", extra=extra_self_fields)
         dur = spec.get("duration")
         if isinstance(dur, dict):
             d_where = f"{where} duration"
@@ -1874,6 +1955,15 @@ class BuildCompiler:
             except Exception as e:
                 raise ValueError(f"{where} stat_exprs[{stat!r}] 表达式非法：{e}") from e
             _check_self_ns_fields(str(v), where=f"{where} stat_exprs[{stat!r}]",
+                                  extra=extra_self_fields)
+        override_exprs = spec.get("override_exprs")
+        _warn_unknown_stat_keys(override_exprs, where)
+        for stat, v in (override_exprs or {}).items():
+            try:
+                self.expr.compile(str(v), layer="effect")
+            except Exception as e:
+                raise ValueError(f"{where} override_exprs[{stat!r}] 表达式非法：{e}") from e
+            _check_self_ns_fields(str(v), where=f"{where} override_exprs[{stat!r}]",
                                   extra=extra_self_fields)
         # 命中域表达式值（04_modifier §hit_condition——与 hit_condition 同语境，$event
         # 字段引用合法（target_hp_ratio/target_control_kinds 族），故不过 $self 字段闸）
@@ -1940,6 +2030,19 @@ class BuildCompiler:
                     f"子块键（enable_if/stat_exprs/stat_effects/duration/grants_immune 等）一律"
                     f"写进 modifier: {{...}} 内，写在 effect 层必被键闸打回（1001 打标实证）")
             _check_keys(eff, _eff_allowed, where=e_desc)
+            if t == "loop_effects":
+                nested = eff.get("effects")
+                if not isinstance(nested, list):
+                    raise ValueError(f"{e_desc} loop_effects 的 effects 必须是数组")
+                has_count = "count" in eff
+                has_condition = "condition" in eff
+                if has_count == has_condition:
+                    raise ValueError(
+                        f"{e_desc} loop_effects 的 count 与 condition 必须二选一")
+                self._validate_effects(
+                    nested, f"{e_desc} loop_effects", extra_self_fields=extra_self_fields,
+                    param_ctx=param_ctx, resources_ctx=resources_ctx,
+                    resource_writes=resource_writes, event_ns=event_ns)
             if t == "random_choice":
                 options = eff.get("options") or []
                 if not options:
@@ -2085,6 +2188,15 @@ class BuildCompiler:
                     raise ValueError(f"{e_desc} set_dynamic_value 的 dynamic_key 不能为空")
                 if eff.get("amount") is None:
                     raise ValueError(f"{e_desc} set_dynamic_value 缺 amount（目标值必填）")
+            if t == "set_modifier_dynamic_value":
+                if not str(eff.get("modifier_id", "")).strip():
+                    raise ValueError(f"{e_desc} set_modifier_dynamic_value 的 modifier_id 不能为空")
+                if not str(eff.get("dynamic_key", "")).strip():
+                    raise ValueError(f"{e_desc} set_modifier_dynamic_value 的 dynamic_key 不能为空")
+                if eff.get("amount") is None:
+                    raise ValueError(f"{e_desc} set_modifier_dynamic_value 缺 amount")
+                if eff.get("mode", "set") not in {"set", "add"}:
+                    raise ValueError(f"{e_desc} set_modifier_dynamic_value 的 mode 须为 set/add")
             if t == "once_per_battle" and not str(eff.get("latch_id", "")).strip():
                 raise ValueError(f"{e_desc} once_per_battle 的 latch_id 不能为空")
             if t == "absorb_modifier":
@@ -2099,12 +2211,12 @@ class BuildCompiler:
                 raise ValueError(
                     f"{e_desc} 的 resource_id 'energy' 是内建资源——能量走 gain_energy 钩"
                     f" / action 层 energy_gain（1210 桂乃芬实证——1004/1103 同口径）")
-            for target_slot in ("target", "amount_target"):
+            for target_slot in ("target", "amount_target", "owner"):
                 target_sel = eff.get(target_slot)
                 if target_sel is None:
                     continue
                 if isinstance(target_sel, dict):
-                    # 目标代数 dict：键 diff + pool/take/mode 词表 + where/order_by/take 预编译；
+                    # 目标代数 dict：键 diff + pool/index/take/mode 词表 + where/order_by/take 预编译；
                     # `$self`/`$event` 字段对账与 hook condition 同口径。
                     from hsr_nous.sim.target_algebra import validate_algebra
                     for _ak in ("where", "order_by", "take"):
@@ -2984,7 +3096,8 @@ class BuildCompiler:
         for aid, mods in modifiers_by_actor.items():
             ovl_stats: Dict[str, str] = {}
             for m in mods:
-                for stat in getattr(m, "override_effects", {}) or {}:
+                for stat in (set(getattr(m, "override_effects", {}) or {})
+                             | set(getattr(m, "override_exprs", {}) or {})):
                     if stat in ovl_stats:
                         raise ValueError(
                             f"override 冲突：单位 {aid} 的初始 modifier {ovl_stats[stat]!r} 与 "

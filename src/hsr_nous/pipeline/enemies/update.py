@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""enemies 域下载：tbgd 五表 + 公共 Modifier + 实际引用 CharacterConfig/Ability/ConfigAI.
+"""enemies 域下载：tbgd 六表 + 公共 Modifier + 实际引用 CharacterConfig/Ability/ConfigAI.
 
 ExcelOutput 表走 `/ExcelOutput/` raw 命名空间；Config 树走仓库根部 raw 命名空间。
 CharacterConfig 来自 MonsterTemplateConfig.JsonConfig，同族 Ability 须经 GitLab 实际文件索引
@@ -11,6 +11,7 @@ CharacterConfig 来自 MonsterTemplateConfig.JsonConfig，同族 Ability 须经 
   顶层一一对应，632×6 字段全量对拍全等在案）
 - MonsterSkillConfig.json（3566 技能：倍率 ParamList/削韧 SPHitBase/AI_CD/AI_ICD）
 - EliteGroup.json / HardLevelGroup.json（公式链系数表——与 hakushin 同名列车）
+- BattleTargetConfig.json（关卡目标 TargetParam 阈值——Ability 静态读取）
 
 红线（warn-only，三域共用口径）：以 Hakushin monster.json 已上线花名册对齐
 MonsterTemplateConfig 模板 id——tbgd 是版本追踪仓（含未上线内容），花名册外的
@@ -40,13 +41,14 @@ def _download_url(filename: str) -> str:
     template = _GITLAB_CONFIG_RAW if filename.startswith("Config/") else _GITLAB_RAW
     return template.format(filename=filename)
 
-#: 五件清单（文件名 = GitLab ExcelOutput 原文件名）
+#: 六件清单（文件名 = GitLab ExcelOutput 原文件名）
 TBGD_FILES = [
     "MonsterConfig.json",
     "MonsterTemplateConfig.json",
     "MonsterSkillConfig.json",
     "EliteGroup.json",
     "HardLevelGroup.json",
+    "BattleTargetConfig.json",
 ]
 
 #: 已被真实引用证明必需的公共 Modifier 定义（ConfigAbility 闭包之外的补充源）。
@@ -54,6 +56,11 @@ GLOBAL_MODIFIER_FILES = [
     "Config/ConfigGlobalModifier/GlobalModifier_Common_Specific.json",
     "Config/ConfigGlobalModifier/GlobalModifier_Common_Property.json",
     "Config/ConfigGlobalModifier/GlobalModifier_Monster.json",
+]
+
+#: Ability 闭包引用的公共 TaskListTemplate；与局部模板共用同一引用解析链。
+GLOBAL_TASK_LIST_FILES = [
+    "Config/ConfigGlobalTaskListTemplate/GlobalTaskListTemplate.json",
 ]
 
 
@@ -167,12 +174,13 @@ def run_update(
     timeout: float = 30.0,
     dry_run: bool = False,
 ) -> int:
-    """拉取五表、公共 Modifier 与实际引用 ConfigAI（文件级断点；单件失败不阻塞他件）."""
+    """拉取六表、公共 Modifier/TaskListTemplate 与实际引用 ConfigAI（文件级断点；单件失败不阻塞他件）."""
     from hsr_nous.pipeline.build.update import download_with_etag
 
     root = Path(data_dir)
     root.mkdir(parents=True, exist_ok=True)
-    targets = list(files) if files else [*TBGD_FILES, *GLOBAL_MODIFIER_FILES]
+    targets = (list(files) if files else
+               [*TBGD_FILES, *GLOBAL_MODIFIER_FILES, *GLOBAL_TASK_LIST_FILES])
 
     updated: List[str] = []
     skipped: List[str] = []

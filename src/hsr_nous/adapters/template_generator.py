@@ -12863,9 +12863,17 @@ def generate_enemy_template(
                             remaining_effects.pop(matched)
                         generic_summons = [spec["enemy_template"] for spec in compiled["summons"]]
                         legacy_summons = [spec["enemy_template"] for spec in legacy[3]]
-                        summons_covered = all(
-                            generic_summons.count(key) >= legacy_summons.count(key)
-                            for key in set(legacy_summons))
+                        costly_summon = any(effect.get("effect_type") == "drain_hp"
+                                            for effect in legacy_effects)
+                        if costly_summon:
+                            summons_covered = (
+                                len(generic_summons) == len(legacy_summons)
+                                and all(generic_summons.count(key) == legacy_summons.count(key)
+                                        for key in set(legacy_summons)))
+                        else:
+                            summons_covered = all(
+                                generic_summons.count(key) >= legacy_summons.count(key)
+                                for key in set(legacy_summons))
                         if (any(compiled["action"].get(key) != legacy_action.get(key)
                                 for key in action_keys) or generic_blast != legacy_blast
                                 or not effects_covered or not summons_covered):
@@ -13094,10 +13102,12 @@ def generate_enemy_template(
         "base_stats": {
             "hp": stats["hp"], "atk": stats["atk"], "def": stats["def_"],
             "spd": stats["spd"], "max_toughness": stats["max_toughness"],
+            "max_special_sp": stats["max_special_sp"],
             "effect_res": stats["effect_res"],
         },
         "weakness": stats["weakness"],
         "resistance": stats["resistance"],
+        "initial_special_sp": stats["initial_special_sp"],
         **({"groups": custom_tags} if custom_tags else {}),
         **({"capabilities": enemy_capabilities} if enemy_capabilities else {}),
         "actions": actions,

@@ -750,11 +750,11 @@ class WebSession:
                 # 敌人下一动意图（纯展示；见 _intent_of）
                 "intent": self._intent_of(aid, st),
                 "modifiers": len(st.modifiers),
-                "modifier_list": [m.name for m in st.modifiers.values()],  # 徽章 chips（③）
+                "modifier_list": [m.name for m in st.all_modifiers()],  # 徽章 chips（③）
                 # buff 小方块图标行三件套（L1/L5 纯展示；modifier_list 纯名数组保持不动）
                 "modifier_icons": [
                     {"name": m.name, "stacks": m.stacks, "type": m.modifier_type}
-                    for m in st.modifiers.values()
+                    for m in st.all_modifiers()
                 ],
             }
         return {
@@ -1145,7 +1145,7 @@ class WebSession:
             st = ctl.state.actors.get(aid)
             if st is None:
                 continue
-            for m in st.modifiers.values():
+            for m in st.all_modifiers():
                 if m.name == name:
                     row = _serialize_modifier(m, ctl.state, ctl.engine.actions_by_actor,
                                               shields=st.shields)
@@ -1314,7 +1314,7 @@ class WebSession:
             "heal_bonus": round(float(eff.get("heal_bonus", 0.0)), 4),
         }
         data["modifier_detail"] = []
-        for m in st.modifiers.values():
+        for m in st.all_modifiers():
             row = _serialize_modifier(m, ctl.state, ctl.engine.actions_by_actor,
                                       shields=st.shields)
             # F3/X1：旁车解析得到目标 ref 才可点展开（action 直查 / 显示名 name 匹配）

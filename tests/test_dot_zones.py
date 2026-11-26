@@ -460,6 +460,16 @@ class TestDotRatioTickExpr:
         r = pipe.settle_damage("dot", holder, holder, modifier=mod)
         assert math.isclose(r.value, 0.5 * 2000.0, rel_tol=1e-12), "基数=0.5×快照 atk"
 
+    def test_snapshot_max_hp_read(self):
+        pipe = SettlementPipeline(mode=MODE_EXPECTED)
+        src = _src_st(hp=4321.0)
+        holder = _holder_st(broken=True)
+        _neutralize_def(holder)
+        mod = _expr_dot_mod(pipe, src, holder, "0.1 * $snapshot.max_hp")
+        r = pipe.settle_damage("dot", holder, holder, modifier=mod)
+        assert math.isclose(r.value, 0.1 * 4321.0, rel_tol=1e-12)
+        assert _compile_dot_expr("0.1 * $snapshot.max_hp") is not None
+
     def test_own_stacks_read_live(self):
         """自身层数读取（跳伤时刻现值）：(2.0+0.5×($modifier.stacks−1))×$snapshot.atk——
         层数在施加与跳伤间可变，两次跳伤层数不同则基数不同（表达式自含层数语义，

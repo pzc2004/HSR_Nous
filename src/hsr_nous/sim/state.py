@@ -101,6 +101,7 @@ class Modifier:
     # 两域面板读取均为无条件件面板（构造防环——pipeline.effective_stats 阶段化求值）
     enable_if_expr: object = None
     stat_exprs: Dict[str, Any] = field(default_factory=dict)  # stat → PreparedExpression
+    override_exprs: Dict[str, Any] = field(default_factory=dict)
     # 命中域表达式值（04_modifier §hit_condition——与 hit_condition 同语境求值：$event
     # 命中域 + 宿主函数，$self 绑定携带者）：条件通过时逐 stat 现场求值计入当次命中
     # （静态 stat_effects 是烘焙定值，本槽服务按目标状态伸缩的 per-hit 值——
@@ -116,26 +117,37 @@ class Modifier:
     # ehr_multi/be_multi + 防御/抗性区的攻击侧输入（source_level/def_pen/res_pen）；跳伤时只补目标侧
     # 链乘（防御/抗性/易伤/减伤/韧性减伤现值）。空 dict = 裸件（手建直调路径），攻击侧全中性兜底。
     dot_snapshot_ctx: Dict[str, float] = field(default_factory=dict)
-    control_kind: str = ""      # "freeze"（跳过行动）/ "imprison"（禁锢：推条）/ "entangle"（纠缠：推条）
+    control_kind: str = ""      # "stun"（眩晕：禁行动）/ "freeze"（冻结：禁行动）/ "imprison"（禁锢：推条）/ "entangle"（纠缠：推条）
+    behavior_flags: List[str] = field(default_factory=list)  # 上游原始行为旗标；添加/移除事件原样携带
     weakness_add: List[str] = field(default_factory=list)  # 弱点植入（stat 本体；判定走 pipeline.effective_weakness）
+    weakness_override: Optional[List[str]] = None  # WeakList 覆写；None=不覆写，[]=清空
+    secret_weakness: List[str] = field(default_factory=list)  # 仅弱点显示隐藏，不阻挡削韧
+    protected_weakness: List[str] = field(default_factory=list)  # Protected 按元素保护（非全局韧性锁）
     grants_immune: List[str] = field(default_factory=list)  # 携带者免疫的 debuff 类别（字面 kind 词表——"control"等，非表达式；enable_if 条件件随启用态开关，04_modifier §4.7）
     tick_anchor: str = "owner_turn_end"  # 计时锚点（duration-1 时点）：owner_turn_end（默认，携带者回合结束）/ owner_turn_start（携带者回合开始——阮梅弦外音族）/ on_action（每次行动——行动次数型 buff 族）/ source_turn_end（施加者回合结束——04_modifier §4.14 duration.tick_on "$modifier.source" 的落地点；施加者离场后自然停走）/ source_turn_start（施加者回合开始——source_turn_end 的开始侧对称锚，长夜月 141302 忆灵光环族）
     effect_scope: str = "self"  # 数值作用范围：self（默认，仅携带者）/ team（光环——挂源辐射全队，阮梅弦外音/缇宝族；计时仍走 tick_anchor）
     # ---- 生存三件套（受击链末段四层分工，见 engine._check_death docstring）----
     hp_lock: bool = False        # 锁血：HP 不会降至 1 以下（伤害照算、致命留 1 血；区别于免死 cancel 与复活回拉）
+    allow_negative_hp: bool = False  # 允许负 HP 存活：父件存在时不做真死定论
     block_damage: bool = False   # 一次性免伤 Barrier：下次受击 amount=0 并消耗，目标侧结算
     fixed_hp_bars: int = 0       # 固定 HP 条数：>0 时每段伤害固定扣 1/N 条（N 为本值）
     revive_percent: float = 0.0  # 复活：>0 时携带者 HP 归零消费本件，以生命上限×该比例回拉（发 on_revive）
     moon_cocoon: bool = False    # 月茧（mechanics 11 §11.1）：携带者受致命伤进月茧态（留 1 血，下次回合开始前受治疗/获盾解除，否则到期真死）；次数为战斗级（见 BattleState.moon_cocoon_used，全队每场 1 次，实战确认 2026-08-22）
     forced_taunt: bool = False   # 强制嘲讽（挂敌方，如火主战技）：携带本件的敌人必须攻击 source_id（覆盖加权选目标与锁定——Fandom Aggro "ignoring Aggro and Lock On"）
     toughness_lock: bool = False  # 韧性锁：存续期间携带者不可被削减韧性（不等于弱点无效或伤害免疫）
+    custom_unselectable: Dict[str, List[str]] = field(default_factory=dict)  # 来源 modifier → 不可选携带者的来源队伍
     lock_on: bool = False         # 目标侧锁定标记：全体敌方单目标技能优先指向携带者
     prevent_action: bool = False  # 禁止下一次行动：回合行动阶段空过，回合末时长仍结算
+    locked_action_types: List[str] = field(default_factory=list)  # 禁用行动类型（ultimate/basic/skill）
     # 资源上限覆写（16_custom_resources §16.12——昔涟 1141517 新蕊溢出至 200% 族）：
     # 携带者 target_resource 资源的获得上限在 _gain_resource 统一入口被抬至 max_override
     # （多覆写取最大；v1 只抬不压——压低实例未到；两键须成对，编译期闸）
     target_resource: str = ""
     max_override: float = 0.0
+    dynamic_values: Dict[str, Any] = field(default_factory=dict)
+    # stack_mode="multiple" 的额外同名实例（主实例仍在 ActorState.modifiers 字典）。
+    # 每实例独立 duration/stacks/dynamic_values/生命周期；统一迭代走 all_modifiers。
+    instances: List["Modifier"] = field(default_factory=list)
 
     def snapshot(self) -> Dict[str, Any]:
         return {
@@ -166,15 +178,19 @@ class ShieldInstance:
     source_id: str = ""     # 施加者 actor_id
     modifier_id: str = ""   # 关联 modifier（破裂级联摘除 / modifier 移除反向摘盾）
     pool: str = ""          # 累积池名（"" = 独立实例；同池跨件加算——丹恒•腾荒四源同池族）
+    max_value: float = 0.0  # ModifyShieldMax 设定的上限；0 = 未设定
 
     def snapshot(self) -> Dict[str, Any]:
-        return {
+        out = {
             "shield_id": self.shield_id,
             "remaining": round(self.remaining, 4),
             "source_id": self.source_id,
             "modifier_id": self.modifier_id,
             "pool": self.pool,
         }
+        if self.max_value > 0:
+            out["max_value"] = round(self.max_value, 4)
+        return out
 
 
 @dataclass
@@ -184,6 +200,7 @@ class ActorState:
     actor: Actor
     current_hp: float
     current_energy: float = 0.0
+    special_sp: float = 0.0  # 当前特殊充能（CharacterConfig.CurrentSpecialSP 的运行时载体）
     alive: bool = True
     banished: bool = False  # 放逐/离场（选择器统一排除；AV 冻结由 scheduler 处理）
     broken: bool = False    # 已击破（base_universal = 1.0，无韧性减伤）
@@ -192,13 +209,22 @@ class ActorState:
     # （max= stats.toughness_bars[i-1]，后接 added_bars 机制赋予条）；按序扣除、溢出作废
     bar_index: int = 0
     added_bars: List[float] = field(default_factory=list)  # add_toughness_bar 运行期追加条 max
-    modifiers: Dict[str, Modifier] = field(default_factory=dict)  # modifier_id → 实例
+    modifiers: Dict[str, Modifier] = field(default_factory=dict)  # modifier_id → 主实例
     resources: Dict[str, float] = field(default_factory=dict)  # 自定义资源（trigger_limit 计数器等）
+
+    def all_modifiers(self) -> List[Modifier]:
+        """全部 modifier 实例（主实例 + multiple 额外实例），统一遍历入口."""
+        out: List[Modifier] = []
+        for mod in self.modifiers.values():
+            out.append(mod)
+            out.extend(mod.instances)
+        return out
     # 好活当赏条目列表（21_elation §21.5——逐角色账、带数值载荷、逐条目独立 2 回合计时；
     # 引擎原生第三形态：modifier 无数值载荷槽、custom_resource 单值无逐条计时，两态装不下）
     banger_entries: List[Dict[str, float]] = field(default_factory=list)
     state_config: Optional[StateConfig] = None  # 当前形态（None = 常态）
     shields: List[ShieldInstance] = field(default_factory=list)  # 护盾栈（并行吸收，见 engine._absorb_with_shields）
+    action_delay_locks: Dict[str, Dict[str, str]] = field(default_factory=dict)  # 行动条锁（来源/方向白名单）
 
     @property
     def extra_bars(self) -> List[float]:
@@ -217,6 +243,7 @@ class ActorState:
             "actor_id": self.actor.actor_id,
             "current_hp": round(self.current_hp, 4),
             "current_energy": round(self.current_energy, 4),
+            "special_sp": round(self.special_sp, 4),
             "alive": self.alive,
             "banished": self.banished,
             "broken": self.broken,
@@ -257,6 +284,8 @@ class BattleState:
     moon_cocoon_used: bool = False
     # 战斗级通用 latch（once_per_battle effect）：同类全队天赋/效果仅触发一次。
     once_latches: set[str] = field(default_factory=set)
+    last_summon_group: str = ""  # 最近 SummonMonster 任务组；下一组替换上一组
+    last_summon_ids: List[str] = field(default_factory=list)
 
     def snapshot(self) -> Dict[str, Any]:
         """两局全等比对投影（回归钉专用）——**非全状态恢复**.
@@ -283,4 +312,6 @@ class BattleState:
             "damage_by_actor": {k: round(v, 4) for k, v in sorted(self.damage_by_actor.items())},
             "actors": {k: self.actors[k].snapshot() for k in sorted(self.actors)},
             "moon_cocoon_used": self.moon_cocoon_used,
+            "last_summon_group": self.last_summon_group,
+            "last_summon_ids": list(self.last_summon_ids),
         }
