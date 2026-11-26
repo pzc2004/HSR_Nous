@@ -13,6 +13,7 @@
 """
 from __future__ import annotations
 
+import math
 from typing import Dict, List, Optional, Tuple
 
 from hsr_nous.sim.avtree import AVTree
@@ -225,6 +226,20 @@ class Scheduler:
         self._remaining[handle] += DISTANCE * pct
         self._reschedule(actor, self._eta(handle))
 
+    def set_action_delay(self, actor: Actor, pct: float) -> None:
+        """剩余行动条直接设为整条的 pct%；不是增减，也不受既有推条量影响。"""
+        if not math.isfinite(pct) or pct < 0:
+            raise ValueError(f"行动条设值必须是非负有限比例：{pct!r}")
+        handle = self._handles[actor.actor_id]
+        self._remaining[handle] = DISTANCE * pct
+        self._reschedule(actor, self._eta(handle))
+
+    def set_action_delay_near(self, actor: Actor, near_actor: Actor) -> None:
+        handle = self._handles[actor.actor_id]
+        near_handle = self._handles[near_actor.actor_id]
+        self._remaining[handle] = math.nextafter(self._remaining[near_handle], math.inf)
+        self._reschedule(actor, self._eta(handle))
+
     def act_now(self, actor: Actor) -> None:
         """立即行动：剩余距离置 0（预计时刻 = clock，无视推条）."""
         handle = self._handles[actor.actor_id]
@@ -254,8 +269,8 @@ class Scheduler:
         经 `_eta` 重挂：`_eff_spd` 对倒计时实体自然返回倒计时速度（倒计时速度固定，
         实体变速期间键不动）；手写 clock + remaining/new_spd 会错用实体新速度。
         """
-        if new_spd <= 0:
-            return
+        if new_spd < 0:
+            return  # 负速度非法；0 与初始化一致，经 _spd_of 下限呈现为近似冻结
         handle = self._handles[actor.actor_id]
         self._spd_now[handle] = new_spd
         self._reschedule(actor, self._eta(handle))

@@ -61,6 +61,7 @@ formula:
 
       # 9. 暴击乘区（单次判定形式）
       # 公式层写法：random() 判定；战斗日志/Hook 中已解析为 is_critical
+      # crit_rate = 面板 + 普通命中域加算；存在 fixed_crit_rate 时由 scoped_override 覆写当次值
       - name: crit_multi
         expression: "(random() < crit_rate) ? (1 + crit_dmg) : 1.0"
 
@@ -70,7 +71,7 @@ formula:
 
       # 11. 减伤乘区（多个减伤源乘算：∏(1 - DMG_RED_i)）
       - name: dmg_red_multi
-        expression: "1 - dmg_reduction"  # dmg_reduction 已预计算为乘积结果
+        expression: "1 - dmg_reduction"  # dmg_reduction 已预计算为乘积结果；直伤逐命中减伤同按乘算并入
 ```
 
 > **`split: even` 与公式层兼容**：`deal_damage` 声明 `split: even` 时，effect 层把 `amount` 总量按结算时存活目标数均分，再逐目标喂入 `ability_multiplier`——公式层**零改动**，各乘区仍逐目标独立求值（分配轴见 `05_effects.md` deal_damage）。
@@ -311,10 +312,10 @@ route["bleed"] → `bleed_dot_damage` 顶层公式，快照切分按 mechanics 0
 
 ```yaml
 toughness_damage:
-  expression: "base_toughness * (1 + break_efficiency_boost) * (1 + weakness_break_efficiency_boost) + fixed_toughness_dmg"
-  # 实际削韧 = 基础削韧 × (1 + break_efficiency_boost) × (1 + weakness_break_efficiency_boost) + fixed_toughness_dmg
+  expression: "base_toughness * (1 + break_efficiency_boost) * (1 + weakness_break_efficiency_boost) * (1 + toughness_taken) + fixed_toughness_dmg"
+  # 实际削韧 = 基础削韧 × (1 + break_efficiency_boost) × (1 + weakness_break_efficiency_boost) × (1 + toughness_taken) + fixed_toughness_dmg
 ```
-（`fixed_toughness_dmg` 为固定削韧值，不受效率加成影响；§1.3 超击破基数区的 `effective_toughness` 喂入值即本式结果）
+（`toughness_taken` 为目标侧承受削韧比例，缺省 0；`fixed_toughness_dmg` 为固定削韧值，不受效率加成影响；§1.3 超击破基数区的 `effective_toughness` 喂入值即本式结果）
 
 ### 1.6 击破结算顺序
 

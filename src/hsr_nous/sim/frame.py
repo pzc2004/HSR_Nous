@@ -1,7 +1,7 @@
 """执行帧（ExecutionFrame，裁决卡 designs/DECISIONS.md #26）：一次行动执行的瞬态上下文.
 
 帧随 `engine._execute_action` 同步调用栈生灭（进入压栈 / 正常返回提交 / 异常整帧丢弃
-——与 ConfigAI 解释器选不出技能时回滚 dynamic_values 的既有先例同口径），承载两类
+——与 ConfigAI 解释器选不出技能时回滚 dynamic_values 的既有先例同口径），承载三类
 "执行内"语义：
 
 1. **写后读**——`set_dynamic_value` 在行动执行内的写入先入覆盖层，同执行内（含同窗
@@ -11,7 +11,12 @@
 2. **执行级随机绑定**——`roll(key)` 在 effect 求值域首调采样一次（消耗主流
    `pipeline.rng`）并绑定帧内，后续读取零消耗；hook 级 condition（快照域）只许读
    已绑定键、读未绑定显式报错（condition 无副作用的纯洁性不破）；绑定不跨帧提交
-   合并——跨执行的战斗级随机记忆走持久态，不归帧。
+   合并——跨执行的战斗级随机记忆走持久态，不归帧；
+3. **阶段变更通知**——current_phase 变化先记 phase_changes，嵌套提交并入父帧，仅最外层提交
+   后发射 monster_phase_changed；回滚与同值不写通知；
+4. **技能/命中目标记账**——target_ids 保留行动解析出的技能目标顺序，hit_target_ids
+   按首次命中顺序去重，分别供 on_action 的 SkillTargetEntityList 与 on_action_end 的
+   AttackTargetList 消费；嵌套行动各有独立列表，不随 dynamic_values 提交。
 
 读取链四层优先级与 roll 分域规则见 `sim_schema/docs/23_event_hook_system.md` §23.15
 （事件间快照语义一字未改：快照冻结已提交态，覆盖层只对帧内读者可见——repeatable-read
@@ -23,7 +28,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable, Dict
+from typing import Callable, Dict, List, Tuple
 
 from hsr_nous.sim_schema.expression import ExpressionError
 
@@ -40,10 +45,26 @@ class ExecutionFrame:
     actor_id: str
     writes: Dict[str, Dict[str, float]] = field(default_factory=dict)  # actor_id → key → value
     rolls: Dict[str, float] = field(default_factory=dict)
+    phase_changes: List[Tuple[str, int, int]] = field(default_factory=list)  # 最外层提交后才发事件
+    hit_target_ids: List[str] = field(default_factory=list)  # 本行动实际命中目标，首命中序去重
+    target_ids: List[str] = field(default_factory=list)  # 本行动解析出的技能目标，保留原顺序
+    action_type: str = ""
+    insert: bool = False
 
     def write(self, actor_id: str, key: str, value: float) -> None:
         """覆盖层写入（未提交——仅帧内读者可见，提交时才落已提交态）."""
         self.writes.setdefault(actor_id, {})[key] = float(value)
+
+    def record_phase_change(self, actor_id: str, from_phase: int, to_phase: int) -> None:
+        """保留每个怪物的净阶段变化，抵消的变化不进入提交通知。"""
+        for index, (changed_id, original_phase, _) in enumerate(self.phase_changes):
+            if changed_id == actor_id:
+                self.phase_changes.pop(index)
+                if original_phase != to_phase:
+                    self.phase_changes.insert(index, (actor_id, original_phase, to_phase))
+                return
+        if from_phase != to_phase:
+            self.phase_changes.append((actor_id, from_phase, to_phase))
 
     def roll_bind(self, key: str, sampler: Callable[[], float]) -> float:
         """effect 求值域：首调采样一次并绑定，后续读取零消耗返回绑定值."""

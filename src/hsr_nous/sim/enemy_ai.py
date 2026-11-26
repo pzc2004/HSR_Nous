@@ -43,7 +43,7 @@ def _compare(actual: float, expected: float, compare_type: str) -> bool:
 
 
 def config_ai_dynamic_value(engine: Any, actor_id: str, key: str) -> float:
-    """按执行帧覆盖层、ConfigAI 运行态、已核初值与缺省规则读取动态值.
+    """按执行帧覆盖层、任意单位运行态、已核 ConfigAI 初值与缺省规则读取动态值.
 
     读取链四层优先级（23_event_hook_system.md §23.15）：① 当前帧覆盖层（执行内
     未提交写入，仅帧内读者可见——写后读）→ ② 已提交态 → ③ 核定初值 → ④ 缺省。
@@ -199,39 +199,44 @@ class ConfigAIInterpreter:
         if flag == "Break":
             return bool(owner.broken)
         if flag == "STAT_DOT":
-            return any(mod.modifier_type == "dot" for mod in owner.modifiers.values())
+            return any(mod.modifier_type == "dot" for mod in owner.all_modifiers())
+        if flag == "STAT_DOT_Electric":
+            return any(mod.modifier_type == "dot" and mod.dot_element == "thunder"
+                       for mod in owner.all_modifiers())
+        if flag == "Stealth":
+            return any("Stealth" in mod.behavior_flags for mod in owner.all_modifiers())
         if flag == "STAT_CTRL":
             return any(mod.debuff_kind == "control" or mod.control_kind
-                       for mod in owner.modifiers.values())
+                       for mod in owner.all_modifiers())
         if flag == "DisableAction":
-            return any(mod.prevent_action for mod in owner.modifiers.values())
+            return any(mod.prevent_action for mod in owner.all_modifiers())
         return False
 
     def _contains_modifier(self, owner: Any, modifier_name: str) -> bool:
         """TBGD 通用 modifier 名与 sim 语义载体同口判定（谓词/目标选择共用）."""
         if any(mod.modifier_id == modifier_name or mod.name == modifier_name
-               for mod in owner.modifiers.values()):
+               for mod in owner.all_modifiers()):
             return True
         if modifier_name == "Monster_W2_Abomi01_00_Revive":
             return "ENEMY_REBIRTH" in owner.modifiers
         if modifier_name == "Monster_Beast02_Attack_Sign":
             return "ENEMY_202302004_MONITORED" in owner.modifiers
         if modifier_name == "MMonster_AML_Elite01_00_Aim":
-            return any(mod.lock_on for mod in owner.modifiers.values())
+            return any(mod.lock_on for mod in owner.all_modifiers())
         if modifier_name in {"MCommon_FastAction", "MCommon_FastAction_Permanent"}:
             # Harpy 的 MCommon_FastAction 在 sim 中以 Stormride modifier 落地。
-            return any(mod.name == "Stormride" for mod in owner.modifiers.values())
+            return any(mod.name == "Stormride" for mod in owner.all_modifiers())
         dot_element = {
             "MCommon_DOT_Electric": "thunder",
             "MCommon_DOT_Burn": "fire",
         }.get(modifier_name)
         if dot_element is not None and any(
                 mod.modifier_type == "dot" and mod.dot_element == dot_element
-                for mod in owner.modifiers.values()):
+                for mod in owner.all_modifiers()):
             return True
         control_kind = {"MCommon_CTRL_Frozen": "freeze"}.get(modifier_name)
         return control_kind is not None and any(
-            mod.control_kind == control_kind for mod in owner.modifiers.values())
+            mod.control_kind == control_kind for mod in owner.all_modifiers())
 
     def _predicate(self, node: Dict[str, Any], target_state: Optional[Any] = None) -> bool:
         """谓词统一处理 Inverse；嵌套过滤可改绑到候选目标而非施放者."""
@@ -325,7 +330,7 @@ class ConfigAIInterpreter:
                             str(node.get("CompareType", "Equal")))
         if node_type == "RPG.GameCore.ByCompareModifierValue":
             name = _dynamic_key(node.get("ModifierName"))
-            modifier = next((mod for mod in owner.modifiers.values()
+            modifier = next((mod for mod in owner.all_modifiers()
                              if mod.modifier_id == name or mod.name == name), None)
             value_type = str(node.get("ValueType", ""))
             if value_type == "LifeTime":
@@ -480,7 +485,7 @@ class ConfigAIInterpreter:
                     candidates = sorted(
                         (st for st in pool if not st.actor.summoner_id),
                         key=lambda st: -sum(mod.modifier_type == "buff"
-                                            for mod in st.modifiers.values()))
+                                            for mod in st.all_modifiers()))
                 elif alias == "AllEnemy":
                     pool = self.engine._allies_alive()
                     candidates = list(pool)

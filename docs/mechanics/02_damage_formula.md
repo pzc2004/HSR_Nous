@@ -325,7 +325,7 @@
               × 击破增伤区(breakDmgBoostMulti) × 超击破增伤区(superBreakDmgBoostMulti) × 减伤(dmgRedMulti)
 
 超击破基数(superBreakBaseMulti) = (3767.5533 / 10) × 有效削韧值(effectiveToughness)
-有效削韧值(effectiveToughness) = 削韧值(toughnessDmg) × (1 + 削韧值提高(breakEfficiencyBoost)) × (1 + 弱点击破效率提高(weaknessBreakEfficiencyBoost)) + 固定削韧值(fixedToughnessDmg)
+有效削韧值(effectiveToughness) = 削韧值(toughnessDmg) × (1 + 削韧值提高(breakEfficiencyBoost)) × (1 + 弱点击破效率提高(weaknessBreakEfficiencyBoost)) × (1 + 承受削韧比例(toughnessTaken)) + 固定削韧值(fixedToughnessDmg)
 超击破转换倍率(superBreakConversionMulti) = Σ 超击破转换倍率(SUPER_BREAK_MODIFIER)（池内加算；无转换源则为 0，不造成超击破）
 超击破增伤区(superBreakDmgBoostMulti) = 1 + Σ 超击破伤害提高（"超击破伤害提高"类专属增益，仅超击破生效，池内加算）
 ```
@@ -335,6 +335,7 @@
 - `fixedToughnessDmg` 为固定削韧值（不受削韧效率影响）
 - `breakEfficiencyBoost` 为削韧值提高（如角色行迹、光锥提供的削韧加成）
 - `weaknessBreakEfficiencyBoost` 为弱点击破效率提高（如某些遗器套装效果）
+- `toughnessTaken` 为目标侧承受削韧比例（敌方 `StanceBreakTakenRatio`），缺省为 0
 - `SUPER_BREAK_MODIFIER` 为超击破**转换倍率**（同谐主终结技 1.6/1.4/1.2、忘归人天赋、流萤/乱破行迹、大丽花天赋等提供——决定削韧值按多大比例转为超击破伤害），池内加算
 - 击破伤害提高（`breakDmgBoostMulti` 池）：忘归人 E4、光锥 In Pursuit of the Wind / Never Forget Her Flame 等
 - 超击破伤害提高（`superBreakDmgBoostMulti` 池）：同谐主行迹「卫我起舞」等
@@ -343,7 +344,7 @@
 #### 技能最终削韧值
 
 ```
-有效削韧值(effectiveToughness) = 削韧值(toughnessDmg) × (1 + 削韧值提高(breakEfficiencyBoost)) × (1 + 弱点击破效率提高(weaknessBreakEfficiencyBoost)) + 固定削韧值(fixedToughnessDmg)
+有效削韧值(effectiveToughness) = 削韧值(toughnessDmg) × (1 + 削韧值提高(breakEfficiencyBoost)) × (1 + 弱点击破效率提高(weaknessBreakEfficiencyBoost)) × (1 + 承受削韧比例(toughnessTaken)) + 固定削韧值(fixedToughnessDmg)
 ```
 
 - `breakEfficiencyBoost` 与 `weaknessBreakEfficiencyBoost` 为两个独立的乘区，**乘算**而非加算。

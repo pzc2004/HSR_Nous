@@ -71,7 +71,7 @@ class ModifierBook:
         # pipeline.modifier_enabled 统一判定，求值失败按不生效同 B8 口径）
         new_kind = mod.debuff_kind or ("control" if mod.control_kind else mod.modifier_type)
         if new_kind != "buff":
-            for held in target.modifiers.values():
+            for held in target.all_modifiers():
                 if (new_kind in held.grants_immune
                         and self._engine.pipeline.modifier_enabled(target, held)):
                     self._engine.bus.emit("on_immune", {"modifier_id": mod.modifier_id,
@@ -82,18 +82,33 @@ class ModifierBook:
             src_state = self._engine.state.actors.get(mod.source_id)
             if not self._engine._effect_application_succeeded(
                     src_state, target, apply_chance,
-                    modifier_id=mod.modifier_id, label=mod.name):
+                    modifier_id=mod.modifier_id, label=mod.name, debuff_kind=new_kind):
                 return False
 
-        # singleton_group：同组先摘旧
+        if mod.singleton_group.startswith("global:"):
+            for other in self._engine.state.actors.values():
+                for old in list(other.all_modifiers()):
+                    if (old.singleton_group == mod.singleton_group
+                            and (other is not target or old.modifier_id != mod.modifier_id)):
+                        self._remove_modifier(other, old.modifier_id, "replace")
+
+        # singleton_group：global: 前缀全场互斥；其他组同目标互斥
         if mod.singleton_group:
-            for old in list(target.modifiers.values()):
+            for old in list(target.all_modifiers()):
                 if old.singleton_group == mod.singleton_group and old.modifier_id != mod.modifier_id:
                     self._remove_modifier(target, old.modifier_id, "replace")
 
         existing = target.modifiers.get(mod.modifier_id)
-        if existing is not None:
-            if mod.stack_mode == "replace":
+        if mod.stack_mode == "multiple":
+            mod.stacks = max(1, min(mod.stacks, mod.max_stack))
+            if existing is None:
+                target.modifiers[mod.modifier_id] = mod
+            else:
+                existing.instances.append(mod)
+        elif existing is not None:
+            if mod.stack_mode in {"replace", "replace_keep_duration"}:
+                if mod.stack_mode == "replace_keep_duration":
+                    mod.duration = existing.duration
                 self._remove_modifier(target, mod.modifier_id, "replace")
                 target.modifiers[mod.modifier_id] = mod
             elif mod.stack_mode == "set":
@@ -111,12 +126,14 @@ class ModifierBook:
             target.modifiers[mod.modifier_id] = mod
         # 条件光环在场标记（04_modifier §4.16）：HP 变化后全队速度重同步的开销闸
         # （倒置的火炬"HP≥50% 速度+40%"族——有条件件才在 HP 事件后跑 _sync_speed）
-        if mod.enable_if_expr is not None or mod.stat_exprs:
+        if mod.enable_if_expr is not None or mod.stat_exprs or mod.override_exprs:
             self._engine._cond_aura_present = True
         self._engine.bus.emit("after_apply_modifier", {
             "modifier_id": mod.modifier_id, "modifier_type": mod.modifier_type,
-            "stat": sorted(set(mod.stat_effects) | set(mod.scaling_effects) | set(mod.override_effects)),
-            "target": target.actor.actor_id, "source": mod.source_id}, self._engine.state)
+            "stat": sorted(set(mod.stat_effects) | set(mod.scaling_effects)
+                           | set(mod.override_effects) | set(mod.override_exprs)),
+            "target": target.actor.actor_id, "source": mod.source_id,
+            "behavior_flags": list(mod.behavior_flags)}, self._engine.state)
         self._sync_speed(target)
         return True
 
@@ -126,11 +143,11 @@ class ModifierBook:
         历史缺口：有效速度（effective_stats.spd）变化从未传给调度器——速度 buff 在行动序上
         曾是"死"的（on_speed_change 无人调用）。此处为唯一接线点。
         """
-        if self._engine.scheduler is None or self._engine._is_enemy(target.actor):
+        if self._engine.scheduler is None:
             return
-        # 光环（scope=team）变化会辐射全队速度——同步全体非怪单位，不只 target
+        # 光环（scope=team）与敌方属性覆写同样影响调度——同步全体存活单位。
         for st in self._engine.state.actors.values():
-            if self._engine._is_enemy(st.actor) or not st.alive:
+            if not st.alive or st.actor.actor_id not in self._engine.scheduler._handles:
                 continue
             handle = self._engine.scheduler.handle_of(st.actor.actor_id)
             new_spd = self._engine.pipeline.effective_stats(st)["spd"]
@@ -141,7 +158,7 @@ class ModifierBook:
     def dispel(self, target: ActorState, max_count: int = 1) -> int:
         """驱散（解除敌方增益）：LIFO 摘 dispellable 的 buff 系."""
         removed = 0
-        for mod in reversed(list(target.modifiers.values())):
+        for mod in reversed(list(target.all_modifiers())):
             if removed >= max_count:
                 break
             if mod.modifier_type in ("buff",) and mod.dispellable:
@@ -154,7 +171,7 @@ class ModifierBook:
     def purify(self, target: ActorState, max_count: int = 1) -> int:
         """净化（解除我方负面）：LIFO 摘 dispellable 的 debuff/dot/control 系."""
         removed = 0
-        for mod in reversed(list(target.modifiers.values())):
+        for mod in reversed(list(target.all_modifiers())):
             if removed >= max_count:
                 break
             if mod.modifier_type in ("debuff", "dot", "control") and mod.dispellable:
@@ -169,24 +186,52 @@ class ModifierBook:
         if removed is not None:
             # 反向摘盾：modifier 消失（过期/驱散/净化/破盾级联），其护盾实例一并移除
             target.shields = [s for s in target.shields if s.modifier_id != modifier_id]
-            payload = {
-                "modifier_id": modifier_id, "reason": reason, "target": target.actor.actor_id,
-                # 被摘件原施加者（$modifier.source 寻址——昔涟"标记消耗后回源追忆"族）
-                "source": removed.source_id,
-            }
-            # OnDestroy：实例已摘除，携带者即使已死亡也必须完成清理/转移；先于公开事件。
-            for eff in removed.on_remove:
-                self._engine._run_hook_effect(target, eff, payload)
-            self._engine.bus.emit("after_remove_modifier", {
-                "modifier_id": modifier_id, "reason": reason, "target": target.actor.actor_id,
-                "source": removed.source_id}, self._engine.state)
+            # multiple：按名摘除覆盖主实例 + 全部额外实例，逐实例 OnDestroy/事件。
+            for instance in [removed, *removed.instances]:
+                payload = {
+                    "modifier_id": modifier_id, "reason": reason, "target": target.actor.actor_id,
+                    "source": instance.source_id,
+                    "behavior_flags": list(instance.behavior_flags),
+                }
+                for eff in instance.on_remove:
+                    self._engine._run_hook_effect(target, eff, payload)
+                self._engine.bus.emit("after_remove_modifier", {
+                    "modifier_id": modifier_id, "reason": reason, "target": target.actor.actor_id,
+                    "source": instance.source_id,
+                    "behavior_flags": list(instance.behavior_flags)}, self._engine.state)
             self._sync_speed(target)
+
+    def _remove_instance(self, target: ActorState, mod: Modifier, reason: str = "expire") -> None:
+        """摘除单个实例（multiple 逐实例到期）；主实例到期且有额外实例时提升首个额外实例."""
+        primary = target.modifiers.get(mod.modifier_id)
+        if primary is mod:
+            if mod.instances:
+                promoted = mod.instances.pop(0)
+                promoted.instances = mod.instances
+                target.modifiers[mod.modifier_id] = promoted
+            else:
+                target.modifiers.pop(mod.modifier_id, None)
+        elif primary is not None and mod in primary.instances:
+            primary.instances.remove(mod)
+        else:
+            return
+        target.shields = [s for s in target.shields if s.modifier_id != mod.modifier_id]
+        payload = {
+            "modifier_id": mod.modifier_id, "reason": reason, "target": target.actor.actor_id,
+            "source": mod.source_id, "behavior_flags": list(mod.behavior_flags),
+        }
+        for eff in mod.on_remove:
+            self._engine._run_hook_effect(target, eff, payload)
+        self._engine.bus.emit("after_remove_modifier", {
+            "modifier_id": mod.modifier_id, "reason": reason, "target": target.actor.actor_id,
+            "source": mod.source_id, "behavior_flags": list(mod.behavior_flags)}, self._engine.state)
+        self._sync_speed(target)
 
     def _tick_dots(self, actor_state: ActorState) -> None:
         """A 类结算：回合开始 DOT 跳伤."""
         # 同一携带者的整批 DoT 跳伤 = 一次伤害事件（月茧同时致死批处理域）
         with self._engine._damage_event():
-            for mod in list(actor_state.modifiers.values()):
+            for mod in actor_state.all_modifiers():
                 if mod.modifier_type != "dot":
                     continue
                 self._settle_one_dot(actor_state, mod)
@@ -208,7 +253,7 @@ class ModifierBook:
         break_damage 的 ratio 槽同构）
         """
         with self._engine._damage_event():
-            for mod in list(actor_state.modifiers.values()):
+            for mod in actor_state.all_modifiers():
                 if mod.modifier_type != "dot":
                     continue
                 if scope == "self":
@@ -268,7 +313,7 @@ class ModifierBook:
         阮梅弦外音族）/ on_action（每次行动——行动次数型 buff 族）。
         source_turn_end 锚不走这里——见 _tick_source_modifiers（按施加者回合扫全场）。
         """
-        for mod in list(actor_state.modifiers.values()):
+        for mod in actor_state.all_modifiers():
             if mod.duration <= 0 or mod.tick_anchor != anchor:
                 continue
             self._tick_one_modifier(actor_state, mod)
@@ -277,7 +322,7 @@ class ModifierBook:
         """单件走字：duration-1，到期移除（月茧到期真死特判——两锚点共用）."""
         mod.duration -= 1
         if mod.duration == 0:
-            self._remove_modifier(actor_state, mod.modifier_id, "expire")
+            self._remove_instance(actor_state, mod, "expire")
             if mod.moon_cocoon:
                 # 月茧到期未解除（未受治疗/未获护盾）→ 置 0 血走 _check_death 单漏斗
                 # （engine 门面回调，同 _tick_dots 先例）——锁血/复活层照走，形态
@@ -298,7 +343,7 @@ class ModifierBook:
         施加者离场（死亡）后无回合，挂靠自然停止走字，不立即移除。
         """
         for st in self._engine.state.actors.values():
-            for mod in list(st.modifiers.values()):
+            for mod in st.all_modifiers():
                 if mod.duration <= 0 or mod.tick_anchor != anchor:
                     continue
                 if mod.source_id != turn_actor.actor_id:
@@ -336,6 +381,7 @@ class ModifierBook:
             modifier_type=spec.get("modifier_type", "buff"),
             debuff_kind=str(spec.get("debuff_kind", "")),
             control_kind=str(spec.get("control_kind", "")),
+            behavior_flags=[str(flag) for flag in spec.get("behavior_flags") or []],
             duration=duration,
             stacks=int(spec.get("stacks", 1)),
             max_stack=int(spec.get("max_stack", 99)),
@@ -354,9 +400,15 @@ class ModifierBook:
                             if enable_if is not None else None),
             stat_exprs={str(k): parse(str(v), layer="effect")
                         for k, v in (spec.get("stat_exprs") or {}).items()},
+            override_exprs={str(k): parse(str(v), layer="effect")
+                            for k, v in (spec.get("override_exprs") or {}).items()},
             hit_stat_exprs={str(k): parse(str(v), layer="effect")
                             for k, v in (spec.get("hit_stat_exprs") or {}).items()},
             weakness_add=[str(w) for w in spec.get("weakness_add") or []],
+            weakness_override=([str(w) for w in spec["weakness_override"]]
+                               if spec.get("weakness_override") is not None else None),
+            secret_weakness=[str(w) for w in spec.get("secret_weakness") or []],
+            protected_weakness=[str(w) for w in spec.get("protected_weakness") or []],
             grants_immune=[str(x) for x in spec.get("grants_immune") or []],
             tick_anchor=anchor_override or str(spec.get("tick_anchor", "owner_turn_end")),
             effect_scope=str(spec.get("effect_scope", "self")),
@@ -367,19 +419,24 @@ class ModifierBook:
             dot_ratio_expr=dot_ratio_expr,
             dot_base_chance=float(spec.get("dot_base_chance", 1.0)),
             hp_lock=bool(spec.get("hp_lock", False)),
+            allow_negative_hp=bool(spec.get("allow_negative_hp", False)),
             block_damage=bool(spec.get("block_damage", False)),
             fixed_hp_bars=int(spec.get("fixed_hp_bars", 0)),
             revive_percent=float(spec.get("revive_percent", 0.0)),
             moon_cocoon=bool(spec.get("moon_cocoon", False)),
             forced_taunt=bool(spec.get("forced_taunt", False)),
             toughness_lock=bool(spec.get("toughness_lock", False)),
+            custom_unselectable={str(key): [str(team) for team in teams]
+                                 for key, teams in (spec.get("custom_unselectable") or {}).items()},
             lock_on=bool(spec.get("lock_on", False)),
             prevent_action=bool(spec.get("prevent_action", False)),
+            locked_action_types=[str(kind) for kind in spec.get("locked_action_types") or []],
             remove_on_source_death=bool(spec.get("remove_on_source_death", False)),
             remove_on_source_exit=bool(spec.get("remove_on_source_exit", False)),
             on_remove=[dict(effect) for effect in spec.get("on_remove") or []],
             target_resource=str(spec.get("target_resource", "")),
             max_override=float(spec.get("max_override", 0.0)),
+            dynamic_values={str(k): v for k, v in (spec.get("dynamic_values") or {}).items()},
             # B3 呈现层留底：shield 声明块原文（状态行公式展示；物化在 _attach_shield）
             shield_spec=(dict(spec["shield"]) if spec.get("shield") else None),
         )
@@ -425,13 +482,23 @@ class ModifierBook:
             return False
         if spec.get("shield"):
             self._attach_shield(target, mod, spec["shield"], source)
+        on_apply_payload = dict(payload or {})
+        on_apply_payload.setdefault("source", mod.source_id)
         for eff in spec.get("on_apply") or []:
-            self._engine._run_hook_effect(target, eff, payload or {})
+            self._engine._run_hook_effect(target, eff, on_apply_payload)
         return True
 
     # ------------------------------------------------------------------
     # 护盾（mechanics 01 §1.3：独立栈 + 并行吸收；生命周期复用关联 modifier）
     # ------------------------------------------------------------------
+
+    def _emit_shield_changed(self, owner: ActorState, shield: ShieldInstance,
+                             source_id: str, reason: str, amount: float) -> None:
+        self._engine.bus.emit("shield_changed", {
+            "shield_id": shield.shield_id, "amount": amount, "reason": reason,
+            "remaining": max(0.0, shield.remaining), "source": source_id,
+            "target": owner.actor.actor_id,
+        }, self._engine.state)
 
     def _attach_shield(self, target: ActorState, mod: Modifier, shield_spec: Dict[str, Any],
                        source: Optional[ActorState]) -> None:
@@ -446,9 +513,10 @@ class ModifierBook:
         value = self._engine.pipeline.shield_value(source, shield_spec)
         pool = str(shield_spec.get("accumulate") or "")
         src_id = source.actor.actor_id if source is not None else mod.source_id
+        modifier_id = str(shield_spec.get("modifier_id") or mod.modifier_id)
         if pool:
             prior_inst = next((s for s in target.shields
-                               if s.pool == pool and s.modifier_id == mod.modifier_id), None)
+                               if s.pool == pool and s.modifier_id == modifier_id), None)
             prior = prior_inst.remaining if prior_inst is not None else 0.0
             others = sum(s.remaining for s in target.shields
                          if s.pool == pool and s is not prior_inst)
@@ -467,17 +535,17 @@ class ModifierBook:
                 target.shields.remove(prior_inst)
             target.shields.append(ShieldInstance(
                 shield_id=mod.modifier_id, name=mod.name, remaining=merged,
-                source_id=src_id, modifier_id=mod.modifier_id, pool=pool))
+                source_id=src_id, modifier_id=modifier_id, pool=pool))
             self._engine.state.log.append(
                 f"AV{self._engine.state.clock:.1f}: {target.actor.name} 获得护盾 {mod.name}"
                 f"（{value:,.0f}，池 {pool} 合计"
                 f" {sum(s.remaining for s in target.shields if s.pool == pool):,.0f}）")
         else:
-            target.shields = [s for s in target.shields if s.modifier_id != mod.modifier_id]
+            target.shields = [s for s in target.shields if s.modifier_id != modifier_id]
             target.shields.append(ShieldInstance(
                 shield_id=mod.modifier_id, name=mod.name, remaining=value,
                 source_id=src_id,
-                modifier_id=mod.modifier_id,
+                modifier_id=modifier_id,
             ))
             self._engine.state.log.append(
                 f"AV{self._engine.state.clock:.1f}: {target.actor.name} 获得护盾 {mod.name}（{value:,.0f}）")
@@ -485,6 +553,8 @@ class ModifierBook:
         if MOON_COCOON_ID in target.modifiers:
             self._remove_modifier(target, MOON_COCOON_ID, "cocoon_release")
             self._engine.state.log.append(f"AV{self._engine.state.clock:.1f}: {target.actor.name} 的月茧解除（获得护盾）")
+        current = next(shield for shield in target.shields if shield.modifier_id == modifier_id)
+        self._emit_shield_changed(target, current, src_id, "gain", value)
 
     def _absorb_with_shields(self, target: ActorState, amount: float, source_id: str = "") -> float:
         """护盾并行吸收：返回溢出量（本体承伤）.
@@ -498,35 +568,45 @@ class ModifierBook:
         合并一单元（单元值 = 成员剩余合计）——取最高在单元间进行；池作为一个整体吸收，
         成员按获得先后 FIFO 逐扣（独立实例 = 单成员单元，逐比特退化为旧语义）。
         """
-        if amount <= 0 or not target.shields:
+        shield_owners = [(target, shield) for shield in target.shields]
+        team = (self._engine._light_team_state_obj
+                if not self._engine._is_enemy(target.actor) else None)
+        if team is not None and team is not target:
+            shield_owners.extend((team, shield) for shield in team.shields)
+        if amount <= 0 or not shield_owners:
             return max(0.0, amount)
-        units: Dict[str, List[ShieldInstance]] = {}
-        for s in target.shields:
-            units.setdefault(s.pool if s.pool else f"\x00{s.shield_id}", []).append(s)
-        overflow = max(0.0, amount - max(sum(x.remaining for x in xs) for xs in units.values()))
-        broken: List[ShieldInstance] = []
+        units: Dict[str, List[tuple[ActorState, ShieldInstance]]] = {}
+        for owner, shield in shield_owners:
+            key = f"{owner.actor.actor_id}\x00{shield.pool or shield.shield_id}"
+            units.setdefault(key, []).append((owner, shield))
+        overflow = max(0.0, amount - max(
+            sum(shield.remaining for _owner, shield in xs) for xs in units.values()))
+        broken: List[tuple[ActorState, ShieldInstance]] = []
         for xs in units.values():
             left = amount
-            for s in xs:
-                take = min(s.remaining, left)
-                s.remaining -= take
+            for owner, shield in xs:
+                take = min(shield.remaining, left)
+                shield.remaining -= take
                 left -= take
                 self._engine.bus.emit("shield_absorbed", {
-                    "shield_id": s.shield_id, "amount": take, "remaining": max(0.0, s.remaining),
+                    "shield_id": shield.shield_id, "amount": take,
+                    "remaining": max(0.0, shield.remaining),
                     "source": source_id, "target": target.actor.actor_id,
                 }, self._engine.state)
-                if s.remaining <= 1e-9:
-                    s.remaining = 0.0
-                    broken.append(s)
+                self._emit_shield_changed(owner, shield, source_id, "absorb", take)
+                if shield.remaining <= 1e-9:
+                    shield.remaining = 0.0
+                    broken.append((owner, shield))
                 if left <= 0:
                     break
-        for s in broken:
-            target.shields.remove(s)
+        for owner, shield in broken:
+            owner.shields.remove(shield)
             self._engine.bus.emit("shield_broken", {
-                "shield_id": s.shield_id, "source": source_id, "target": target.actor.actor_id,
+                "shield_id": shield.shield_id, "source": source_id, "target": target.actor.actor_id,
             }, self._engine.state)
+            self._emit_shield_changed(owner, shield, source_id, "break", 0.0)
             self._engine.state.log.append(
-                f"AV{self._engine.state.clock:.1f}: {target.actor.name} 的护盾 {s.name} 被击破")
-            if s.modifier_id:
-                self._remove_modifier(target, s.modifier_id, "shield_broken")
+                f"AV{self._engine.state.clock:.1f}: {owner.actor.name} 的护盾 {shield.name} 被击破")
+            if shield.modifier_id:
+                self._remove_modifier(owner, shield.modifier_id, "shield_broken")
         return overflow

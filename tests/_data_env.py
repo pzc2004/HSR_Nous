@@ -62,6 +62,7 @@ def enemy_ability_available() -> bool:
         "Config/ConfigGlobalModifier/GlobalModifier_Common_Specific.json",
         "Config/ConfigGlobalModifier/GlobalModifier_Common_Property.json",
         "Config/ConfigGlobalModifier/GlobalModifier_Monster.json",
+        "Config/ConfigGlobalTaskListTemplate/GlobalTaskListTemplate.json",
     )
     return all((root / relative).is_file() for relative in required)
 

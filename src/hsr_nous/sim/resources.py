@@ -23,6 +23,8 @@ def ultimate_available(state: ActorState, ult_action: Optional[Action]) -> bool:
     """能量满即可大；特殊充能（ult_cost_resource 非空）走资源门槛不走能量."""
     if ult_action is None:
         return False
+    if any("ultimate" in mod.locked_action_types for mod in state.all_modifiers()):
+        return False
     if ult_action.ult_cost_resource:
         return state.resources.get(ult_action.ult_cost_resource, 0.0) >= ult_action.ult_cost_amount
     return state.current_energy >= ult_threshold_of(ult_action, state.actor.stats.max_energy)

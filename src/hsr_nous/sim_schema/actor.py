@@ -85,6 +85,7 @@ class StatBlock:
     # 削韧效率双池（01_formula §1.5 toughness_damage 式：(1+池1)×(1+池2) 乘算——spec 双池，实测待确认）
     break_efficiency_boost: float = 0.0  # 池 1：削韧值提高（角色行迹/光锥族）
     weakness_break_efficiency_boost: float = 0.0  # 池 2：弱点击破效率提高（阮梅弦外音/遗器套装族）
+    toughness_taken: float = 0.0  # 目标侧承受削韧比例（StanceBreakTakenRatio）
 
     # 效果
     effect_hit: float = 0.0       # 效果命中
@@ -97,6 +98,7 @@ class StatBlock:
 
     # 能量
     max_energy: float = 0.0       # 能量上限（从 characters.json max_sp）
+    max_special_sp: float = 0.0  # 特殊充能上限（CharacterConfig.MaxSpecialSP）
     energy_regen: float = 1.0     # 能量恢复效率（基础 100%）
 
     # 治疗/护盾
@@ -169,3 +171,5 @@ class Actor:
     # _init_system_units（旧 _init_aha 点位——调度 tie/伤害账本/满血口径现序保持）；
     # "" = 常规单位
     turn_handler: str = ""
+    # 特殊充能初值（CharacterConfig.CurrentSpecialSP；与当前 HP/能量分离的运行时入口）
+    initial_special_sp: float = 0.0

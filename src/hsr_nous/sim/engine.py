@@ -137,7 +137,10 @@ class CombatEngine:
             }
             for actor_id, policy in self._enemy_policies.items()
         }
+        self.battle_events: Dict[int, Dict[str, Any]] = {}  # 战斗事件注册表（决策卡 #44）
         self._level_state_obj = None
+        self._light_team_state_obj = None
+        self._dark_team_state_obj = None
         # 召唤物定义注册件（模板 summons 块的编译产物 SummonDef；from_compiled 注入——
         # summon effect 按 summon_id 查表布场，见 12_summon）
         self.summon_defs: Dict[str, Any] = summon_defs or {}
@@ -155,6 +158,7 @@ class CombatEngine:
         # 阿哈时刻 pool 覆写锚（21_elation.md §21.4——额外阿哈时刻固定值结算时，行动层
         # elation 路由读此锚代替实时池；常规时刻/非阿哈代放=None 读实时池）
         self._aha_pool_override: Optional[float] = None
+        self._elation_time_active = False
         # 表达式编译器：一台引擎一份（共享 _cache）——build 编译期创建经 from_compiled 注入，
         # hook condition / policy runtime / pipeline scoped 加成三处共用
         self._expr = expr or ExprCompiler()
@@ -169,7 +173,7 @@ class CombatEngine:
             m for other in self.state.actors.values()
             if other is not st and other.alive and not other.banished
             and self._is_enemy(other.actor) == self._is_enemy(st.actor)
-            for m in other.modifiers.values() if m.effect_scope == "team"
+            for m in other.all_modifiers() if m.effect_scope == "team"
         ])
         # 条件光环运行时注入（04_modifier §4.16：enable_if/stat_exprs 语境工厂 + ⚠ 告警槽）；
         # _cond_aura_present = 场上存在条件件标记（HP 事件后速度重同步的开销闸，modifiers 挂载时置位）
@@ -177,7 +181,8 @@ class CombatEngine:
         # hit_condition 命中域宿主函数注入（debuff_count($event.target) 族——hooks 函数集
         # 同槽，$self 绑定携带者）+ actor 反查（DoT 跳伤时刻按 source_id 反查施加者——
         # 跳伤攻击侧 scoped 求值源）
-        self.pipeline.set_hit_functions(lambda st: self._hooks._hook_functions(st),
+        self.pipeline.set_hit_functions(
+            lambda st, payload=None: self._hooks._hook_functions(st, payload),
                                         lambda st: _HookSelfNS(self, st))
         self.pipeline.set_actor_lookup(lambda aid: self.state.actors.get(aid))
         self._cond_aura_present = False
@@ -208,6 +213,8 @@ class CombatEngine:
         # 入口技（变身族）"结束本回合"：置位后本回合行动阶段整体跳过——官方原文"结束本回合"，
         # 无论谁的回合（ult_now 插队/窗口 before 两路同口径；after 路行动已发生不受影响）
         self._turn_consumed = False
+        self._turn_owner_action_phase_end = False
+        self._modifier_phase1_begin = False
         self._compiled_hooks: List[Any] = []  # 模板 hooks 块的编译产物（from_compiled 注入）
         # 近似置信度通道：CompiledEncounter.caveats 的携带副本（from_compiled
         # 注入——纯元数据，不进结算不改数值；montecarlo/web 结果附带读取点）
@@ -305,7 +312,7 @@ class CombatEngine:
             0.0 if _resolve(target) is None else float(panel_of(_resolve(target))["hp"]))
         # res_ 平铺同 hook/available_if 域（三域同槽——1507 千冶•刃 Zone 门控光环
         # enable_if "res__zone_on >= 1" 实证：缺平铺=条件域求值失败按不生效+B8 静默死件）
-        return {"self": ns,
+        return {"self": ns, "modifier": mod, "mod": mod,
                 **self._res_ns(holder)}, functions
 
     def _resync_cond_speed(self, _et: str, _payload: Dict[str, Any], _ctx: Any) -> None:
@@ -451,7 +458,7 @@ class CombatEngine:
         # max_override（16 §16.12——modifier 覆写资源上限，昔涟 1141517 新蕊溢出至 200% 族）：
         # 携带者本资源覆写件取最大（多覆写/基础 cap 同取大——v1 只抬不压，压低实例未到达；
         # 覆写件到期不回收已超限值，下次获得按有效上限截断自然回落）
-        ov = [m.max_override for m in st.modifiers.values()
+        ov = [m.max_override for m in st.all_modifiers()
               if m.target_resource == rid and m.max_override > 0]
         if ov:
             cap = max(cap, max(ov)) if cap is not None else max(ov)
@@ -607,6 +614,7 @@ class CombatEngine:
             actor=actor,
             current_hp=actor.stats.hp,
             current_energy=0.0,
+            special_sp=actor.initial_special_sp,
             alive=True,
             toughness=toughness,
         )
@@ -650,7 +658,8 @@ class CombatEngine:
         return stats
 
     def summon_actor(self, owner_state: ActorState, summon_id: str,
-                     position: str = "after_owner") -> ActorState:
+                     position: str = "after_owner", reference_actor_id: str = "",
+                     summon_group: str = "") -> ActorState:
         """召唤物入场：按 SummonDef 布场（继承召唤者 Layer-1 面板 → 上行动条 → actor_enter）.
 
         继承的是召唤者**编译期面板**（含光锥/遗器归并），不是战斗内 effective（12_summon §12.5）。
@@ -701,8 +710,19 @@ class CombatEngine:
             stats = copy.deepcopy(stats)
         stats.max_energy = 0.0
         actor = replace(sdef.actor, stats=stats)
+        if position == "last_die":
+            reference = self.state.actors.get(str(reference_actor_id))
+            if reference is None or reference.alive:
+                raise ValueError("last_die 召唤需要本次 on_kill 已死亡目标作为站位引用")
         st = self._spawn_actor(actor)
-        self._place_relative_owner(actor.actor_id, owner_state.actor.actor_id, position)
+        self._place_relative_owner(actor.actor_id, owner_state.actor.actor_id, position,
+                                   reference_actor_id=reference_actor_id)
+        group_key = summon_group or f"__single__:{actor.actor_id}"
+        if self.state.last_summon_group != group_key:
+            self.state.last_summon_ids = []
+            self.state.last_summon_group = group_key
+        if actor.actor_id not in self.state.last_summon_ids:
+            self.state.last_summon_ids.append(actor.actor_id)
         # 召唤物 custom_resources 初始化（12_summon v1.2：模板 summons 块值块——
         # 风堇 tally 由小伊卡记账族；布场时按 decl.current 初始化，与 setup 的角色通道同口径）
         for rid, decl in (self._resource_decls.get(actor.actor_id) or {}).items():
@@ -720,9 +740,11 @@ class CombatEngine:
         return st
 
     def _place_relative_owner(self, summon_id: str, owner_id: str,
-                              position: str = "after_owner") -> None:
+                              position: str = "after_owner", reference_actor_id: str = "") -> None:
         """布场站位（12_summon position）：after_owner=紧邻召唤者右侧（忆灵簇尾）；
-        before_owner=紧邻召唤者左侧（召唤者右移——布洛妮娅幻象左右炮族）。
+        after=紧邻任意参照右侧（不跳过其随从簇）；
+        before_owner=紧邻召唤者左侧（召唤者右移——布洛妮娅幻象左右炮族）；
+        last_die=本次死亡目标原站位，尸体仍留字典时插到其前面。
         state.actors 插入序即站位（blast 相邻/前端卡序/受击范围同源）；
         离场不离字典，重召天然回原位。
         """
@@ -731,6 +753,24 @@ class CombatEngine:
             return
         st = actors.pop(summon_id)
         items = list(actors.items())
+        if position == "formation_record":
+            team = "dark" if self._is_enemy(st.actor) else "light"
+            recorded = self._hooks._hook_amount(
+                f"dynamic_of($level, '_FormationRecord:{team}')", actors[owner_id], {})
+            if recorded < 1 or int(recorded) != recorded:
+                raise ValueError("FormationRecord 召唤需要已记录的正整数编队位置")
+            side = [i for i, (_, s2) in enumerate(items)
+                    if self._is_enemy(s2.actor) == self._is_enemy(st.actor)]
+            slot = min(int(recorded) - 1, len(side))
+            at = side[slot] if slot < len(side) else len(items)
+            items.insert(at, (summon_id, st))
+            self.state.actors = dict(items)
+            return
+        if position == "last_die":
+            at = next(i for i, (aid, _) in enumerate(items) if aid == str(reference_actor_id))
+            items.insert(at, (summon_id, st))
+            self.state.actors = dict(items)
+            return
         if position in ("first", "last"):
             # First/Last（敌方 SummonMonster LocationType）：插入该侧队首/队尾
             owner_enemy = self._is_enemy(st.actor)
@@ -741,7 +781,9 @@ class CombatEngine:
             self.state.actors = dict(items)
             return
         idx = next(i for i, (aid, _) in enumerate(items) if aid == owner_id)
-        if position == "before_owner":
+        if position == "after":
+            items.insert(idx + 1, (summon_id, st))
+        elif position == "before_owner":
             items.insert(idx, (summon_id, st))
         else:
             end = idx + 1
@@ -753,7 +795,7 @@ class CombatEngine:
     def _remove_source_exit_modifiers(self, actor_id: str, *, reason: str) -> None:
         """摘除永久离场施加者的带旗 modifier；临时 banish 不调用本通道."""
         for st in self.state.actors.values():
-            for mod in list(st.modifiers.values()):
+            for mod in list(st.all_modifiers()):
                 if mod.remove_on_source_exit and mod.source_id == str(actor_id):
                     self._remove_modifier(st, mod.modifier_id, reason)
 
@@ -932,6 +974,13 @@ class CombatEngine:
                 f"AV{self.state.clock:.1f}: {spawned.name}在条{spd_txt if spawned.speed_rule else ''}")
 
     def _run_aha_turn(self, *, extra_pool: Optional[float] = None) -> None:
+        self._elation_time_active = True
+        try:
+            self._run_aha_turn_inner(extra_pool=extra_pool)
+        finally:
+            self._elation_time_active = False
+
+    def _run_aha_turn_inner(self, *, extra_pool: Optional[float] = None) -> None:
         """阿哈时刻结算（21_elation.md §21.4）.
 
         常规（extra_pool=None）：解控 → 共读实时池（行动层 elation 路由现场读值——清池
@@ -948,7 +997,7 @@ class CombatEngine:
             return
         # 解控（欢愉角色控制类件——dispellable 闸同常规驱散）
         for st in members:
-            for mid in [m.modifier_id for m in st.modifiers.values()
+            for mid in [m.modifier_id for m in st.all_modifiers()
                         if m.control_kind and m.dispellable]:
                 self._remove_modifier(st, mid, "cleanse")
         pool = float(extra_pool) if extra_pool is not None else float(self.state.punchline)
@@ -1015,6 +1064,31 @@ class CombatEngine:
                 stats=StatBlock(hp=1, spd=100, max_energy=0)), current_hp=1.0)
         return self._level_state_obj
 
+    def _team_entity_state(self, team: str) -> ActorState:
+        """TargetFetchTeamEntity 的阵营载体；不占站位或普通目标池."""
+        if team == "TeamLight":
+            if self._light_team_state_obj is None:
+                self._light_team_state_obj = ActorState(actor=Actor(
+                    actor_id="$light_team", name="我方队伍", actor_type="team",
+                    stats=StatBlock(hp=1, spd=100, max_energy=0)), current_hp=1.0)
+            return self._light_team_state_obj
+        if team == "TeamDark":
+            if self._dark_team_state_obj is None:
+                self._dark_team_state_obj = ActorState(actor=Actor(
+                    actor_id="$dark_team", name="敌方队伍", actor_type="team",
+                    stats=StatBlock(hp=1, spd=100, max_energy=0)), current_hp=1.0)
+            return self._dark_team_state_obj
+        raise ValueError(f"未知队伍实体：{team!r}")
+
+    def _pseudo_entity_state(self, ref: Any) -> Optional[ActorState]:
+        if ref == "$level":
+            return self._level_state
+        if ref == "$light_team":
+            return self._team_entity_state("TeamLight")
+        if ref == "$dark_team":
+            return self._team_entity_state("TeamDark")
+        return None
+
     def _is_enemy(self, actor: Actor) -> bool:
         """**敌方单位**判定（机制按敌我分，不按物种分）.
 
@@ -1022,6 +1096,18 @@ class CombatEngine:
         逻辑（词表 "monster"/"enemy" 是数据值不是物种区分）。
         """
         return actor.actor_type in self.ENEMY_TYPES
+
+    @staticmethod
+    def _action_delay_change_allowed(target: ActorState, source_id: str,
+                                     change_type: str) -> bool:
+        """每条锁独立检查；全部锁都放行才允许本次常规推拉条。"""
+        for lock in target.action_delay_locks.values():
+            if lock.get("source_id") != source_id:
+                return False
+            allowed_type = lock.get("change_type", "")
+            if allowed_type and allowed_type != change_type:
+                return False
+        return True
 
     def _enemies_alive(self) -> List[ActorState]:
         return [s for s in self.state.actors.values() if self._is_enemy(s.actor) and s.alive]
@@ -1117,7 +1203,7 @@ class CombatEngine:
 
     def _effect_application_succeeded(
         self, source: Optional[ActorState], target: ActorState, apply_chance: Optional[float], *,
-        modifier_id: str, label: str,
+        modifier_id: str, label: str, debuff_kind: str = "",
     ) -> bool:
         """debuff 系效果共用命中/抵抗判定；delay_action 等非 modifier 效果同走此口.
 
@@ -1129,7 +1215,8 @@ class CombatEngine:
         target_eff = self.pipeline.effective_stats(target)
         chance = self.pipeline.hit_chance(
             source_eff, target_eff, apply_chance,
-            effect_res_pen=source_eff.get("effect_res_pen", 0.0))
+            effect_res_pen=source_eff.get("effect_res_pen", 0.0),
+            type_res=target_eff.get(f"{debuff_kind}_type_res", 0.0) if debuff_kind else 0.0)
         if self.pipeline.roll_debuff_apply(chance):
             return True
         self.bus.emit("on_resist", {
@@ -1206,7 +1293,12 @@ class CombatEngine:
     def _emit_after_being_hit(self, *, amount: float, absorbed: float, damage_type: Any,
                               source_id: str, target_id: str, is_critical: bool,
                               seg_index: int, actor_type: str, action_type: Any,
-                              hit_targets: List[str], action_id: str = "") -> None:
+                              hit_targets: List[str], action_id: str = "", split: str = "",
+                              block_damage_triggered: bool = False,
+                              is_indirect: bool = False,
+                              damage_tags: Optional[List[int]] = None,
+                              damage_custom_name: str = "",
+                              max_hit_split_count: int = 1) -> None:
         """after_being_hit 单发射口（23 章 §23.4 受击链收尾事件——钩子上读到盾吸收/锁血/复活/回能后的终态）.
 
         action 伤害段（_execute_action）与 hook 伤害（hooks.py deal_damage 的 follow_up/
@@ -1214,12 +1306,21 @@ class CombatEngine:
         （收割闸对账，勿手改）。附加伤害（category 'additional'——03_actor §3.8 tags
         「不再触发命中类监听」）与真实伤害（无攻击判定——mechanics 02 §2.8）不走本口。
         """
+        if self._frame_stack:
+            frame = self._frame_stack[-1]
+            for hit_target_id in hit_targets:
+                if hit_target_id not in frame.hit_target_ids:
+                    frame.hit_target_ids.append(hit_target_id)
         self.bus.emit("after_being_hit", {
             "amount": amount, "absorbed": absorbed, "damage_type": damage_type,
             "source": source_id, "target": target_id, "is_critical": is_critical,
             "seg_index": seg_index, "actor_type": actor_type, "action_type": action_type,
-            "hit_targets": hit_targets, "action_id": action_id,
-            "primary_target": hit_targets[0] if hit_targets else ""}, self.state)
+            "hit_targets": hit_targets, "action_id": action_id, "split": split,
+            "primary_target": hit_targets[0] if hit_targets else "",
+            "block_damage_triggered": block_damage_triggered,
+            "is_indirect": is_indirect, "damage_tags": list(damage_tags or []),
+            "damage_custom_name": damage_custom_name,
+            "max_hit_split_count": max_hit_split_count}, self.state)
 
     def _check_death(self, target: ActorState, source_id: str = "", *, action_id: str = "") -> None:
         """死亡检查：锁血 → 月茧 → 复活 → 真死（受击链末段四层分工）.
@@ -1245,8 +1346,10 @@ class CombatEngine:
         """
         if target.current_hp > 0 or not target.alive:
             return
+        if any(m.allow_negative_hp for m in target.all_modifiers()):
+            return
         # 锁血层：致命伤留 1 血
-        if any(m.hp_lock for m in target.modifiers.values()):
+        if any(m.hp_lock for m in target.all_modifiers()):
             target.current_hp = 1.0
             self.bus.emit("on_hp_lock", {
                 "source": source_id, "target": target.actor.actor_id,
@@ -1255,7 +1358,7 @@ class CombatEngine:
             return
         # 月茧层：授予件 + 全队次数可用 → 消耗次数进月茧态（茧中人授予件已消耗、
         # 次数已用，再受致命击自然落不到本层 → 真死，无需特判）
-        cocoon_grant = next((m for m in target.modifiers.values()
+        cocoon_grant = next((m for m in target.all_modifiers()
                              if m.moon_cocoon and m.modifier_id != MOON_COCOON_ID), None)
         if cocoon_grant is not None and self._moon_cocoon_available():
             self._remove_modifier(target, cocoon_grant.modifier_id, "moon_cocoon")
@@ -1271,7 +1374,7 @@ class CombatEngine:
             self.state.log.append(f"AV{self.state.clock:.1f}: {target.actor.name} 进入月茧状态")
             return
         # 复活层：消费复活件，set_hp_to_percent 回拉
-        rev = next((m for m in target.modifiers.values() if m.revive_percent > 0), None)
+        rev = next((m for m in target.all_modifiers() if m.revive_percent > 0), None)
         if rev is not None:
             self._remove_modifier(target, rev.modifier_id, "revive")
             # 茧中人被复活接住：月茧态随之结束（次数不退——进茧时已消耗）——否则到期会误杀
@@ -1298,7 +1401,7 @@ class CombatEngine:
         # 读到摘除后终态；alive 闸使「自己听自己 actor_exit」结构性不触发，本扫描是引擎层
         # 统一通道（dismiss/放逐不经过——只认真死定论）
         for st in self.state.actors.values():
-            for m in list(st.modifiers.values()):
+            for m in list(st.all_modifiers()):
                 if m.remove_on_source_death and m.source_id == target.actor.actor_id:
                     self._remove_modifier(st, m.modifier_id, "source_death")
         self._remove_source_exit_modifiers(target.actor.actor_id, reason="source_exit")
@@ -1333,14 +1436,34 @@ class CombatEngine:
                 | {str(e).lower() for e in action.toughness_scope})
         else:
             can_reduce = action.damage_type in self.pipeline.effective_weakness(target)
-        if any(mod.toughness_lock for mod in target.modifiers.values()):
+        src_state = self.state.actors.get(source.actor_id)
+        force_stance_break = False
+        if src_state is not None and any(
+                "force_stance_break" in mod.hit_stat_exprs
+                for mod in src_state.all_modifiers()):
+            target_hp = self.pipeline.effective_stats(target)["hp"]
+            force_stance_break = self.pipeline._scoped_boost(
+                src_state, {
+                    "action_type": action.action_type, "damage_type": action.damage_type or "",
+                    "target_broken": target.broken,
+                    "target_controlled": any(mod.control_kind for mod in target.all_modifiers()),
+                    "target_control_kinds": [mod.control_kind for mod in target.all_modifiers()
+                                             if mod.control_kind],
+                    "target_hp_ratio": target.current_hp / target_hp if target_hp > 0 else 0.0,
+                }, lambda stat: stat == "force_stance_break", target=target) > 0
+        if force_stance_break:
+            can_reduce = True
+        if any(mod.toughness_lock for mod in target.all_modifiers()):
+            can_reduce = False
+        if not action.toughness_scope and not force_stance_break and any(
+                action.damage_type in mod.protected_weakness
+                for mod in target.all_modifiers()):
             can_reduce = False
         # 削韧量 = rulebook toughness_damage 表达式求值（双效率池乘算 (1+a)(1+b)——spec 双池，实测待确认；
         # 含光环辐射，pipeline 统一生效面；固定削韧项无实例，公式内中性 0）
-        src_state = self.state.actors.get(source.actor_id)
         amount = self.pipeline.toughness_damage_amount(
             src_state, float(action.toughness_dmg),
-            action_type=action.action_type, damage_type=action.damage_type or "")
+            action_type=action.action_type, damage_type=action.damage_type or "", target=target)
         result = self.pipeline.toughness_damage(target, amount, action.damage_type or "", can_reduce)
         if result.value > 0:
             self.bus.emit("on_toughness_damage", {"amount": result.value, "source": source.actor_id, "target": target.actor.actor_id, "bar_index": target.bar_index}, self.state)
@@ -1457,7 +1580,7 @@ class CombatEngine:
             return
         effective_toughness = self.pipeline.toughness_damage_amount(
             actor_state, float(action.toughness_dmg),
-            action_type=action.action_type, damage_type=action.damage_type or "")
+            action_type=action.action_type, damage_type=action.damage_type or "", target=target)
         dmg = self.pipeline.settle_damage(
             "super_break", actor_state, target,
             element=action.damage_type or "physical",
@@ -1580,6 +1703,9 @@ class CombatEngine:
         """行动级可用条件（03_actor §3.8.1）：无声明恒真；有声明现场求值——
         `$self`=行动方 + `res_<rid>` 平铺 + hook 函数族（controlled/resource_of 等）。
         求值失败按不可用 + ⚠ 战斗日志（B8 同口径）；手工构造的 Action（无预编译产物）懒解析."""
+        locked = {kind for mod in actor_state.all_modifiers() for kind in mod.locked_action_types}
+        if act.action_type in locked:
+            return False
         if not act.available_if:
             return True
         expr = act.available_if_expr
@@ -1617,7 +1743,7 @@ class CombatEngine:
         （owner_turn_start/on_action）本回合末本就不走字，无需补偿
         （"已有增益时长不变"对它们天然成立，+1 反而白送时长）。
         """
-        for mod in actor_state.modifiers.values():
+        for mod in actor_state.all_modifiers():
             if mod.duration > 0 and mod.tick_anchor == "owner_turn_end":
                 mod.duration += 1
         self._tick_modifiers(actor_state)
@@ -1649,27 +1775,39 @@ class CombatEngine:
         actor_state.resources[key] = actor_state.resources.get(key, 0.0) + 1
         self._check_exit_conditions(actor_state)
 
-    def _pick_ally_target(self, attacker: Optional[ActorState] = None) -> Optional[ActorState]:
-        """敌方选目标（mechanics 10）：覆盖层 > 加权——掷骰按 taunt_eff 加权，期望取最高（并列按编队序）.
+    def _pick_ally_target(self, attacker: Optional[ActorState] = None, *,
+                          candidates: Optional[List[ActorState]] = None,
+                          random_by_aggro: bool = True) -> Optional[ActorState]:
+        """敌方选目标：强制嘲讽/锁定优先；随机回退可按嘲讽值加权或均匀抽取.
 
         覆盖层：强制嘲讽（attacker 身上 forced_taunt 件 → 必打其 source，Fandom Aggro
-        "ignoring Aggro and Lock On"）> 目标侧 lock_on（source=attacker）> 加权。
+        "ignoring Aggro and Lock On"）> 目标侧 lock_on（source=attacker）> 随机。
+        candidates 保留调用方过滤后的候选集；random_by_aggro=false 对应
+        TargetFetchByTauntAndAggro(RandomByAggroWhenFail=false)。
         """
         # enemy_targetable:false 的召唤物（Netherwing/Demiurge 族）不进敌方一切目标池（v1 口径含 AoE，
         # 待实测：AoE 是否豁免）；taunt:false 权重置 0（永不加权命中，强制嘲讽仍可指）
-        allies = [s for s in self._allies_alive() if s.actor.summon_flags.get("enemy_targetable", True)]
+        allies = ([s for s in self._allies_alive()
+                   if s.actor.summon_flags.get("enemy_targetable", True)]
+                  if candidates is None else list(candidates))
+        if attacker is not None:
+            allies = [target for target in allies if self._custom_targetable(attacker, target)]
         if not allies:
             return None
         if attacker is not None:
-            for mod in attacker.modifiers.values():
+            for mod in attacker.all_modifiers():
                 if mod.forced_taunt:
                     src = self.state.actors.get(mod.source_id)
                     if src is not None and any(s is src for s in allies):
                         return src
             for target in allies:
-                for mod in target.modifiers.values():
+                for mod in target.all_modifiers():
                     if mod.lock_on:
                         return target
+        if not random_by_aggro:
+            if self.pipeline.mode == MODE_ROLL and self.pipeline.rng:
+                return self.pipeline.rng.choice(allies)
+            return allies[0]
         weights = {id(s): (self.pipeline.effective_stats(s)["taunt_eff"]
                            if s.actor.summon_flags.get("taunt", True) else 0.0) for s in allies}
         if self.pipeline.mode == MODE_ROLL and self.pipeline.rng:
@@ -1688,12 +1826,22 @@ class CombatEngine:
         key = action.level_key or action.action_type
         return int(actor.skill_levels.get(key, actor.skill_levels.get("ultimate", 10)))
 
+    def _custom_targetable(self, source: ActorState, target: ActorState) -> bool:
+        team = ("neutral" if source.actor.actor_type == "battle_event"
+                else "dark" if self._is_enemy(source.actor) else "light")
+        return not any(
+            team in teams and source_modifier in source.modifiers
+            for modifier in target.all_modifiers()
+            for source_modifier, teams in modifier.custom_unselectable.items())
+
     def _hostile_target_pool(self, actor: Actor) -> List[ActorState]:
-        """行动/通用 hook 的敌方目标池；enemy_targetable:false 不进被攻击候选."""
+        """行动/通用 hook 的敌方目标池；静态可选标记与来源限制共同过滤."""
         enemies = self._enemies_alive()
-        if self._is_enemy(actor):
-            return enemies
-        return [st for st in enemies if st.actor.summon_flags.get("enemy_targetable", True)]
+        pool = (enemies if self._is_enemy(actor) else
+                [st for st in enemies if st.actor.summon_flags.get("enemy_targetable", True)])
+        source = self.state.actors.get(actor.actor_id)
+        return ([st for st in pool if self._custom_targetable(source, st)]
+                if source is not None else pool)
 
     def _resolve_targets(self, actor_state: ActorState, action: Action) -> tuple[Optional[ActorState], List[ActorState]]:
         """按 target_type 解析 (主目标, 目标集)（站位=编队序；blast/bounce_blast 相邻=存活列表索引 ±1）.
@@ -1708,8 +1856,10 @@ class CombatEngine:
             if tt == "ally_aoe":
                 teammates = self._enemies_alive()
                 return (teammates[0] if teammates else None), teammates
-            # 敌方视角的我方目标池：enemy_targetable:false 召唤物剔除（与 _pick_ally_target 同口径）
-            allies = [s for s in self._allies_alive() if s.actor.summon_flags.get("enemy_targetable", True)]
+            # 敌方视角的我方目标池：静态标记与 modifier 来源限制同 _pick_ally_target 口径
+            allies = [s for s in self._allies_alive()
+                      if s.actor.summon_flags.get("enemy_targetable", True)
+                      and self._custom_targetable(actor_state, s)]
             if tt == "aoe":
                 return (allies[0] if allies else None), allies
             if tt in {"bounce", "bounce_blast"}:
@@ -1751,7 +1901,7 @@ class CombatEngine:
         if tt == "aoe":
             return enemies[0], enemies
         forced = next((self.state.actors.get(mod.source_id)
-                       for mod in actor_state.modifiers.values()
+                       for mod in actor_state.all_modifiers()
                        if mod.forced_taunt and self.state.actors.get(mod.source_id) in enemies), None)
         if forced is not None:
             # 被敌方 Taunt 的我方单位强制攻击施加者，覆盖普通目标选择。
@@ -1792,7 +1942,7 @@ class CombatEngine:
                 return None
             return next((s for s in candidates if any(
                 m.modifier_type == "dot" and m.dot_element == element
-                for m in s.modifiers.values())), None)
+                for m in s.all_modifiers())), None)
         if preference != "owner_last_target":
             return None
         sdef = self.summon_defs.get(actor_state.actor.actor_id)
@@ -1811,10 +1961,44 @@ class CombatEngine:
             action,
             target_type=str(variant.get("target_type", action.target_type)),
             damage_type=variant.get("damage_type", action.damage_type),
-            toughness_dmg=int(variant.get("toughness_dmg", action.toughness_dmg)),
-            scaling=([{k: float(x) for k, x in row.items()} for row in variant["scaling"]]
+            toughness_dmg=(lambda value: value if isinstance(value, str) else int(value))(
+                variant.get("toughness_dmg", action.toughness_dmg)),
+            scaling=([{k: x if isinstance(x, str) else float(x) for k, x in row.items()}
+                      for row in variant["scaling"]]
                      if variant.get("scaling") is not None else action.scaling),
+            scaling_blast=([{k: x if isinstance(x, str) else float(x) for k, x in row.items()}
+                            for row in variant["scaling_blast"]]
+                           if variant.get("scaling_blast") is not None else action.scaling_blast),
         )
+
+    def _resolve_dynamic_action_scaling(self, action: Action,
+                                        actor_state: ActorState) -> Action:
+        rows = [*action.scaling, *(action.scaling_blast or [])]
+        if (not any(isinstance(value, str) for row in rows for value in row.values())
+                and not isinstance(action.toughness_dmg, str)
+                and not isinstance(action.toughness_dmg_blast, str)):
+            return action
+        payload = {
+            "actor": actor_state.actor.actor_id, "source": actor_state.actor.actor_id,
+            "target": self._last_target_id, "action_id": action.action_id,
+            "action_type": action.action_type,
+        }
+
+        def resolve(source: Optional[List[Dict[str, Any]]]) -> Optional[List[Dict[str, Any]]]:
+            if source is None:
+                return None
+            return [{key: self._hooks._hook_amount(value, actor_state, payload)
+                     if isinstance(value, str) else value for key, value in row.items()}
+                    for row in source]
+
+        return replace(
+            action, scaling=resolve(action.scaling) or [],
+            scaling_blast=resolve(action.scaling_blast),
+            toughness_dmg=(self._hooks._hook_amount(action.toughness_dmg, actor_state, payload)
+                           if isinstance(action.toughness_dmg, str) else action.toughness_dmg),
+            toughness_dmg_blast=(self._hooks._hook_amount(
+                action.toughness_dmg_blast, actor_state, payload)
+                if isinstance(action.toughness_dmg_blast, str) else action.toughness_dmg_blast))
 
     @property
     def current_frame(self) -> Optional[ExecutionFrame]:
@@ -1831,12 +2015,21 @@ class CombatEngine:
             parent = self._frame_stack[-1]
             for actor_id, kv in frame.writes.items():
                 parent.writes.setdefault(actor_id, {}).update(kv)
+            for actor_id, from_phase, to_phase in frame.phase_changes:
+                parent.record_phase_change(actor_id, from_phase, to_phase)
             return
         for actor_id, kv in frame.writes.items():
             runtime = self._enemy_policy_state.setdefault(actor_id, {
                 "seq_idx": 0, "cooldown_left": {}, "current_phase": 1,
                 "dynamic_values": {}})
-            runtime.setdefault("dynamic_values", {}).update(kv)
+            phase = kv.get("current_phase")
+            if phase is not None:
+                runtime["current_phase"] = int(phase)
+            runtime.setdefault("dynamic_values", {}).update(
+                {key: value for key, value in kv.items() if key != "current_phase"})
+        for actor_id, from_phase, to_phase in frame.phase_changes:
+            self.bus.emit("monster_phase_changed", {
+                "actor": actor_id, "from_phase": from_phase, "to_phase": to_phase}, self.state)
 
     def _execute_action(self, actor_state: ActorState, action: Action, *, _insert: bool = False,
                         forced_target: Optional[ActorState] = None,
@@ -1854,7 +2047,8 @@ class CombatEngine:
         on_action 仍落在帧内）；None = 调用方自发自收（tests 直调等旧口径不变）。
         """
         frame = ExecutionFrame(action_id=action.action_id,
-                               actor_id=actor_state.actor.actor_id)
+                               actor_id=actor_state.actor.actor_id,
+                               action_type=action.action_type, insert=_insert)
         self._frame_stack.append(frame)
         try:
             self._execute_action_inner(actor_state, action, _insert=_insert,
@@ -1875,6 +2069,7 @@ class CombatEngine:
                     "target_type": _action_broadcast["target_type"],
                     "actor_type": _action_broadcast["actor_type"],
                     "target": self._last_target_id,
+                    "targets": list(frame.target_ids),
                     "sp_consumed": self._last_sp_consumed,
                     "insert": True,
                     "tag": str(_action_broadcast.get("tag", "")),
@@ -1887,6 +2082,7 @@ class CombatEngine:
                     "target_type": _action_broadcast["target_type"],
                     "actor_type": _action_broadcast["actor_type"],
                     "target": self._last_target_id,
+                    "targets": list(frame.target_ids),
                     "sp_consumed": self._last_sp_consumed,
                 }, self.state)
         self._frame_stack.pop()
@@ -1896,7 +2092,8 @@ class CombatEngine:
                                         "action_type": action.action_type,
                                         "action_id": action.action_id,
                                         "actor_type": actor_state.actor.actor_type,
-                                        "insert": _insert}, self.state)
+                                        "insert": _insert,
+                                        "hit_targets": list(frame.hit_target_ids)}, self.state)
 
     def _execute_action_inner(self, actor_state: ActorState, action: Action, *, _insert: bool = False,
                               forced_target: Optional[ActorState] = None) -> None:
@@ -1928,9 +2125,19 @@ class CombatEngine:
                     targets = [forced_target]
         if not targets:
             return
+        if self._frame_stack:
+            self._frame_stack[-1].target_ids = [target.actor.actor_id for target in targets]
         # on_action 事件 payload 的主目标寻址（星期日/蒙福者族需要知道技能打在谁身上——
         # 各 emit 点统一读这个槽；未解析出目标时为 None，条件求值按不触发处理同口径）
         self._last_target_id = primary.actor.actor_id if primary is not None else None
+        self.bus.emit("before_action", {
+            "actor": actor.actor_id, "action_type": action.action_type,
+            "action_id": action.action_id, "target_type": action.target_type,
+            "actor_type": actor.actor_type,
+            "target": self._last_target_id,
+            "targets": [target.actor.actor_id for target in targets],
+            "insert": _insert,
+        }, self.state)
         if primary is not None:
             # 逐 actor 记账（prefer_target "owner_last_target" 取数锚——忆灵优先忆师末目标族）
             self._last_target_by_actor[actor.actor_id] = primary.actor.actor_id
@@ -1960,7 +2167,7 @@ class CombatEngine:
 
         # 净化自身所有可驱散负面（140811"解除自身所有负面效果"族）
         if action.cleanse_self:
-            for mid in [m.modifier_id for m in actor_state.modifiers.values()
+            for mid in [m.modifier_id for m in actor_state.all_modifiers()
                         if m.modifier_type == "debuff" and m.dispellable]:
                 self._remove_modifier(actor_state, mid, "cleanse")
 
@@ -2059,6 +2266,7 @@ class CombatEngine:
                         if not targets:
                             break
                     previous_target_type = seg_action.target_type
+                    seg_action = self._resolve_dynamic_action_scaling(seg_action, actor_state)
                     for target in targets:
                         if not target.alive:
                             continue
@@ -2107,6 +2315,11 @@ class CombatEngine:
                             "source": actor.actor_id, "target": target.actor.actor_id,
                             "action_id": eff.action_id,
                             "action_type": eff.action_type, "is_critical": result.node.get("isCrit", False),
+                            "split": eff.split, "is_indirect": eff.is_indirect,
+                            "damage_tags": list(eff.damage_tags),
+                            "damage_custom_name": eff.damage_custom_name,
+                            "block_damage_triggered": any(
+                                mod.block_damage for mod in target.all_modifiers()),
                         }, self.state)
                         if wp.get("cancel"):
                             continue  # 伤害被取消（免死类 hook 侧已自理回血/反击）
@@ -2144,7 +2357,11 @@ class CombatEngine:
                             target_id=target.actor.actor_id,
                             is_critical=result.node.get("isCrit", False), seg_index=seg,
                             actor_type=actor.actor_type, action_type=eff.action_type,
-                            hit_targets=[t3.actor.actor_id for t3 in targets], action_id=eff.action_id)
+                            hit_targets=[t3.actor.actor_id for t3 in targets], action_id=eff.action_id,
+                            split=eff.split, is_indirect=eff.is_indirect, damage_tags=eff.damage_tags,
+                            damage_custom_name=eff.damage_custom_name,
+                            max_hit_split_count=instances,
+                            block_damage_triggered=bool(wp.get("block_damage_triggered")))
         else:
             # 无伤害行动（self buff/铺场类）也留行动日志——可观察性是机制对轴的前提
             self.state.log.append(
@@ -2204,7 +2421,7 @@ class CombatEngine:
         target = self.state.actors.get(str(payload.get("target") or ""))
         if target is None:
             return None
-        blocking = [m for m in target.modifiers.values() if m.block_damage]
+        blocking = [m for m in target.all_modifiers() if m.block_damage]
         if not blocking:
             return None
         for mod in blocking:
@@ -2336,6 +2553,8 @@ class CombatEngine:
         entry = self.state_entry_actions.get(ult.action_id)
         if entry is not None and caster.state_config is entry[1]:
             return False  # 已在该形态：变身技不重复触发（防能量回充连锁变身）
+        self.bus.emit("on_ultimate_prepare", {
+            "source": caster.actor.actor_id, "action": ult.action_id}, self.state)
         self._last_sp_consumed = 0   # 变身入口技不经 _execute_action——清零防串上一行动账
         cost = ult_threshold_of(ult, caster.actor.stats.max_energy)  # 开大能耗 = 阈值全扣
         # 形态入口技：施放即变身（进入形态 + 结束本回合 + 授予倒计时回合）
@@ -2347,7 +2566,10 @@ class CombatEngine:
                 consume = ult.ult_consume_amount if ult.ult_consume_amount > 0 else ult.ult_cost_amount
                 self._gain_resource(caster, ult.ult_cost_resource, -consume)
             else:
+                before_energy = caster.current_energy
                 self.pipeline.consume_energy(caster, cost)
+                self._emit_energy_change(
+                    caster, before_energy, source=caster.actor.actor_id, reason="ultimate")
         if entry is not None:
             _owner, config = entry
             self.enter_state(caster, config)
@@ -2398,6 +2620,15 @@ class CombatEngine:
                                       "target": self._last_target_id}, self.state)
         return True
 
+    def _emit_energy_change(self, target: ActorState, before: float, *,
+                            source: str = "", reason: str = "") -> None:
+        after = target.current_energy
+        if after == before:
+            return
+        self.bus.emit("on_energy_change", {
+            "target": target.actor.actor_id, "before": before, "after": after,
+            "source": source, "reason": reason}, self.state)
+
     def _grant_energy(self, recipient: ActorState, amount: float, *, source: str,
                       action_id: Optional[str], reason: str, err_exempt: bool = False) -> float:
         """能量获得统一入口（§23.4 对账表：一切获得路径的发射点）.
@@ -2421,7 +2652,9 @@ class CombatEngine:
         final = float(wp.get("amount", amount))
         if final <= 0:
             return 0.0
+        before = recipient.current_energy
         res = self.pipeline.gain_energy(recipient, final, err_exempt=err_exempt)
+        self._emit_energy_change(recipient, before, source=source, reason=reason)
         return float(res.node.get("actualAmount", 0.0))
 
     def _grant_hit_energy(self, source: Actor, action: Action, target: ActorState) -> None:
@@ -2503,11 +2736,11 @@ class CombatEngine:
 
     def _enemy_turn(self, actor_state: ActorState) -> None:
         actor = actor_state.actor
-        frozen = any(m.control_kind == "freeze" for m in actor_state.modifiers.values())
+        frozen = any(m.control_kind == "freeze" for m in actor_state.all_modifiers())
 
         # 冻结：真正跳过一次行动（不恢复韧性；解冻后下次行动提前——比例读 rulebook constants.freeze_advance，mechanics 03 §3.5）
         if frozen:
-            for mod_id in [m.modifier_id for m in actor_state.modifiers.values() if m.control_kind == "freeze"]:
+            for mod_id in [m.modifier_id for m in actor_state.all_modifiers() if m.control_kind == "freeze"]:
                 self._remove_modifier(actor_state, mod_id, "expire")
             assert self.scheduler is not None
             self.scheduler.advance_action(actor, self.pipeline.freeze_advance())
@@ -2518,8 +2751,9 @@ class CombatEngine:
         # toughness_recovered waterfall（残梅绽族：cancel = 阻止本次恢复、保持击破、
         # 该次行动被消耗——mechanics 04"冻结/残梅绽真跳过"分流）
         if actor_state.broken:
+            max_toughness = float(self.pipeline.effective_stats(actor_state)["max_toughness"])
             wp = self.bus.waterfall("toughness_recovered", {
-                "target": actor.actor_id, "amount": actor.stats.max_toughness,
+                "target": actor.actor_id, "amount": max_toughness,
             }, self.state)
             if wp.get("cancel"):
                 # 恢复被阻止：击破态维持、本次不行动。回合弹出时已无条件重置剩余距离
@@ -2532,7 +2766,7 @@ class CombatEngine:
                 return
             actor_state.broken = False
             actor_state.bar_index = 0   # 韧性恢复回主条（多韧性条 §3.10：追加条随下次主条破再循环）
-            actor_state.toughness = float(wp.get("amount", actor.stats.max_toughness))
+            actor_state.toughness = float(wp.get("amount", max_toughness))
             self.state.log.append(f"AV{self.state.clock:.1f}: [敌] {actor.name} 韧性恢复")
 
         policy = self._enemy_policies.get(actor.actor_id)
@@ -2638,7 +2872,7 @@ class CombatEngine:
         """强制普攻回合：暴怒打对立阵营；支配打其他同阵营友方."""
         if control_kind not in {"outrage", "dominate"}:
             raise ValueError(f"未知强制普攻控制类型：{control_kind!r}")
-        if not any(mod.control_kind == control_kind for mod in actor_state.modifiers.values()):
+        if not any(mod.control_kind == control_kind for mod in actor_state.all_modifiers()):
             return False
         actor = actor_state.actor
         if control_kind == "outrage":
@@ -2671,20 +2905,26 @@ class CombatEngine:
     def _run_turn(self, actor_state: ActorState, kind: str) -> None:
         actor = actor_state.actor
         self._current_turn_actor_id = actor.actor_id
+        self._turn_owner_action_phase_end = False
         is_countdown = kind == EXTRA_COUNTDOWN
 
         # 阶段 1 · 回合开始（A 类结算：DOT 跳伤；倒计时类不广播）
-        if not is_countdown:
-            self.bus.emit("on_turn_start", {"actor": actor.actor_id, "kind": kind}, self.state)
-        self._tick_modifiers(actor_state, "owner_turn_start")  # 计时锚"回合开始"（阮梅弦外音族）
-        self._tick_source_modifiers(actor, "source_turn_start")  # 施加者回合开始锚（长夜月忆灵光环族）
-        self._tick_dots(actor_state)
+        previous_phase1_begin = self._modifier_phase1_begin
+        self._modifier_phase1_begin = not is_countdown
+        try:
+            if not is_countdown:
+                self.bus.emit("on_turn_start", {"actor": actor.actor_id, "kind": kind}, self.state)
+            self._tick_modifiers(actor_state, "owner_turn_start")  # 计时锚"回合开始"（阮梅弦外音族）
+            self._tick_source_modifiers(actor, "source_turn_start")  # 施加者回合开始锚（长夜月忆灵光环族）
+            self._tick_dots(actor_state)
+        finally:
+            self._modifier_phase1_begin = previous_phase1_begin
         # 回合开始结算致死（DOT/月茧到期）：死亡单位不进入行动阶段（与主循环的 dead-skip 同口径）
         if not actor_state.alive:
             return
 
         # 阶段 2 · 行动（快照回合开始时的形态：本回合内才变身的，当动不计入倒计时）
-        prevent_action = any(mod.prevent_action for mod in actor_state.modifiers.values())
+        prevent_action = any(mod.prevent_action for mod in actor_state.all_modifiers())
         controlled = self._forced_basic_turn(actor_state, "outrage")
         if not controlled:
             controlled = self._forced_basic_turn(actor_state, "dominate")
@@ -2740,6 +2980,7 @@ class CombatEngine:
         else:
             self.state.log.append(f"AV{self.state.clock:.1f}: {actor.name} 行动被阻止")
 
+        self._turn_owner_action_phase_end = True
         # 阶段 4 · 回合结束（B 类结算：modifier tick；倒计时类不广播）
         if not is_countdown:
             self.bus.emit("on_turn_end", {"actor": actor.actor_id, "kind": kind}, self.state)

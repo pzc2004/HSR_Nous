@@ -1,6 +1,7 @@
 """技能/行动定义：普攻、战技、终结技、天赋等."""
 
 from dataclasses import dataclass, field
+from typing import Any
 from typing import Any, Dict, List, Optional
 
 #: 元素词表（内部小写 canonical key——damage_type / toughness_scope / Actor.element 同词表；
@@ -26,7 +27,7 @@ class Action:
     damage_type: Optional[str] = None  # "physical", "fire", "ice", "thunder", "wind", "quantum", "imaginary"
 
     # 技能倍率（按等级）
-    scaling: List[Dict[str, float]] = field(default_factory=list)
+    scaling: List[Dict[str, Any]] = field(default_factory=list)
 
     # 能量
     energy_cost: int = 0      # 终结技能量消耗
@@ -38,15 +39,15 @@ class Action:
     skill_point_gain: int = 0  # 战技点获取（普攻默认+1）
 
     # 削韧值（击破系统核心参数；多段 SPHitRatio 可产生小数，编译不做 int 截断）
-    toughness_dmg: float = 0.0  # 削韧值（普攻10, 战技20, 终结技30）
+    toughness_dmg: Any = 0.0  # 削韧值（普攻10, 战技20, 终结技30）
     # 削韧作用域（乱破/波提欧"无视弱点属性削减韧性"族）：""=默认闸
     # （攻击属性 ∈ 目标有效弱点才可削，植入弱点计入）；"all"=无视弱点任意属性可削；
     # 元素列表=这些元素无视弱点可削（静闸；modifier 携带的动态闸未落地，见 03_actor §3.8 注）
     toughness_scope: Any = ""
 
     # 扩散副目标（Blast：主目标 + 相邻；数值锚点 docs/mechanics/04_break_system.md 基线 10/20/10）
-    scaling_blast: Optional[List[Dict[str, float]]] = None  # 相邻目标倍率表（按等级）；None=与主目标相同
-    toughness_dmg_blast: Optional[float] = None  # 相邻目标削韧；None=主目标一半
+    scaling_blast: Optional[List[Dict[str, Any]]] = None  # 相邻目标倍率表（按等级）；None=与主目标相同
+    toughness_dmg_blast: Any = None  # 相邻目标削韧；None=主目标一半
 
     # 多段（本字段即引擎层表达）：scaling/toughness_dmg 均为**每段**数值
     instances: int = 1  # 段数；>1 时逐段结算，段间目标死亡则后续段落空（鞭尸损失）
@@ -74,6 +75,9 @@ class Action:
 
     # 分配轴（05_effects §split）："even"=总伤按结算时存活目标数均分（逐目标各自跑公式）
     split: str = ""
+    is_indirect: bool = False  # 上游 AttackData.IsIndirect 显式标志，原样进入受击事件
+    damage_tags: List[int] = field(default_factory=list)  # 上游 DamageTag 整数枚举值
+    damage_custom_name: str = ""  # 上游 AttackData.CustomName，原样进入受击事件
 
     # 立即行动效果（拉条族）：非空时施放后使指定目标立即行动（"all_enemies"=敌方全体，白厄 140809 族）
     act_now_targets: str = ""
