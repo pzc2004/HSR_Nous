@@ -25,6 +25,7 @@ import types
 from typing import Any, Dict, List, Optional
 
 from hsr_nous.sim.pipeline import MODE_ROLL
+from hsr_nous.sim_schema.actor import TARGET_POOL_EXCLUDE_FLAGS
 
 #: 代数 dict 合法键（编译期闸与文档单一事实源）
 TARGET_ALGEBRA_KEYS = frozenset({
@@ -138,9 +139,25 @@ def resolve_pool(spec: Any, *, engine: Any, st: Any, payload: Dict[str, Any],
                                 include_dead=include_dead,
                                 include_unselectable=include_unselectable)
     if include_dead and spec in {"allies", "enemies", "all"}:
+        # include_dead 仅放松存活闸（22_syntax §include_dead：保留死亡实体，普通攻击/增益
+        # 不得借此绕开存活闸）——banished/系统排除旗/可选性过滤仍生效，与常规池同口径。
+        # 旧直返 state.actors.values() 只按敌我过滤，绕过 banished/排除旗/targetable。
         want_enemy = spec != "allies"
-        return [state for state in engine.state.actors.values()
-                if spec == "all" or engine._is_enemy(state.actor) == want_enemy]
+        result = []
+        for state in engine.state.actors.values():
+            is_enemy = engine._is_enemy(state.actor)
+            if spec != "all" and is_enemy != want_enemy:
+                continue
+            if state.banished:
+                continue
+            if not is_enemy and (state.actor.system_flags & TARGET_POOL_EXCLUDE_FLAGS):
+                continue
+            if not include_unselectable:
+                flag = "enemy_targetable" if is_enemy else "ally_targetable"
+                if not state.actor.summon_flags.get(flag, True):
+                    continue
+            result.append(state)
+        return result
     if spec == "enemy_targets":
         return [s for s in engine._allies_alive()
                 if include_unselectable or s.actor.summon_flags.get("enemy_targetable", True)]

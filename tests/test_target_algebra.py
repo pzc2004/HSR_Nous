@@ -198,6 +198,31 @@ class TestHookAlgebraDirect:
         pool = eng._hooks._hook_target_states({"pool": "unselectable"}, hero, {})
         assert ev in pool, "池含 battle_event，谓词须同判不可选"
 
+    def test_include_dead_respects_exclusions(self):
+        """include_dead 仅放松存活闸——banished/系统排除旗/不可选仍排除（旧直返
+        state.actors.values() 绕过全部过滤，与常规池口径分叉）。"""
+        eng = _mk_engine()
+        hero = eng.state.actors["hero"]
+        a1 = eng.state.actors["a1"]
+        a2 = eng.state.actors["a2"]
+        a1.banished = True
+        a2.actor.system_flags = frozenset({"untargetable"})
+        hero.alive = False  # 死亡但可选 → include_dead 保留
+        ids = {s.actor.actor_id for s in eng._hooks._hook_target_states(
+            {"pool": "allies", "include_dead": True}, hero, {})}
+        assert "a1" not in ids, "banished 仍排除"
+        assert "a2" not in ids, "系统排除旗仍排除"
+        assert "hero" in ids, "死亡但可选的我方保留"
+        # 不可选（summon_flags）默认排除，include_unselectable 放松
+        a2.actor.system_flags = frozenset()
+        a2.actor.summon_flags["ally_targetable"] = False
+        ids2 = {s.actor.actor_id for s in eng._hooks._hook_target_states(
+            {"pool": "allies", "include_dead": True}, hero, {})}
+        assert "a2" not in ids2, "不可选默认排除"
+        ids3 = {s.actor.actor_id for s in eng._hooks._hook_target_states(
+            {"pool": "allies", "include_dead": True, "include_unselectable": True}, hero, {})}
+        assert "a2" in ids3, "include_unselectable 放松可选性"
+
     def test_take_int_random_targets(self):
         """实例垫底（敌方 "Deals … to 3 random targets"）：take 3 + mode random——
         roll 同 seed 复现；expected 按序取前 N 不掷骰（确定化口径）."""

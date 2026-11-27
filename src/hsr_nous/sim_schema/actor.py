@@ -28,6 +28,11 @@ PATHS = frozenset({
 #: scheduler._wave_reset_exempt 注册（「转面不重跑」）。
 SYSTEM_UNIT_FLAGS = frozenset({"untargetable", "no_wipe", "no_aura", "wave_reset_exempt"})
 
+#: 目标池排除子集（SYSTEM_UNIT_FLAGS 去掉 wave_reset_exempt——后者走 scheduler 注册通道，
+#: 不参与目标池排除）：engine._allies_alive 与 target_algebra include_dead 分支同读此单一
+#: 来源（include_dead 仅放松存活闸，系统排除旗/banished/可选性仍生效，22_syntax §include_dead）。
+TARGET_POOL_EXCLUDE_FLAGS = frozenset({"untargetable", "no_wipe", "no_aura"})
+
 #: 具名速度规则词表（系统单位 speed_rule——实现在引擎（系数归 rulebook constants），
 #: 词表唯一源本文件；编译期闸与引擎 dispatch 同读）：aha = 阿哈速度公式（21_elation §21.4）
 SPEED_RULES = frozenset({"aha"})
