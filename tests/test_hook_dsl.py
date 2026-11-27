@@ -687,6 +687,17 @@ class TestActivateUltimate:
         eng.enter_state(ally, eng.state_configs_by_actor["ally"][0])
         assert eng._activate_ultimate(ally) is False, "形态锁 ultimate——跳过"
 
+    def test_locked_action_types_blocks_free_fire(self):
+        """F03：控制禁用终结技（locked_action_types）free 路径同受闸，不许绕过."""
+        eng = _au_engine()
+        ally = eng.state.actors["ally"]
+        eng._hooks._run_hook_effect(ally, {
+            "effect_type": "apply_modifier", "target": "self",
+            "modifier": {"modifier_id": "UltDisable", "modifier_type": "debuff",
+                         "duration": 0, "max_stack": 1,
+                         "locked_action_types": ["ultimate"]}}, {})
+        assert eng._activate_ultimate(ally) is False, "locked_action_types 禁用——free 路径须跳过"
+
     def test_replaced_ult_resolved_by_state(self):
         """形态替换 ult 按当前形态解析（昔涟涟漪 141503→141514 族的唯一形态感知点）."""
         from hsr_nous.sim.state import StateConfig

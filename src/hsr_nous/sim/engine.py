@@ -2510,6 +2510,10 @@ class CombatEngine:
         ult = self._ult_action_of(st)
         if ult is None:
             return False
+        # F03：free 路径同受 locked_action_types 闸（控制禁用终结技——AttachSkillTypeDisable
+        # 族），与 resources.ultimate_available 同口径，不许绕过
+        if any("ultimate" in mod.locked_action_types for mod in st.all_modifiers()):
+            return False
         return self._fire_ultimate(st, ult, free=True)
 
     def _try_ultimate(self, actor_state: ActorState, timing: str) -> bool:
