@@ -1067,6 +1067,10 @@ class HookRuntime:
             for actor, _kind, _eta in scheduler.preview():
                 if avatar_only and actor.actor_type != "character":
                     continue
+                # 死者/放逐者不占行动条首位（F07：preview 只滤冻结，谓词须自滤死亡）
+                ast = self._engine.state.actors.get(actor.actor_id)
+                if ast is None or not ast.alive or ast.banished:
+                    continue
                 if want_enemy is None or self._engine._is_enemy(actor) == want_enemy:
                     return float(actor.actor_id == st2.actor.actor_id)
             return 0.0
