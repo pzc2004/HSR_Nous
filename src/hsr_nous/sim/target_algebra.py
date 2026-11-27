@@ -247,8 +247,11 @@ def eval_algebra(
     n = len(pool) if take == "all" else max(0, min(int(take), len(pool)))
     mode = spec.get("mode", "deterministic")
     if mode in {"taunt_or_random", "taunt_or_aggro"}:
-        if n != 1:
+        # 判声明的 take 而非裁剪后的 n：take:1 + 空池应返回空，不是误炸（F06）
+        if take != 1:
             raise ValueError(f"{mode} 仅支持 take: 1，得到 {take!r}")
+        if not pool:
+            return []
         owner = getattr(self_ns, "_st", None)
         if owner is None:
             raise ValueError(f"{mode} 需要 hook 持有者作为攻击者语境")

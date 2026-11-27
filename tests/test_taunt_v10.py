@@ -171,3 +171,27 @@ class TestDeterminism:
                           mode=MODE_ROLL, seed=7)
             return eng.run().snapshot()
         assert _snap() == _snap()
+
+
+class TestTauntEmptyPoolF06:
+    """F06：taunt 模式判声明 take 而非裁剪后的 n；take:1 + 空池返回空，不误炸。"""
+
+    def test_take1_empty_pool_returns_empty(self):
+        from types import SimpleNamespace
+        from hsr_nous.sim.target_algebra import eval_algebra
+        eng = _engine([_ally("h", "毁灭员", path="destruction")])
+        self_ns = SimpleNamespace(_st=eng.state.actors["h"])
+        out = eval_algebra({"mode": "taunt_or_random", "take": 1},
+                           pool=[], engine=eng, expr=eng._expr, self_ns=self_ns)
+        assert out == []
+
+    def test_take2_raises_with_declared_value(self):
+        import pytest
+        from types import SimpleNamespace
+        from hsr_nous.sim.target_algebra import eval_algebra
+        eng = _engine([_ally("h", "毁灭员", path="destruction")])
+        self_ns = SimpleNamespace(_st=eng.state.actors["h"])
+        with pytest.raises(ValueError, match="得到 2"):
+            eval_algebra({"mode": "taunt_or_random", "take": 2},
+                         pool=[eng.state.actors["h"]], engine=eng,
+                         expr=eng._expr, self_ns=self_ns)
