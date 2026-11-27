@@ -862,7 +862,7 @@ class HookRuntime:
 
         def unique_target(name: Any) -> str:
             from hsr_nous.sim.target_algebra import unique_target_id
-            return unique_target_id(self._engine, name)
+            return unique_target_id(self._engine, name, st)
 
         def turn_owner_of() -> str:
             """当前回合归属者 actor_id（ByIsTurnOwnerEntity 全语境直译通道）。"""

@@ -131,6 +131,22 @@ class TestHookAlgebraDirect:
             "target": "self", "scope": "unique_name"}, {})
         assert eng._hooks._hook_target_states(spec, hero, {}) == [hero]
 
+    def test_private_dynamic_target_readable_by_owner(self):
+        """actor 私有动态目标绑定（per-owner，非 unique_name）须被持有者读到——
+        旧 unique_target_id 只读 $level，私有表只写不读静默空转（05_effects §actor
+        私有动态目标绑定）；他人读同名不串，全局 unique_name 回落口径不变。"""
+        eng = _mk_engine()
+        hero = eng.state.actors["hero"]
+        spec = {"pool": "unique:Priv"}
+        assert eng._hooks._hook_target_states(spec, hero, {}) == []
+        eng._hooks._run_hook_effect(hero, {
+            "effect_type": "set_dynamic_target", "dynamic_key": "Priv",
+            "target": {"pool": "enemies", "take": 1}, "owner": "self"}, {})
+        resolved = eng._hooks._hook_target_states(spec, hero, {})
+        assert [s.actor.actor_id for s in resolved] == ["e1"], "持有者读到私有绑定"
+        other = eng.state.actors["e2"]
+        assert eng._hooks._hook_target_states(spec, other, {}) == [], "私有绑定不串他人"
+
     def test_take_int_random_targets(self):
         """实例垫底（敌方 "Deals … to 3 random targets"）：take 3 + mode random——
         roll 同 seed 复现；expected 按序取前 N 不掷骰（确定化口径）."""

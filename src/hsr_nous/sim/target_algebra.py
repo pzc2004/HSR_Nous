@@ -38,7 +38,19 @@ TARGET_ALGEBRA_MODES = frozenset({"deterministic", "random", "shuffle", "taunt_o
 UNIQUE_TARGET_PREFIX = "unique:"
 
 
-def unique_target_id(engine: Any, name: Any) -> str:
+def unique_target_id(engine: Any, name: Any, holder: Any = None) -> str:
+    """unique 名 → actor_id：持有者私有绑定优先，全局 $level 回落。
+
+    actor 私有动态目标绑定（05_effects.md §actor 私有动态目标绑定）写持有者自己的
+    _enemy_policy_state[owner].dynamic_targets；全局 unique_name 绑定写 $level。
+    旧只读 $level → 私有绑定只写不读（静默空转）。holder=读取方持有者，先读其私有表，
+    未命中回落 $level（unique_name / battle_event 全局绑定口径不变）。
+    """
+    if holder is not None:
+        rt = engine._enemy_policy_state.get(holder.actor.actor_id) or {}
+        value = (rt.get("dynamic_targets") or {}).get(str(name))
+        if value:
+            return str(value)
     runtime = engine._enemy_policy_state.get("$level") or {}
     return str((runtime.get("dynamic_targets") or {}).get(str(name)) or "")
 
@@ -51,8 +63,8 @@ def battle_event_actor(engine: Any, actor_id: Any) -> Any:
     return None
 
 
-def unique_target_actor(engine: Any, name: Any) -> Any:
-    actor_id = unique_target_id(engine, name)
+def unique_target_actor(engine: Any, name: Any, holder: Any = None) -> Any:
+    actor_id = unique_target_id(engine, name, holder)
     return engine.state.actors.get(actor_id) or battle_event_actor(engine, actor_id)
 
 
@@ -145,7 +157,7 @@ def resolve_pool(spec: Any, *, engine: Any, st: Any, payload: Dict[str, Any],
                 + ([s for s in engine._enemies_alive() if not s.banished]
                    if include_unselectable else engine._hostile_target_pool(st.actor)))
     if isinstance(spec, str) and spec.startswith(UNIQUE_TARGET_PREFIX):
-        target = unique_target_actor(engine, spec[len(UNIQUE_TARGET_PREFIX):])
+        target = unique_target_actor(engine, spec[len(UNIQUE_TARGET_PREFIX):], st)
         return [target] if target is not None else []
     if isinstance(spec, str) and spec.startswith("$event."):
         if spec in ("$event.targets", "$event.hit_targets"):
