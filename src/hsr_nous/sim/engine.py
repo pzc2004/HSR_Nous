@@ -548,7 +548,15 @@ class CombatEngine:
         覆盖：BattleState 全字段全精度（含 actor/modifier 全字段——表达式槽存 source
         串）+ 调度器动态六件与 clock（红黑树逐句柄 insert 派生重建）+ RNG 流位置 +
         引擎运行期字段 + hooks 累积队列。契约与闸详见 sim/save_load.py 模块 docstring。
+
+        前置：须在场间静息态（执行帧栈空）存档——帧覆盖层/roll 绑定是瞬态，中场存档
+        会丢失帧内写回与随机绑定。旧豁免单假设「档间恒空」已被探针证伪（select_target/
+        wait_segment 帧内 depth=1），改为显式断言把前提变成强制（F24）。
         """
+        if self._frame_stack:
+            raise ValueError(
+                "行动结算中（执行帧栈非空）不可存档：帧覆盖层/roll 绑定属瞬态，"
+                "存档须在场间静息态——中场存档会静默丢失帧内写回与随机绑定（F24）")
         return save_engine(self)
 
     @classmethod
@@ -1054,6 +1062,14 @@ class CombatEngine:
     # 终止判定
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _pseudo_state(actor_id: str, name: str, actor_type: str) -> ActorState:
+        """伪实体惰性载体（$level/队伍）单一构造点：常数 hp/spd/max_energy 不参与结算，
+        不占站位/目标池（F26 压缩——原三处重复 StatBlock(hp=1, spd=100, max_energy=0)）。"""
+        return ActorState(actor=Actor(
+            actor_id=actor_id, name=name, actor_type=actor_type,
+            stats=StatBlock(hp=1, spd=100, max_energy=0)), current_hp=1.0)
+
     @property
     def _level_state(self) -> ActorState:
         """关卡级共享黑板（决策卡 #31）：LevelEntity 的运行时载体——伪 ActorState，
@@ -1061,24 +1077,18 @@ class CombatEngine:
         modifier 池挂伪 state（天气阶段/士兵计数/limbo 标记等跨怪协调状态的住所）。
         """
         if self._level_state_obj is None:
-            self._level_state_obj = ActorState(actor=Actor(
-                actor_id="$level", name="关卡", actor_type="level",
-                stats=StatBlock(hp=1, spd=100, max_energy=0)), current_hp=1.0)
+            self._level_state_obj = self._pseudo_state("$level", "关卡", "level")
         return self._level_state_obj
 
     def _team_entity_state(self, team: str) -> ActorState:
         """TargetFetchTeamEntity 的阵营载体；不占站位或普通目标池."""
         if team == "TeamLight":
             if self._light_team_state_obj is None:
-                self._light_team_state_obj = ActorState(actor=Actor(
-                    actor_id="$light_team", name="我方队伍", actor_type="team",
-                    stats=StatBlock(hp=1, spd=100, max_energy=0)), current_hp=1.0)
+                self._light_team_state_obj = self._pseudo_state("$light_team", "我方队伍", "team")
             return self._light_team_state_obj
         if team == "TeamDark":
             if self._dark_team_state_obj is None:
-                self._dark_team_state_obj = ActorState(actor=Actor(
-                    actor_id="$dark_team", name="敌方队伍", actor_type="team",
-                    stats=StatBlock(hp=1, spd=100, max_energy=0)), current_hp=1.0)
+                self._dark_team_state_obj = self._pseudo_state("$dark_team", "敌方队伍", "team")
             return self._dark_team_state_obj
         raise ValueError(f"未知队伍实体：{team!r}")
 
