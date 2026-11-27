@@ -1,8 +1,8 @@
 """执行帧（ExecutionFrame，裁决卡 designs/DECISIONS.md #26）：一次行动执行的瞬态上下文.
 
 帧随 `engine._execute_action` 同步调用栈生灭（进入压栈 / 正常返回提交 / 异常整帧丢弃
-——与 ConfigAI 解释器选不出技能时回滚 dynamic_values 的既有先例同口径），承载三类
-"执行内"语义：
+——与 ConfigAI 解释器选不出技能时回滚 dynamic_values 的既有先例同口径），承载以下
+"执行内"语义（条目自枚举，不写会过期的计数）：
 
 1. **写后读**——`set_dynamic_value` 在行动执行内的写入先入覆盖层，同执行内（含同窗
    事件链上后续 hook 的 condition/effect）立即可读；最外层帧提交才把覆盖层合并进

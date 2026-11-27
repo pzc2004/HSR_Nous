@@ -405,7 +405,7 @@ sim 引擎启动时扫描所有模板的 `hooks` 字段，构建事件分发表�
 > `engine._execute_action`（压栈/提交/回滚）、`enemy_ai.config_ai_dynamic_value`
 > （读取链）、`hooks._hook_functions`（`roll` 宿主注入）。
 
-**执行帧** = 一次行动执行，或帧外事件的一条 hook 链执行的瞬态上下文，承载两类"执行内"语义：
+**执行帧** = 一次行动执行，或帧外事件的一条 hook 链执行的瞬态上下文，承载以下"执行内"语义（核心读/写两条；完整四条含阶段通知/目标记账见 `sim/frame.py` 头注）：
 
 1. **写后读（read-your-writes）**：`set_dynamic_value` 在行动执行内的写入先入帧覆盖层，
    同执行内（含同窗事件链上后续 hook 的 condition/effect）立即可读；

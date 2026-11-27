@@ -126,7 +126,7 @@ v3.0 引入，忆师和忆灵在**同一行动中**各自发动攻击。
 噬命降低的是**可回复生命上限**，不是直接扣减有效生命上限，也不是治疗量乘区：
 
 ```
-recoverable_hp_cap = max(0, effective_max_hp × (1 - min(variant_cap, initial_ratio + accumulated_hit_ratio)) - dirty_hp_delta)
+recoverable_hp_cap = max(0, effective_max_hp × (1 - min(variant_cap, initial_ratio + accumulated_hit_ratio)) - recoverable_hp_delta)
 # variant_cap ≤ 0.99；基础实例为 0.99，The Ascended (Bug) 为 0.50
 ```
 
