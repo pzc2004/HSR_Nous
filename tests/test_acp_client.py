@@ -32,6 +32,23 @@ def _update(update_id: str, **extra: object) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def test_eof_error_carries_stderr_tail(tmp_path):
+    """stderr 病灶闸：对端崩溃退出时 EOF 错误须带 stderr 诊断尾部（不再 DEVNULL 丢弃）。"""
+    import os
+    import sys
+    script = (
+        "import sys, time; "
+        "sys.stderr.write('boom diagnostic xyz\\n'); sys.stderr.flush(); "
+        "time.sleep(0.5)"
+    )
+    client = AcpClient(
+        argv=[sys.executable, "-c", script],
+        env=dict(os.environ), cwd=tmp_path,
+    )
+    with pytest.raises(AcpConnectionError, match="boom diagnostic xyz"):
+        asyncio.run(client.start(timeout_s=10))
+
+
 def test_handshake_and_session_lifecycle():
     async def scenario() -> None:
         authenticated: list[str] = []

@@ -32,6 +32,7 @@ import json
 import os
 import signal
 import subprocess
+from collections import deque
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from pathlib import Path
 from typing import Any
@@ -128,6 +129,7 @@ class AcpClient:
         self._spawn = spawn or self._spawn_subprocess
         self._transport: _Transport | None = None
         self._reader_task: asyncio.Task[None] | None = None
+        self._stderr_task: asyncio.Task[None] | None = None
         self._write_lock = asyncio.Lock()
         self._next_id = 0
         self._pending: dict[int, asyncio.Future[dict[str, Any]]] = {}
@@ -186,7 +188,7 @@ class AcpClient:
                 *self._argv,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.DEVNULL,  # 诊断走 web 日志会污染 stdout 纯协议流约定之外的通道；原型期直接丢弃
+                stderr=asyncio.subprocess.PIPE,  # 捕获诊断尾部，EOF/连接失败时带进错误（不再 DEVNULL 丢弃）
                 cwd=self._cwd,
                 env=self._env,
                 start_new_session=True,
@@ -206,6 +208,9 @@ class AcpClient:
             raise AcpError("ACP 客户端已启动")
         self._transport = await self._spawn()
         self._reader_task = asyncio.create_task(self._read_loop(), name="acp-reader")
+        if hasattr(self._transport, "drain_stderr"):
+            self._stderr_task = asyncio.create_task(
+                self._transport.drain_stderr(), name="acp-stderr")
         try:
             init = await self._request(
                 "initialize",
@@ -247,6 +252,9 @@ class AcpClient:
         if self._reader_task is not None:
             self._reader_task.cancel()
             self._reader_task = None
+        if self._stderr_task is not None:
+            self._stderr_task.cancel()
+            self._stderr_task = None
         transport, self._transport = self._transport, None
         if transport is not None:
             await transport.aclose()
@@ -403,7 +411,12 @@ class AcpClient:
             while True:
                 raw = await self._transport.readline()
                 if not raw:
-                    raise AcpConnectionError("ACP 对端关闭了连接（stdout EOF）")
+                    msg = "ACP 对端关闭了连接（stdout EOF）"
+                    tail = (self._transport.stderr_text()
+                            if hasattr(self._transport, "stderr_text") else "")
+                    if tail:
+                        msg += f"；对端 stderr 尾部:\n{tail}"
+                    raise AcpConnectionError(msg)
                 message = decode_frame(raw)
                 self._dispatch(message)
         except asyncio.CancelledError:
@@ -513,6 +526,8 @@ class _SubprocessTransport(_Transport):
         assert process.stdin is not None and process.stdout is not None
         self._stdin = process.stdin
         self._stdout = process.stdout
+        self._stderr = process.stderr
+        self._stderr_tail: deque[str] = deque(maxlen=50)
 
     def write(self, data: bytes) -> None:
         self._stdin.write(data)
@@ -522,6 +537,19 @@ class _SubprocessTransport(_Transport):
 
     async def readline(self) -> bytes:
         return await self._stdout.readline()
+
+    async def drain_stderr(self) -> None:
+        """持续排干 stderr 到环形缓冲（防管道塞满死锁），供 EOF 诊断取尾部。"""
+        if self._stderr is None:
+            return
+        while True:
+            line = await self._stderr.readline()
+            if not line:
+                return
+            self._stderr_tail.append(line.decode("utf-8", "replace").rstrip())
+
+    def stderr_text(self) -> str:
+        return "\n".join(self._stderr_tail)
 
     async def aclose(self) -> None:
         try:
