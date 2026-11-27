@@ -303,8 +303,9 @@ class HookRuntime:
             "team": self._engine.team_namespace(),
             **self._engine._res_ns(st),
         }
-        # $modifier 命名空间（modifier 相关事件的 payload 驱动）：modifier_id + source
-        # （施加者——昔涟"标记消耗后回源追忆"族；source 由发射点供给/实例反查兜底）
+        # $modifier 命名空间（modifier 相关事件的 payload 驱动）：modifier_id / source
+        # （施加者——昔涟"标记消耗后回源追忆"族；source 由发射点供给/实例反查兜底）/
+        # stacks / duration / max_stacks（注意复数 max_stacks，映射 modifier.max_stack 字段）
         if "modifier_id" in payload:
             target_id = str(payload.get("target", st.actor.actor_id))
             t_st = (self._engine.state.actors.get(target_id)
