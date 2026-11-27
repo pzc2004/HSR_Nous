@@ -124,6 +124,7 @@ hooks:
 | `deal_damage` / `apply_modifier` / `remove_modifier` / `gain_energy` / `consume_energy` / `gain_skill_point` / `gain_resource` / `set_hp_to_percent` / `grant_extra_turn` / `immediate_action` / `delay_action` / `trigger_action` | **已实现**（hook 通道） |
 | `barrage_damage` | **已实现**（hook 通道——右侧优先每目标一次的连续攻击；重复目标追加一段，见本节 Barrage 伤害） |
 | `random_choice` | **已实现**（hook 通道——`options` 中随机执行一个 effect；expected 取首项，roll 均匀随机） |
+| `loop_effects` | **已实现**（hook 通道——循环执行嵌套 `effects`：`count` 定次数（非负有限整数）或 `condition` 逐轮重求值二选一；安全上限 10000 轮，超限/非整数显式报错不静默截断；每轮 nested payload 带 `loop_index`；条件循环读得到帧内写后读，对应 ConditionLoopExecuteTaskList） |
 | `break_damage` / `cancel_event` / `set_resource` / `heal_self` / `adjust_stacks` | **已实现**（hook 通道；原引擎暗原语，本节补登，见下） |
 | `set_dynamic_value` | **已实现**（hook 通道——ConfigAI 动态值设值，`dynamic_key` + `amount`，见下） |
 | `create_battle_event` | **已实现**（hook 通道——创建并注册战斗事件伪实体，载荷 `actor/event_id/source/team`，不占站位或行动条，支持存档） |
