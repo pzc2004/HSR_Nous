@@ -611,7 +611,9 @@ class CombatEngine:
         """
         toughness = actor.stats.max_toughness if self._is_enemy(actor) else 0.0
         st = ActorState(
-            actor=actor,
+            # F01 隔离：布场拷贝 Actor，引擎在私有副本上跑——任何 actor.* 就地写
+            # （set_targetable 写 summon_flags 等）不污染共享编译资产（跨引擎/跨局）
+            actor=copy.deepcopy(actor),
             current_hp=actor.stats.hp,
             current_energy=0.0,
             special_sp=actor.initial_special_sp,

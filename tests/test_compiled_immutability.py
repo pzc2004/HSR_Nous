@@ -147,3 +147,27 @@ def test_deepcopy_compiled_keeps_freeze():
     # 内容等值且内层容器独立（深拷语义）
     assert c2.binding_params_by_actor["hero"] == {"p": 1.0}
     assert c2.binding_params_by_actor["hero"] is not c.binding_params_by_actor["hero"]
+
+
+def test_compiled_actors_not_mutated_by_battle():
+    """G1 跨引擎编译资产纯净闸：战斗不得改写 compiled 的 Actor 本体（F01）。
+
+    蒙特卡洛 N 局共用同一 compiled；set_targetable 等就地写 actor.summon_flags
+    会污染后续所有局。本闸比「两个引擎」而非「同一引擎跑两次」（后者抓不到上游
+    编译资产本体的污染）。修法：_spawn_actor 布场 deepcopy Actor，引擎私有副本。
+    """
+    from tests.test_compile_gates import _build, _stage
+    from hsr_nous.sim.compile import compile_encounter
+    from hsr_nous.sim.pipeline import MODE_EXPECTED
+
+    compiled = compile_encounter(_build(), _stage())
+    before = {a.actor_id: copy.deepcopy(vars(a))
+              for a in compiled.to_encounter().actors}
+    eng = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    eng.setup()
+    st = eng.state.actors["hero"]
+    eng._hooks._run_hook_effect(
+        st, {"effect_type": "set_targetable", "target": "all_enemies",
+             "enemy_targetable": False}, {})
+    after = {a.actor_id: vars(a) for a in compiled.to_encounter().actors}
+    assert before == after, "战斗改写了编译资产 Actor 本体——跨引擎/跨局污染（F01）"
