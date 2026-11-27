@@ -1849,7 +1849,7 @@ class HookRuntime:
     def _h_modify_shield(self, st, eff, payload, updates):
         modifier_ids = {str(item) for item in eff.get("modifier_ids") or []}
         for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-            for shield in t2.shields:
+            for shield in list(t2.shields):   # 快照：破裂级联会移除实例
                 if modifier_ids and shield.modifier_id not in modifier_ids:
                     continue
                 amount = self._hook_amount(eff.get("amount", 0), st, payload, target_st=t2)
@@ -1861,6 +1861,9 @@ class HookRuntime:
                     shield.remaining = max(0.0, base + float(amount))
                     if shield.max_value > 0 and not eff.get("allow_expand_max"):
                         shield.remaining = min(shield.remaining, shield.max_value)
+                # F12：归零走破裂级联（与吸收破盾同口径），不留活零值盾
+                if shield.remaining <= 1e-9:
+                    self._engine._modifiers._break_shield(t2, shield, st.actor.actor_id)
 
 
     def _h_remove_shield(self, st, eff, payload, updates):

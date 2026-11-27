@@ -62,6 +62,23 @@ def _hit_ally(eng):
     eng._execute_action(eng.state.actors["e"], _enemy_atk())
 
 
+class TestModifyShieldBreakF12:
+    def test_set_zero_triggers_break_cascade(self):
+        """F12：modify_shield 设 0 走破裂级联——盾离场 + 关联 modifier 摘 + shield_broken."""
+        eng = _engine()
+        st = eng.state.actors["h"]
+        eng._apply_modifier_spec(st, _shield_spec("SH_X", 500.0), st)
+        broken = []
+        eng.bus.subscribe("shield_broken", lambda et, p, ctx: broken.append(dict(p)))
+        assert "SH_X" in st.modifiers and st.shields
+        eng._hooks._run_hook_effect(st, {
+            "effect_type": "modify_shield", "target": "self",
+            "modifier_ids": ["SH_X"], "amount": 0}, {})
+        assert not st.shields, "零值盾须破裂离场，不留活零值盾"
+        assert "SH_X" not in st.modifiers, "关联 modifier 级联摘除"
+        assert [p["shield_id"] for p in broken] == ["SH_X"]
+
+
 class TestShieldAbsorb:
     def test_parallel_absorb_high_shield_survives(self):
         """两盾同时扣全额；低盾破高盾留，本体不掉血."""

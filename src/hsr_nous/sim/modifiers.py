@@ -602,13 +602,24 @@ class ModifierBook:
                 if left <= 0:
                     break
         for owner, shield in broken:
-            owner.shields.remove(shield)
-            self._engine.bus.emit("shield_broken", {
-                "shield_id": shield.shield_id, "source": source_id, "target": target.actor.actor_id,
-            }, self._engine.state)
-            self._emit_shield_changed(owner, shield, source_id, "break", 0.0)
-            self._engine.state.log.append(
-                f"AV{self._engine.state.clock:.1f}: {owner.actor.name} 的护盾 {shield.name} 被击破")
-            if shield.modifier_id:
-                self._remove_modifier(owner, shield.modifier_id, "shield_broken")
+            self._break_shield(owner, shield, source_id, event_target=target.actor.actor_id)
         return overflow
+
+    def _break_shield(self, owner: ActorState, shield: ShieldInstance,
+                      source_id: str = "", event_target: str = "") -> None:
+        """护盾破裂级联（单一来源）：移除实例 + shield_broken + 摘关联 modifier。
+
+        吸收归零（_absorb_with_shields）与 modify_shield 设 0（F12）共用，
+        不留活零值盾。event_target 缺省 = 持有者。
+        """
+        if shield in owner.shields:
+            owner.shields.remove(shield)
+        self._engine.bus.emit("shield_broken", {
+            "shield_id": shield.shield_id, "source": source_id,
+            "target": event_target or owner.actor.actor_id,
+        }, self._engine.state)
+        self._emit_shield_changed(owner, shield, source_id, "break", 0.0)
+        self._engine.state.log.append(
+            f"AV{self._engine.state.clock:.1f}: {owner.actor.name} 的护盾 {shield.name} 被击破")
+        if shield.modifier_id:
+            self._remove_modifier(owner, shield.modifier_id, "shield_broken")
