@@ -1332,7 +1332,8 @@ def test_with_servant_remove_unselectable_suffix_order():
     for actor_id in ("selectable", "blocked"):
         eng.state.actors[actor_id].actor.summoner_id = "owner"
         eng.state.actors[actor_id].actor.actor_type = "summon"
-    blocked.summon_flags["enemy_targetable"] = False
+    # 布场 deepcopy 后引擎持私有副本，须改引擎内 actor 而非原始模板（与上两行同源）
+    eng.state.actors["blocked"].actor.summon_flags["enemy_targetable"] = False
     for actor_id in ("owner", "selectable", "blocked"):
         eng._apply_modifier(eng.state.actors[actor_id], Modifier(
             modifier_id="mark", name="mark", modifier_type="debuff"))
