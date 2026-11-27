@@ -259,3 +259,52 @@ class TestShieldFormulaBook:
                 "shield": {"scaling": {"spd": 1.0}, "flat": 100.0}}
         with pytest.raises(ValueError, match="公式外槽位"):
             eng._apply_modifier_spec(st, spec, st)
+
+
+class TestShieldCleanupMirrorF10:
+    """F10：护盾两清理路径镜像——载体（shield_id）与关联件（modifier_id）不同件时
+    （InitShield 在 modifier OnStack 内，载体永久 duration=0、盾关联到 Shell 件），
+    摘载体不留孤儿盾、破盾/摘关联件不留孤儿载体。"""
+
+    def _init_shield(self, eng, link="SH"):
+        st = eng.state.actors["h"]
+        spec = {"modifier_id": "M", "name": "InitShield", "modifier_type": "buff",
+                "duration": 0, "shield": {"flat": 500.0, "modifier_id": link}}
+        eng._apply_modifier_spec(st, spec, st)
+        return st
+
+    def _shell(self, eng):
+        st = eng.state.actors["h"]
+        eng._apply_modifier_spec(st, {"modifier_id": "SH", "name": "Shell",
+                                      "modifier_type": "buff", "duration": 3}, st)
+
+    def test_remove_linked_modifier_takes_shield_and_carrier(self):
+        eng = _engine()
+        self._shell(eng)
+        st = self._init_shield(eng)
+        assert st.shields and "M" in st.modifiers
+        eng._remove_modifier(st, "SH", "dispel")
+        assert not st.shields, "关联件 SH 消失 → 盾随消"
+        assert "M" not in st.modifiers, "载体 M 连带摘，不留孤儿载体"
+
+    def test_break_shield_removes_linked_and_carrier(self):
+        eng = _engine()
+        self._shell(eng)
+        st = self._init_shield(eng)
+        eng._absorb_with_shields(st, 600.0, "e")
+        assert not st.shields
+        assert "SH" not in st.modifiers and "M" not in st.modifiers, "破盾摘关联件与载体"
+
+    def test_remove_carrier_no_orphan_shield(self):
+        eng = _engine()
+        st = self._init_shield(eng)  # 关联件 SH 未施加（target≠holder）
+        assert st.shields
+        eng._remove_modifier(st, "M", "expire")
+        assert not st.shields, "摘载体 M → 盾随消，不留永久孤儿盾"
+
+    def test_break_shield_no_orphan_carrier(self):
+        eng = _engine()
+        st = self._init_shield(eng)  # 关联件 SH 未施加
+        eng._absorb_with_shields(st, 600.0, "e")
+        assert not st.shields
+        assert "M" not in st.modifiers, "破盾摘载体，不留孤儿载体（has_modifier 仍 1 无盾）"
