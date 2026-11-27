@@ -324,38 +324,31 @@ class HookRuntime:
                                   owner: ActorState, event_ns: Any = None,
                                   include_unselectable: bool = False) -> float:
         """count_selected 透传外层 self/event；owner 决定嵌套池的属主。"""
-        from hsr_nous.sim.target_algebra import eval_algebra, resolve_pool
-
-        if isinstance(pool, dict) or (isinstance(pool, str) and pool.lstrip().startswith("{")):
-            spec = json.loads(pool) if isinstance(pool, str) else pool
-            event_payload = dict(vars(event_ns)) if event_ns is not None else {}
-
-            def selected_count(value: Any) -> float:
-                if isinstance(value, dict) and "concat" in value:
-                    outer = {key: child for key, child in value.items() if key != "concat"}
-                    total = 0.0
-                    for child in value["concat"]:
-                        merged = dict(child)
-                        if "where" in outer:
-                            merged["where"] = (f"({merged.get('where', 'true')}) "
-                                                   f"and ({outer['where']})")
-                        merged.update({key: child for key, child in outer.items() if key != "where"})
-                        total += selected_count(merged)
-                    return total
-                required = set(re.findall(r"\$event\.([A-Za-z_]\w*)", json.dumps(value)))
-                if any(field not in event_payload for field in required):
-                    return 0.0
-                return float(len(self._hook_target_states(value, owner, event_payload)))
-
-            return selected_count(spec)
-        if str(pool).startswith("$event."):
-            raise ValueError("count_selected 的字符串 pool 不支持 $event；请改用目标规格对象")
-        members = resolve_pool(str(pool), engine=self._engine, st=owner, payload={},
-                               include_unselectable=include_unselectable)
-        selected = eval_algebra(
-            {"where": str(where)}, pool=members, engine=self._engine,
-            expr=self._engine._expr, event_ns=event_ns, self_ns=self_ns)
-        return float(len(selected))
+        # 归一为目标规格后委托唯一解析路径 _hook_target_states（禁采样）——不再自实现
+        # concat/take/where：旧 dict 分支把外层 take 逐子块应用再求和（count=N×take，
+        # effect 对并集只取 take），且忽略函数级 where/include_unselectable、random 模式
+        # 经 _hook_target_states 掷骰耗主 RNG。单一路径令计数与 effect 选择恒等且条件域纯。
+        if isinstance(pool, dict):
+            spec = dict(pool)
+        elif isinstance(pool, str) and pool.lstrip().startswith("{"):
+            spec = json.loads(pool)
+        else:
+            if str(pool).startswith("$event."):
+                raise ValueError("count_selected 的字符串 pool 不支持 $event；请改用目标规格对象")
+            spec = {"pool": str(pool)}
+        # 函数级 where/include_unselectable 并入规格（与 effect target 同口径）
+        if where is not None and str(where).strip() not in {"", "true", "True"}:
+            spec["where"] = (f"({spec['where']}) and ({where})"
+                             if spec.get("where") else str(where))
+        if include_unselectable:
+            spec["include_unselectable"] = True
+        event_payload = dict(vars(event_ns)) if event_ns is not None else {}
+        # 规格引用了 payload 缺失的 $event 字段 → 无事件语境，计 0（沿用旧口径）
+        required = set(re.findall(r"\$event\.([A-Za-z_]\w*)", json.dumps(spec)))
+        if any(field not in event_payload for field in required):
+            return 0.0
+        return float(len(self._hook_target_states(
+            spec, owner, event_payload, allow_sample=False)))
 
     def _hook_functions(self, st: ActorState, payload: Optional[Dict[str, Any]] = None,
                         *, _roll_readonly: bool = False) -> Dict[str, Any]:
@@ -1244,8 +1237,12 @@ class HookRuntime:
         aid = payload.get(ref.split(".", 1)[1])
         return self._engine.state.actors.get(str(aid)) if aid is not None else None
 
-    def _hook_target_states(self, sel: Any, st: ActorState, payload: Dict[str, Any]) -> List[ActorState]:
+    def _hook_target_states(self, sel: Any, st: ActorState, payload: Dict[str, Any],
+                            *, allow_sample: bool = True) -> List[ActorState]:
         """hook effect 目标选择器统一解析（目标代数求值器）.
+
+        allow_sample=False：计数/条件快照域禁掷骰（透传 eval_algebra），选中个数与
+        roll 全等但不推进主随机流——count_selected 唯一解析路径（不再自实现目标代数）。
 
         字符串 = 脱糖别名（`_HOOK_SELECTOR_ALIASES`，模板零改动）；dict = 代数直写
         （`{pool, where, order_by, index, take, mode}`）；`$event.targets` / `$event.<字段>` 为
@@ -1270,10 +1267,10 @@ class HookRuntime:
             spec = dict(sel)
             spec.pop("concat")
             pool = [target for child in children
-                    for target in self._hook_target_states(child, st, payload)]
+                    for target in self._hook_target_states(child, st, payload, allow_sample=allow_sample)]
             return eval_algebra(spec, pool=pool, engine=self._engine,
                                 expr=self._engine._expr, event_ns=event_ns,
-                                self_ns=self_ns)
+                                self_ns=self_ns, allow_sample=allow_sample)
         if isinstance(sel, dict):
             spec = dict(sel)
             pool = resolve_pool(spec.pop("pool", "enemies"),
@@ -1282,7 +1279,7 @@ class HookRuntime:
                                 include_unselectable=bool(spec.get("include_unselectable", False)))
             return eval_algebra(spec, pool=pool, engine=self._engine,
                                 expr=self._engine._expr, event_ns=event_ns,
-                                self_ns=self_ns)
+                                self_ns=self_ns, allow_sample=allow_sample)
         sel = str(sel)
         if sel.startswith("$event."):
             # payload 寻址通道（$event.targets / $event.hit_targets / $event.<字段>）——
@@ -1294,7 +1291,7 @@ class HookRuntime:
                                             st=st, payload=payload) if s is not st]
             return eval_algebra(spec, pool=pool, engine=self._engine,
                                 expr=self._engine._expr, event_ns=event_ns,
-                                self_ns=self_ns)
+                                self_ns=self_ns, allow_sample=allow_sample)
         spec = _HOOK_SELECTOR_ALIASES.get(sel)
         if spec is None:
             # 未知选择器编译期就该炸（build_compiler 白名单）；走到这里=绕过编译层，同口径炸
@@ -1306,7 +1303,7 @@ class HookRuntime:
         pool = resolve_pool(spec.pop("pool"), engine=self._engine, st=st, payload=payload)
         return eval_algebra(spec, pool=pool, engine=self._engine,
                             expr=self._engine._expr, event_ns=event_ns,
-                            self_ns=self_ns)
+                            self_ns=self_ns, allow_sample=allow_sample)
 
     def _emit_heal_settled(self, st: ActorState, t2: ActorState, result: Any,
                            payload: Dict[str, Any]) -> float:

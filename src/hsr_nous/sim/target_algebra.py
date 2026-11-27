@@ -169,8 +169,13 @@ def eval_algebra(
     expr: Any,
     event_ns: Any = None,
     self_ns: Any = None,
+    allow_sample: bool = True,
 ) -> List[Any]:
     """代数求值（池已解析）：where 过滤 → order_by 全序 → index 精确选择 → take 截取 → mode.
+
+    allow_sample=False（计数/条件快照域）：禁 pre_shuffle/random/shuffle/taunt 掷骰，
+    按 expected 确定化口径取前 N——选中**个数**与 roll 全等（采样只决定选谁不决定选几个），
+    但不推进主随机流（condition 纯洁性，§23.15 分域规则）。
 
     expr：表达式编译器（cerces——ExprCompiler 实例，调用方注入与全链共享 _cache 同实例）。
     event_ns：hook 通道 `$event` 注入（与 hook condition 同 payload 命名空间——
@@ -208,7 +213,7 @@ def eval_algebra(
         existing = set(base_ids)
         pool = pool + [s for s in engine.state.actors.values()
                        if s.alive and s.actor.summoner_id in base_ids and s.actor.actor_id not in existing]
-    if spec.get("pre_shuffle") and engine.pipeline.mode == MODE_ROLL and engine.pipeline.rng is not None:
+    if allow_sample and spec.get("pre_shuffle") and engine.pipeline.mode == MODE_ROLL and engine.pipeline.rng is not None:
         pool = list(engine.pipeline.rng.sample(pool, len(pool)))
     order_src = spec.get("order_by")
     if order_src:
@@ -252,6 +257,8 @@ def eval_algebra(
             raise ValueError(f"{mode} 仅支持 take: 1，得到 {take!r}")
         if not pool:
             return []
+        if not allow_sample:
+            return pool[:1]  # 计数域：taunt 恒选 1，不掷骰（个数与 roll 全等）
         owner = getattr(self_ns, "_st", None)
         if owner is None:
             raise ValueError(f"{mode} 需要 hook 持有者作为攻击者语境")
@@ -260,7 +267,7 @@ def eval_algebra(
         return [picked] if picked is not None else []
     if mode in {"random", "shuffle"}:
         rng = engine.pipeline.rng
-        if engine.pipeline.mode == MODE_ROLL and rng is not None:
+        if allow_sample and engine.pipeline.mode == MODE_ROLL and rng is not None:
             if mode == "shuffle" or n < len(pool):
                 return list(rng.sample(pool, n))
             return list(pool)
