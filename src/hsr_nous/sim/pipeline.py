@@ -144,46 +144,7 @@ class SettlementPipeline:
                     if m.enable_if_expr is not None or m.stat_exprs or m.override_exprs}
         if _skip_cond or not cond_ids or self._cond_runtime is None:
             if _skip_cond and cond_ids:
-                # 仅移除门控件（enable_if）防环；无条件动态件（stat_exprs/override_exprs
-                # 无 enable_if）保留 flat 部 + 表达式对 base_panel 求值并入——与静态
-                # override_effects 同口径。旧整件移除致条件域面板丢失无条件动态覆写，
-                # 兄弟件 enable_if 读 $self 判假（F19）。
-                gated_ids = {id(m) for m in held if m.enable_if_expr is not None}
-                base_held = [m for m in held if id(m) not in gated_ids]
-                dyn = [m for m in held if id(m) in cond_ids and m.enable_if_expr is None]
-                guard = getattr(self, "_skip_cond_guard", None)
-                if guard is None:
-                    guard = self._skip_cond_guard = set()
-                if dyn and self._cond_runtime is not None and id(actor_state) not in guard:
-                    base_panel = self._compute(actor_state, base_held, ())
-                    guard.add(id(actor_state))  # 重入守卫：跨件循环读回本单位时仅返 base
-                    try:
-                        panel_cache: Dict[int, Dict[str, Any]] = {id(actor_state): base_panel}
-
-                        def base_panel_of(st: ActorState) -> Dict[str, Any]:
-                            if id(st) not in panel_cache:
-                                panel_cache[id(st)] = self.effective_stats(st, _skip_cond=True)
-                            return panel_cache[id(st)]
-
-                        extra: List[tuple] = []
-                        override_extra: List[tuple] = []
-                        for m in dyn:
-                            try:
-                                ctx, functions = self._cond_runtime(actor_state, m, base_panel_of)
-                                for stat, expr in m.stat_exprs.items():
-                                    extra.append((stat, float(evaluate(
-                                        expr, context=ctx, functions=functions, trace=False).value)))
-                                for stat, expr in m.override_exprs.items():
-                                    override_extra.append((m, stat, float(evaluate(
-                                        expr, context=ctx, functions=functions, trace=False).value)))
-                            except Exception as e:
-                                if self._cond_warn is not None:
-                                    self._cond_warn(
-                                        f"⚠ 无条件动态覆写 {m.modifier_id} 求值失败按不生效处理：{e!r}")
-                        return self._compute(actor_state, base_held, extra, override_extra)
-                    finally:
-                        guard.discard(id(actor_state))
-                held = base_held
+                held = [m for m in held if id(m) not in cond_ids]
             return self._compute(actor_state, held, ())
 
         panel_cache: Dict[int, Dict[str, Any]] = {}

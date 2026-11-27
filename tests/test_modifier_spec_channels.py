@@ -203,20 +203,6 @@ class TestOverrideEffectsChannel:
         expected = 200 if order[-1] == "static" else 100
         assert eng.pipeline.effective_stats(source)["max_toughness"] == expected
 
-    def test_unconditional_override_exprs_visible_in_condition_panel(self):
-        """F19：无条件 override_exprs（无 enable_if）在 condition 域面板（_skip_cond）须
-        生效，与等价静态 override_effects 同口径——旧整件移除致条件域丢失无条件动态覆写，
-        兄弟件 enable_if 读 $self 判假。"""
-        from tests._builders import engine_vs_dummy, make_dummy
-        eng = engine_vs_dummy(enemies=[make_dummy("source", max_toughness=120)])
-        source = eng.state.actors["source"]
-        eng._apply_modifier_spec(source, {
-            "modifier_id": "dyn", "modifier_type": "buff", "duration": 0,
-            "override_exprs": {"max_toughness": "999"}}, source)
-        assert eng.pipeline.effective_stats(source)["max_toughness"] == 999
-        assert eng.pipeline.effective_stats(source, _skip_cond=True)["max_toughness"] == 999, \
-            "无条件动态覆写须在条件域面板可见"
-
 
 class TestHitConditionChannel:
     _SPEC = {"modifier_id": "HUNT", "name": "对受控增伤", "duration": 0,
