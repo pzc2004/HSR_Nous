@@ -211,8 +211,8 @@ def test_effect_types_mirror_implementation():
     """
     from hsr_nous.sim_schema.effect_types import ENGINE_EFFECT_TYPES
     src = (ROOT / "src" / "hsr_nous" / "sim" / "hooks.py").read_text(encoding="utf-8")
-    # 词边界前缀锚必须带：否则 phase_event == "..." 会被误当分派分支
-    impl = set(re.findall(r'(?:elif|if)\s+t == "([a-z_]+)"', src))
+    # 分派表优雅化后：实现集 = _h_<type> 方法名（getattr 分派，见 _run_hook_effect）
+    impl = set(re.findall(r'def _h_([a-z_]+)\(', src))
     # 分派前置处理（once_per_battle 是 latch，在 inner 提前消费）
     impl |= set(re.findall(r'eff\.get\("effect_type"\) == "([a-z_]+)"', src))
     assert not (impl - ENGINE_EFFECT_TYPES), (

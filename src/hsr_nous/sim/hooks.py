@@ -1335,848 +1335,777 @@ class HookRuntime:
         if condition is not None and not bool(self._hook_amount(condition, st, payload)):
             return
         t = eff.get("effect_type")
-        if t == "cancel_event":
-            # waterfall 事件取消（免死族；updates 进 waterfall 链）
-            if updates is not None:
-                updates["cancel"] = True
-            return
-        if t == "modify_amount":
-            # waterfall 事件 amount 改写（抵扣/减免族——与 cancel_event 具名对偶，05_effects
-            # §modify_amount：0=全额免扣、中间值=部分抵扣；表达式同 _hook_amount 通道；
-            # emit 事件上写无效果——updates 仅 waterfall 链非 None）
-            if updates is not None:
-                updates["amount"] = self._hook_amount(eff.get("amount", 0), st, payload)
-            return
-        if t == "gain_resource":
-            rid = eff["resource_id"]
-            # 统一入口（16 值块 v1：max 截断/bank 溢出/provenance 来源记账）。
-            # source：provenance 来源覆写（昔涟 Future"消耗来源=行动队友"族——'$event.<字段>'
-            # 事件寻址或字面 actor_id；缺省 = hook 持有者自身）。
-            # target：跨 actor 写通道（05_effects §5.3——缺省 self 现状不变；显式给=对解析目标
-            # 逐各写，amount 按 $target 逐目标求值，gain_energy 同先例；与 source 正交——
-            # 写谁的面板 ≠ 谁触发的；昔涟 1141519 tally 加账/1141524 忆质+1 首实例）
-            src_ref = str(eff.get("source", ""))
-            if src_ref.startswith("$event."):
-                src_st = self._event_actor(src_ref, payload)
-                source_id = src_st.actor.actor_id if src_st is not None else st.actor.actor_id
-            elif src_ref:
-                source_id = src_ref
-            else:
-                source_id = st.actor.actor_id
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                amt = self._hook_amount(eff.get("amount", 0), st, payload, target_st=t2)
-                self._engine._gain_resource(t2, rid, amt, source_id=source_id)
-        elif t == "gain_skill_point":
-            amount = int(self._hook_amount(eff.get("amount", 0), st, payload))
-            # overflow_to（花火 1130603 溢出记录族）：恢复超出上限的部分转记入指定资源
-            # （「记录溢出的战技点数」——sp_overflow 池；池上限由资源声明 max 截断）
-            overflow_to = str(eff.get("overflow_to", "") or "")
-            if overflow_to and amount > 0:
-                cur = self._engine.state.skill_points
-                cap = self._engine._sp_max()
-                overflow = max(0, cur + amount - cap)
-                if overflow > 0:
-                    self._engine._gain_resource(st, overflow_to, overflow)
-            self._engine._adjust_skill_points(amount, reason="hook")
-        elif t == "set_skill_point":
-            value = self._hook_amount(eff.get("amount", 0), st, payload)
-            if value < 0 or int(value) != value:
-                raise ValueError("set_skill_point 的 amount 必须是非负整数")
-            self._engine._adjust_skill_points(
-                int(value) - self._engine.state.skill_points, reason="set")
-        elif t == "set_sp_max":
-            # 战技点上限覆写（花火天赋「上限额外增加」族——state.sp_max_override 挂点
-            # （engine._sp_max 读数端预留已久），本 effect=首个实例）
-            self._engine.state.sp_max_override = int(
-                self._hook_amount(eff.get("amount", 0), st, payload))
-        elif t == "refill_skill_point":
-            # 溢出池回补（花火 1130603 族）：战技点 < 上限时从 from_resource 记录池补足
-            # 至上限（「消耗记录值为我方恢复战技点，直至恢复至上限」；池耗尽即止——
-            # 模板挂在 on_turn_end（我方角色）触发）
-            rid = str(eff.get("from_resource", ""))
-            if rid:
-                need = int(self._engine._sp_max() - self._engine.state.skill_points)
-                have = int(st.resources.get(rid, 0.0))
-                take = min(need, have)
-                if need > 0 and take > 0:
-                    st.resources[rid] = st.resources.get(rid, 0.0) - take
-                    self._engine._adjust_skill_points(take, reason="refill")
-                    self._engine.state.log.append(
-                        f"AV{self._engine.state.clock:.1f}: {st.actor.name} 消耗溢出记录 "
-                        f"{take} 点为我方恢复战技点（余 {st.resources[rid]:.0f}）")
-        elif t == "gain_energy":
-            sel = eff.get("target", "self")
-            # err_exempt：具名豁免不乘 ERR（mechanics 05 §5.3 清单：停云/藿藿/镜中故我族）
-            err_exempt = bool(eff.get("err_exempt", False))
-            # target 词表按 05_effects §回复能量收窄为二值 + 事件寻址通道
-            # （'$event.<字段>'：停云/星期日单充族——实例已到达（131303 恢复目标能量上限
-            # 20%，amount 按目标面板逐目标求值，$target 命名空间）；其余选择器值
-            # 与其他选择器同纪律炸（曾 else 静默当全体：highest_hp 写成全体充能的雷）；
-            # **dict 走目标代数通用通道**（藿藿 1217 终结技"excluding this unit"排自身首实例
-            # ——代数 where 槽是排他语义唯一承载，2026-09-14 接线）
-            if isinstance(sel, dict):
-                targets = self._hook_target_states(sel, st, payload)
-            elif str(sel) == "self":
-                targets = [st]
-            elif str(sel) == "all_allies":
-                targets = self._engine._allies_alive()
-            elif str(sel).startswith("$event."):
-                targets = self._hook_target_states(sel, st, payload)
-            else:
-                raise ValueError(
-                    f"gain_energy 的 target 非法值 {sel!r}"
-                    f"（合法集合：['all_allies', 'self'] + '$event.<字段>' + 代数 dict，"
-                    f"见 05_effects §回复能量）")
-            for t2 in targets:
-                # 放逐=状态冻结：能量不涨（全局机制（军功充能/奇袭族）照跑，个人面板冻结——
-                # 裁决边界：充能照跑、能量冻结、终结技禁放）
-                if t2.banished:
-                    continue
-                amt = self._hook_amount(eff.get("amount", 0), st, payload, target_st=t2)
-                self._engine._grant_energy(t2, amt, source=st.actor.actor_id,
-                                           action_id=None, reason="effect", err_exempt=err_exempt)
-        elif t == "consume_energy":
-            sel = eff.get("target", "self")
-            if isinstance(sel, dict):
-                targets = self._hook_target_states(sel, st, payload)
-            elif str(sel) == "self":
-                targets = [st]
-            elif str(sel) == "all_allies":
-                targets = self._engine._allies_alive()
-            elif str(sel).startswith("$event."):
-                targets = self._hook_target_states(sel, st, payload)
-            else:
-                raise ValueError(
-                    f"consume_energy 的 target 非法值 {sel!r}"
-                    f"（合法集合：['all_allies', 'self'] + '$event.<字段>' + 代数 dict，"
-                    f"见 05_effects §消耗能量）")
-            for t2 in targets:
-                if t2.banished:
-                    continue
-                amt = self._hook_amount(eff.get("amount", 0), st, payload, target_st=t2)
-                if amt < 0:
-                    raise ValueError("consume_energy 的 amount 必须非负")
-                before = t2.current_energy
-                self._engine.pipeline.consume_energy(t2, amt)
-                self._engine._emit_energy_change(
-                    t2, before, source=st.actor.actor_id, reason="effect")
-        elif t == "modify_special_sp":
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                amount = self._hook_amount(eff["amount"], st, payload, target_st=t2)
-                maximum = max(0.0, float(t2.actor.stats.max_special_sp))
-                t2.special_sp = min(maximum, max(0.0, t2.special_sp + amount))
-        elif t == "set_energy":
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                if t2.banished:
-                    continue
-                amount = self._hook_amount(eff["amount"], st, payload, target_st=t2)
-                if amount < 0:
-                    raise ValueError("set_energy 的 amount 必须非负")
-                before = t2.current_energy
-                t2.current_energy = amount
-                self._engine._emit_energy_change(
-                    t2, before, source=st.actor.actor_id, reason="set")
-        elif t == "set_resource":
-            rid = eff["resource_id"]
-            # 设值 = 差量走统一入口（同拿 clamp/provenance 口径）；target 跨 actor 写通道
-            # 同 gain_resource（风堇 1140901 忆灵侧清 tally——账挂忆师——首实例）
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                target = self._hook_amount(eff.get("amount", 0), st, payload, target_st=t2)
-                # 差量现值走统一读取口径（punchline/certified_banger 重定向——
-                # 队伍账/条目列表；直读 st.resources 会拿持有者空账算错差量）
-                self._engine._gain_resource(t2, rid, target - self._engine._resource_value(t2, rid))
-        elif t == "emit_phase_custom_event":
-            phase_event = str(eff["phase_event"])
-            if phase_event not in {"monster_phase_change_begin", "monster_phase_change_end"}:
-                raise ValueError(f"未知阶段自定义事件 {phase_event!r}")
-            targets = self._hook_target_states(
-                {"pool": "all_with_battle_events", "include_unselectable": True}, st, payload)
-            target_ids = [t2.actor.actor_id for t2 in targets
-                          if t2.current_hp > 0 or eff.get("include_limbo", False)]
-            param_entity = st.actor.actor_id
-            if "param_entity" in eff:
-                selected = self._hook_target_states(eff["param_entity"], st, payload)
-                param_entity = selected[0].actor.actor_id if selected else ""
-            if phase_event == "monster_phase_change_begin":
-                self._engine.bus.emit("monster_phase_change_begin", {
-                    "actor": st.actor.actor_id, "param_entity": param_entity,
-                    "targets": target_ids}, self._engine.state)
-            else:
-                self._engine.bus.emit("monster_phase_change_end", {
-                    "actor": st.actor.actor_id, "param_entity": param_entity,
-                    "targets": target_ids}, self._engine.state)
-        elif t == "emit_modifier_custom_event":
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                self._engine.bus.emit("modifier_custom_event", {
-                    "source": st.actor.actor_id, "target": t2.actor.actor_id,
-                    "event_type": int(eff["event_type"]),
-                    "dynamic_key": str(eff.get("dynamic_key") or ""),
-                    "value": self._hook_amount(eff.get("value", 0), st, payload, target_st=t2),
-                }, self._engine.state)
-        elif t == "create_battle_event":
-            event_id = int(eff["event_id"])
-            actor_id = f"$battle_event:{event_id}"
-            actor_state = ActorState(actor=Actor(
-                actor_id=actor_id, name=f"Battle Event {event_id}", actor_type="battle_event",
-                summoner_id=st.actor.actor_id,
-                stats=StatBlock(hp=1, spd=100, max_energy=0)), current_hp=1.0)
-            self._engine.battle_events[event_id] = {
-                "team": str(eff.get("team") or ""), "created": True,
-                "actor_state": actor_state}
+        handler = getattr(self, f"_h_{t}", None)
+        if handler is None:
+            raise ValueError(f"未知 effect_type {t!r}，已实现集合见 sim_schema/effect_types.py")
+        handler(st, eff, payload, updates)
+
+    def _h_cancel_event(self, st, eff, payload, updates):
+        # waterfall 事件取消（免死族；updates 进 waterfall 链）
+        if updates is not None:
+            updates["cancel"] = True
+        return
+
+
+    def _h_modify_amount(self, st, eff, payload, updates):
+        # waterfall 事件 amount 改写（抵扣/减免族——与 cancel_event 具名对偶，05_effects
+        # §modify_amount：0=全额免扣、中间值=部分抵扣；表达式同 _hook_amount 通道；
+        # emit 事件上写无效果——updates 仅 waterfall 链非 None）
+        if updates is not None:
+            updates["amount"] = self._hook_amount(eff.get("amount", 0), st, payload)
+        return
+
+
+    def _h_gain_resource(self, st, eff, payload, updates):
+        rid = eff["resource_id"]
+        # 统一入口（16 值块 v1：max 截断/bank 溢出/provenance 来源记账）。
+        # source：provenance 来源覆写（昔涟 Future"消耗来源=行动队友"族——'$event.<字段>'
+        # 事件寻址或字面 actor_id；缺省 = hook 持有者自身）。
+        # target：跨 actor 写通道（05_effects §5.3——缺省 self 现状不变；显式给=对解析目标
+        # 逐各写，amount 按 $target 逐目标求值，gain_energy 同先例；与 source 正交——
+        # 写谁的面板 ≠ 谁触发的；昔涟 1141519 tally 加账/1141524 忆质+1 首实例）
+        src_ref = str(eff.get("source", ""))
+        if src_ref.startswith("$event."):
+            src_st = self._event_actor(src_ref, payload)
+            source_id = src_st.actor.actor_id if src_st is not None else st.actor.actor_id
+        elif src_ref:
+            source_id = src_ref
+        else:
+            source_id = st.actor.actor_id
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            amt = self._hook_amount(eff.get("amount", 0), st, payload, target_st=t2)
+            self._engine._gain_resource(t2, rid, amt, source_id=source_id)
+
+
+    def _h_gain_skill_point(self, st, eff, payload, updates):
+        amount = int(self._hook_amount(eff.get("amount", 0), st, payload))
+        # overflow_to（花火 1130603 溢出记录族）：恢复超出上限的部分转记入指定资源
+        # （「记录溢出的战技点数」——sp_overflow 池；池上限由资源声明 max 截断）
+        overflow_to = str(eff.get("overflow_to", "") or "")
+        if overflow_to and amount > 0:
+            cur = self._engine.state.skill_points
+            cap = self._engine._sp_max()
+            overflow = max(0, cur + amount - cap)
+            if overflow > 0:
+                self._engine._gain_resource(st, overflow_to, overflow)
+        self._engine._adjust_skill_points(amount, reason="hook")
+
+
+    def _h_set_skill_point(self, st, eff, payload, updates):
+        value = self._hook_amount(eff.get("amount", 0), st, payload)
+        if value < 0 or int(value) != value:
+            raise ValueError("set_skill_point 的 amount 必须是非负整数")
+        self._engine._adjust_skill_points(
+            int(value) - self._engine.state.skill_points, reason="set")
+
+
+    def _h_set_sp_max(self, st, eff, payload, updates):
+        # 战技点上限覆写（花火天赋「上限额外增加」族——state.sp_max_override 挂点
+        # （engine._sp_max 读数端预留已久），本 effect=首个实例）
+        self._engine.state.sp_max_override = int(
+            self._hook_amount(eff.get("amount", 0), st, payload))
+
+
+    def _h_refill_skill_point(self, st, eff, payload, updates):
+        # 溢出池回补（花火 1130603 族）：战技点 < 上限时从 from_resource 记录池补足
+        # 至上限（「消耗记录值为我方恢复战技点，直至恢复至上限」；池耗尽即止——
+        # 模板挂在 on_turn_end（我方角色）触发）
+        rid = str(eff.get("from_resource", ""))
+        if rid:
+            need = int(self._engine._sp_max() - self._engine.state.skill_points)
+            have = int(st.resources.get(rid, 0.0))
+            take = min(need, have)
+            if need > 0 and take > 0:
+                st.resources[rid] = st.resources.get(rid, 0.0) - take
+                self._engine._adjust_skill_points(take, reason="refill")
+                self._engine.state.log.append(
+                    f"AV{self._engine.state.clock:.1f}: {st.actor.name} 消耗溢出记录 "
+                    f"{take} 点为我方恢复战技点（余 {st.resources[rid]:.0f}）")
+
+
+    def _h_gain_energy(self, st, eff, payload, updates):
+        sel = eff.get("target", "self")
+        # err_exempt：具名豁免不乘 ERR（mechanics 05 §5.3 清单：停云/藿藿/镜中故我族）
+        err_exempt = bool(eff.get("err_exempt", False))
+        # target 词表按 05_effects §回复能量收窄为二值 + 事件寻址通道
+        # （'$event.<字段>'：停云/星期日单充族——实例已到达（131303 恢复目标能量上限
+        # 20%，amount 按目标面板逐目标求值，$target 命名空间）；其余选择器值
+        # 与其他选择器同纪律炸（曾 else 静默当全体：highest_hp 写成全体充能的雷）；
+        # **dict 走目标代数通用通道**（藿藿 1217 终结技"excluding this unit"排自身首实例
+        # ——代数 where 槽是排他语义唯一承载，2026-09-14 接线）
+        if isinstance(sel, dict):
+            targets = self._hook_target_states(sel, st, payload)
+        elif str(sel) == "self":
+            targets = [st]
+        elif str(sel) == "all_allies":
+            targets = self._engine._allies_alive()
+        elif str(sel).startswith("$event."):
+            targets = self._hook_target_states(sel, st, payload)
+        else:
+            raise ValueError(
+                f"gain_energy 的 target 非法值 {sel!r}"
+                f"（合法集合：['all_allies', 'self'] + '$event.<字段>' + 代数 dict，"
+                f"见 05_effects §回复能量）")
+        for t2 in targets:
+            # 放逐=状态冻结：能量不涨（全局机制（军功充能/奇袭族）照跑，个人面板冻结——
+            # 裁决边界：充能照跑、能量冻结、终结技禁放）
+            if t2.banished:
+                continue
+            amt = self._hook_amount(eff.get("amount", 0), st, payload, target_st=t2)
+            self._engine._grant_energy(t2, amt, source=st.actor.actor_id,
+                                       action_id=None, reason="effect", err_exempt=err_exempt)
+
+
+    def _h_consume_energy(self, st, eff, payload, updates):
+        sel = eff.get("target", "self")
+        if isinstance(sel, dict):
+            targets = self._hook_target_states(sel, st, payload)
+        elif str(sel) == "self":
+            targets = [st]
+        elif str(sel) == "all_allies":
+            targets = self._engine._allies_alive()
+        elif str(sel).startswith("$event."):
+            targets = self._hook_target_states(sel, st, payload)
+        else:
+            raise ValueError(
+                f"consume_energy 的 target 非法值 {sel!r}"
+                f"（合法集合：['all_allies', 'self'] + '$event.<字段>' + 代数 dict，"
+                f"见 05_effects §消耗能量）")
+        for t2 in targets:
+            if t2.banished:
+                continue
+            amt = self._hook_amount(eff.get("amount", 0), st, payload, target_st=t2)
+            if amt < 0:
+                raise ValueError("consume_energy 的 amount 必须非负")
+            before = t2.current_energy
+            self._engine.pipeline.consume_energy(t2, amt)
+            self._engine._emit_energy_change(
+                t2, before, source=st.actor.actor_id, reason="effect")
+
+
+    def _h_modify_special_sp(self, st, eff, payload, updates):
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            amount = self._hook_amount(eff["amount"], st, payload, target_st=t2)
+            maximum = max(0.0, float(t2.actor.stats.max_special_sp))
+            t2.special_sp = min(maximum, max(0.0, t2.special_sp + amount))
+
+
+    def _h_set_energy(self, st, eff, payload, updates):
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            if t2.banished:
+                continue
+            amount = self._hook_amount(eff["amount"], st, payload, target_st=t2)
+            if amount < 0:
+                raise ValueError("set_energy 的 amount 必须非负")
+            before = t2.current_energy
+            t2.current_energy = amount
+            self._engine._emit_energy_change(
+                t2, before, source=st.actor.actor_id, reason="set")
+
+
+    def _h_set_resource(self, st, eff, payload, updates):
+        rid = eff["resource_id"]
+        # 设值 = 差量走统一入口（同拿 clamp/provenance 口径）；target 跨 actor 写通道
+        # 同 gain_resource（风堇 1140901 忆灵侧清 tally——账挂忆师——首实例）
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            target = self._hook_amount(eff.get("amount", 0), st, payload, target_st=t2)
+            # 差量现值走统一读取口径（punchline/certified_banger 重定向——
+            # 队伍账/条目列表；直读 st.resources 会拿持有者空账算错差量）
+            self._engine._gain_resource(t2, rid, target - self._engine._resource_value(t2, rid))
+
+
+    def _h_emit_phase_custom_event(self, st, eff, payload, updates):
+        phase_event = str(eff["phase_event"])
+        if phase_event not in {"monster_phase_change_begin", "monster_phase_change_end"}:
+            raise ValueError(f"未知阶段自定义事件 {phase_event!r}")
+        targets = self._hook_target_states(
+            {"pool": "all_with_battle_events", "include_unselectable": True}, st, payload)
+        target_ids = [t2.actor.actor_id for t2 in targets
+                      if t2.current_hp > 0 or eff.get("include_limbo", False)]
+        param_entity = st.actor.actor_id
+        if "param_entity" in eff:
+            selected = self._hook_target_states(eff["param_entity"], st, payload)
+            param_entity = selected[0].actor.actor_id if selected else ""
+        if phase_event == "monster_phase_change_begin":
+            self._engine.bus.emit("monster_phase_change_begin", {
+                "actor": st.actor.actor_id, "param_entity": param_entity,
+                "targets": target_ids}, self._engine.state)
+        else:
+            self._engine.bus.emit("monster_phase_change_end", {
+                "actor": st.actor.actor_id, "param_entity": param_entity,
+                "targets": target_ids}, self._engine.state)
+
+
+    def _h_emit_modifier_custom_event(self, st, eff, payload, updates):
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            self._engine.bus.emit("modifier_custom_event", {
+                "source": st.actor.actor_id, "target": t2.actor.actor_id,
+                "event_type": int(eff["event_type"]),
+                "dynamic_key": str(eff.get("dynamic_key") or ""),
+                "value": self._hook_amount(eff.get("value", 0), st, payload, target_st=t2),
+            }, self._engine.state)
+
+
+    def _h_create_battle_event(self, st, eff, payload, updates):
+        event_id = int(eff["event_id"])
+        actor_id = f"$battle_event:{event_id}"
+        actor_state = ActorState(actor=Actor(
+            actor_id=actor_id, name=f"Battle Event {event_id}", actor_type="battle_event",
+            summoner_id=st.actor.actor_id,
+            stats=StatBlock(hp=1, spd=100, max_energy=0)), current_hp=1.0)
+        self._engine.battle_events[event_id] = {
+            "team": str(eff.get("team") or ""), "created": True,
+            "actor_state": actor_state}
+        runtime = self._engine._enemy_policy_state.setdefault("$level", {
+            "seq_idx": 0, "cooldown_left": {}, "current_phase": 1,
+            "dynamic_values": {}, "dynamic_targets": {}})
+        runtime.setdefault("dynamic_targets", {})[actor_id] = actor_id
+        self._engine.bus.emit("battle_event_create", {
+            "actor": actor_id, "event_id": event_id,
+            "source": st.actor.actor_id, "team": str(eff.get("team") or "")}, self._engine.state)
+
+
+    def _h_set_dynamic_target(self, st, eff, payload, updates):
+        targets = self._hook_target_states(eff.get("target", "self"), st, payload)
+        if eff.get("scope") == "unique_name":
+            if len(targets) != 1:
+                raise ValueError("UniqueName 绑定要求恰好一个目标")
             runtime = self._engine._enemy_policy_state.setdefault("$level", {
                 "seq_idx": 0, "cooldown_left": {}, "current_phase": 1,
                 "dynamic_values": {}, "dynamic_targets": {}})
-            runtime.setdefault("dynamic_targets", {})[actor_id] = actor_id
-            self._engine.bus.emit("battle_event_create", {
-                "actor": actor_id, "event_id": event_id,
-                "source": st.actor.actor_id, "team": str(eff.get("team") or "")}, self._engine.state)
-        elif t == "set_dynamic_target":
-            targets = self._hook_target_states(eff.get("target", "self"), st, payload)
-            if eff.get("scope") == "unique_name":
-                if len(targets) != 1:
-                    raise ValueError("UniqueName 绑定要求恰好一个目标")
-                runtime = self._engine._enemy_policy_state.setdefault("$level", {
-                    "seq_idx": 0, "cooldown_left": {}, "current_phase": 1,
-                    "dynamic_values": {}, "dynamic_targets": {}})
-                runtime.setdefault("dynamic_targets", {})[str(eff["dynamic_key"])] = \
-                    targets[0].actor.actor_id
-            else:
-                owners = self._hook_target_states(
-                    eff.get("owner", eff.get("target", "self")), st, payload)
-                for owner in owners:
-                    for t2 in targets:
-                        runtime = self._engine._enemy_policy_state.setdefault(owner.actor.actor_id, {
-                            "seq_idx": 0, "cooldown_left": {}, "current_phase": 1,
-                            "dynamic_values": {}, "dynamic_targets": {}})
-                        runtime.setdefault("dynamic_targets", {})[str(eff["dynamic_key"])] = \
-                            t2.actor.actor_id
-        elif t == "loop_effects":
-            if "condition" in eff:
-                # 条件驱动循环（ConditionLoopExecuteTaskList，#544）：逐轮重求值，
-                # 读得到帧内写后读；谓词不收敛撞安全上限显式报错，不静默截断。
-                condition = eff["condition"]
-                index = 0
-                while bool(self._hook_amount(condition, st, payload)):
-                    if index >= 10000:
-                        raise ValueError("条件循环超过安全上限 10000 轮（谓词未收敛）")
-                    nested_payload = {**payload, "loop_index": index}
-                    for nested in eff.get("effects") or []:
-                        self._run_hook_effect(st, nested, nested_payload)
-                    index += 1
-                return
-            count = self._hook_amount(eff["count"], st, payload)
-            if not math.isfinite(count) or count < 0 or int(count) != count:
-                raise ValueError(f"动态循环次数必须是非负有限整数，得到 {count!r}")
-            if count > 10000:
-                raise ValueError(f"动态循环次数 {int(count)} 超过安全上限 10000")
-            for index in range(int(count)):
+            runtime.setdefault("dynamic_targets", {})[str(eff["dynamic_key"])] = \
+                targets[0].actor.actor_id
+        else:
+            owners = self._hook_target_states(
+                eff.get("owner", eff.get("target", "self")), st, payload)
+            for owner in owners:
+                for t2 in targets:
+                    runtime = self._engine._enemy_policy_state.setdefault(owner.actor.actor_id, {
+                        "seq_idx": 0, "cooldown_left": {}, "current_phase": 1,
+                        "dynamic_values": {}, "dynamic_targets": {}})
+                    runtime.setdefault("dynamic_targets", {})[str(eff["dynamic_key"])] = \
+                        t2.actor.actor_id
+
+
+    def _h_loop_effects(self, st, eff, payload, updates):
+        if "condition" in eff:
+            # 条件驱动循环（ConditionLoopExecuteTaskList，#544）：逐轮重求值，
+            # 读得到帧内写后读；谓词不收敛撞安全上限显式报错，不静默截断。
+            condition = eff["condition"]
+            index = 0
+            while bool(self._hook_amount(condition, st, payload)):
+                if index >= 10000:
+                    raise ValueError("条件循环超过安全上限 10000 轮（谓词未收敛）")
                 nested_payload = {**payload, "loop_index": index}
                 for nested in eff.get("effects") or []:
                     self._run_hook_effect(st, nested, nested_payload)
-        elif t == "record_formation_index":
-            functions = self._hook_functions(st, payload)
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                team = "dark" if self._engine._is_enemy(t2.actor) else "light"
-                position = functions["position_of"](t2, team)
-                self._run_hook_effect(st, {
-                    "effect_type": "set_dynamic_value", "target": "$level",
-                    "dynamic_key": f"_FormationRecord:{team}", "amount": position,
-                }, payload)
-        elif t == "set_dynamic_value":
-            key = str(eff["dynamic_key"])
-            # amount_target 只提供 $target 求值语境，写入仍由 target 决定；
-            # 每个读取候选依次求值并写入，空候选不写，多候选后者覆盖前者。
-            # 执行帧内写入进帧覆盖层（写后读：同执行内立即可读，提交时才落已提交态、
-            # 异常随帧回滚丢弃）；帧外维持直写已提交态（§23.15 四层读取链）。
-            frame = self._engine.current_frame
-            read_targets = (self._hook_target_states(eff["amount_target"], st, payload)
-                            if "amount_target" in eff else None)
-            if read_targets is not None and not read_targets:
-                return
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                runtime = self._engine._enemy_policy_state.get(t2.actor.actor_id)
-                if runtime is None:
-                    # 同一表按任意 actor_id 保存动态值；是否有 ConfigAI policy 与读写资格无关。
-                    runtime = self._engine._enemy_policy_state.setdefault(t2.actor.actor_id, {
-                        "seq_idx": 0, "cooldown_left": {}, "current_phase": 1,
-                        "dynamic_values": {},
-                    })
-                for amount_st in read_targets if read_targets is not None else [t2]:
-                    value = self._hook_amount(eff["amount"], st, payload, target_st=amount_st)
-                    if key == "current_phase":
-                        if not float(value).is_integer():
-                            raise ValueError(f"current_phase 必须为整数，得到 {value!r}")
-                        new_phase = int(value)
-                        old_phase = (frame.writes.get(t2.actor.actor_id, {}).get(
-                            "current_phase", runtime["current_phase"])
-                            if frame is not None else runtime["current_phase"])
-                        if frame is not None:
-                            if new_phase != old_phase:
-                                frame.record_phase_change(
-                                    t2.actor.actor_id, int(old_phase), new_phase)
-                            frame.write(t2.actor.actor_id, key, new_phase)
-                        else:
-                            if new_phase != old_phase:
-                                self._engine.bus.emit("monster_phase_changed", {
-                                    "actor": t2.actor.actor_id,
-                                    "from_phase": old_phase, "to_phase": new_phase}, self._engine.state)
-                            runtime["current_phase"] = new_phase
-                    elif frame is not None:
-                        frame.write(t2.actor.actor_id, key, float(value))
+                index += 1
+            return
+        count = self._hook_amount(eff["count"], st, payload)
+        if not math.isfinite(count) or count < 0 or int(count) != count:
+            raise ValueError(f"动态循环次数必须是非负有限整数，得到 {count!r}")
+        if count > 10000:
+            raise ValueError(f"动态循环次数 {int(count)} 超过安全上限 10000")
+        for index in range(int(count)):
+            nested_payload = {**payload, "loop_index": index}
+            for nested in eff.get("effects") or []:
+                self._run_hook_effect(st, nested, nested_payload)
+
+
+    def _h_record_formation_index(self, st, eff, payload, updates):
+        functions = self._hook_functions(st, payload)
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            team = "dark" if self._engine._is_enemy(t2.actor) else "light"
+            position = functions["position_of"](t2, team)
+            self._run_hook_effect(st, {
+                "effect_type": "set_dynamic_value", "target": "$level",
+                "dynamic_key": f"_FormationRecord:{team}", "amount": position,
+            }, payload)
+
+
+    def _h_set_dynamic_value(self, st, eff, payload, updates):
+        key = str(eff["dynamic_key"])
+        # amount_target 只提供 $target 求值语境，写入仍由 target 决定；
+        # 每个读取候选依次求值并写入，空候选不写，多候选后者覆盖前者。
+        # 执行帧内写入进帧覆盖层（写后读：同执行内立即可读，提交时才落已提交态、
+        # 异常随帧回滚丢弃）；帧外维持直写已提交态（§23.15 四层读取链）。
+        frame = self._engine.current_frame
+        read_targets = (self._hook_target_states(eff["amount_target"], st, payload)
+                        if "amount_target" in eff else None)
+        if read_targets is not None and not read_targets:
+            return
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            runtime = self._engine._enemy_policy_state.get(t2.actor.actor_id)
+            if runtime is None:
+                # 同一表按任意 actor_id 保存动态值；是否有 ConfigAI policy 与读写资格无关。
+                runtime = self._engine._enemy_policy_state.setdefault(t2.actor.actor_id, {
+                    "seq_idx": 0, "cooldown_left": {}, "current_phase": 1,
+                    "dynamic_values": {},
+                })
+            for amount_st in read_targets if read_targets is not None else [t2]:
+                value = self._hook_amount(eff["amount"], st, payload, target_st=amount_st)
+                if key == "current_phase":
+                    if not float(value).is_integer():
+                        raise ValueError(f"current_phase 必须为整数，得到 {value!r}")
+                    new_phase = int(value)
+                    old_phase = (frame.writes.get(t2.actor.actor_id, {}).get(
+                        "current_phase", runtime["current_phase"])
+                        if frame is not None else runtime["current_phase"])
+                    if frame is not None:
+                        if new_phase != old_phase:
+                            frame.record_phase_change(
+                                t2.actor.actor_id, int(old_phase), new_phase)
+                        frame.write(t2.actor.actor_id, key, new_phase)
                     else:
-                        runtime.setdefault("dynamic_values", {})[key] = float(value)
-        elif t == "set_modifier_dynamic_value":
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                modifier = t2.modifiers.get(str(eff["modifier_id"]))
-                if modifier is None:
+                        if new_phase != old_phase:
+                            self._engine.bus.emit("monster_phase_changed", {
+                                "actor": t2.actor.actor_id,
+                                "from_phase": old_phase, "to_phase": new_phase}, self._engine.state)
+                        runtime["current_phase"] = new_phase
+                elif frame is not None:
+                    frame.write(t2.actor.actor_id, key, float(value))
+                else:
+                    runtime.setdefault("dynamic_values", {})[key] = float(value)
+
+
+    def _h_set_modifier_dynamic_value(self, st, eff, payload, updates):
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            modifier = t2.modifiers.get(str(eff["modifier_id"]))
+            if modifier is None:
+                continue
+            value = self._hook_amount(eff["amount"], st, payload, target_st=t2)
+            if eff.get("mode", "set") == "add":
+                value += self._modifier_dynamic_value(
+                    t2, modifier.modifier_id, str(eff["dynamic_key"]))
+            modifier.dynamic_values[str(eff["dynamic_key"])] = float(value)
+
+
+    def _h_bind_roll(self, st, eff, payload, updates):
+        # 执行帧共享掷骰绑定锚（23 §23.15 / 05_effects §bind_roll）：编译器概率分支
+        # （ByRandomChance/RandomConfig）翻译的前置绑定——绑定值 = roll(roll_key) × scale。
+        # roll 模式采 pipeline.rng（消耗主流一次）；expected 模式绑 0.5 的下邻浮点
+        # （与 mechanic_chance 的 p>=0.5 期望口径逐比特一致，两通道不许两种期望语义）。
+        # 帧外调用显式报错（roll 只活在行动执行内）。
+        frame = self._engine.current_frame
+        if frame is None:
+            raise ExpressionError(
+                f"bind_roll({eff.get('roll_key')!r}) 需要活动执行帧"
+                f"——仅行动执行内的 effect 表达式可用")
+        scale = self._hook_amount(eff["scale"], st, payload) if "scale" in eff else 1.0
+        key = _scoped_roll_key(eff["roll_key"], payload)
+        if self._engine.pipeline.mode == MODE_ROLL:
+            frame.roll_bind(key, lambda: self._engine.pipeline.rng.random() * scale)
+        else:
+            frame.roll_bind(key, lambda: math.nextafter(0.5, 0.0) * scale)
+
+
+    def _h_refund_bank(self, st, eff, payload, updates):
+        # bank 返还（16 §16.12 糖展开原语）：<rid>_bank → <rid> clamp 回填——
+        # ③防递归：from_bank=True（不回流）；多出作废（银行全清，钉字面口径）
+        rid = str(eff["resource_id"])
+        bank_rid = f"{rid}_bank"
+        bank_cur = st.resources.get(bank_rid, 0.0)
+        if bank_cur > 0:
+            moved = self._engine._gain_resource(st, rid, bank_cur, from_bank=True)
+            st.resources[bank_rid] = 0.0
+            if moved < bank_cur:
+                self._engine.state.log.append(
+                    f"AV{self._engine.state.clock:.1f}: {st.actor.name} 的 {bank_rid}"
+                    f" 返还截断——回填 {moved}，超出上限部分 {bank_cur - moved} 作废")
+            self._engine.bus.emit("on_resource_gain", {
+                "actor": st.actor.actor_id, "resource_id": bank_rid,
+                "amount": -bank_cur, "current": 0.0}, self._engine.state)
+
+
+    def _h_heal_self(self, st, eff, payload, updates):
+        ratio = self._hook_amount(eff.get("ratio", 0), st, payload)
+        # 走管线统一治疗路径（rulebook heal 式：hp_scaling=ratio × 施放者有效 HP，
+        # 吃治疗源 heal_bonus（召唤物施放归主人面板——2026-09-21 裁决）+ 受疗者
+        # incoming_heal——mechanics 01 §1.3）
+        result = self._engine.pipeline.heal(st, st, hp_scaling=ratio)
+        # 后段（on_hp_increase 发射 + 月茧解除）= _emit_heal_settled 统一通道
+        self._emit_heal_settled(st, st, result, payload)
+
+
+    def _h_set_hp_to_percent(self, st, eff, payload, updates):
+        # B9 原语：HP 设为生命上限×比例（刃 120503/复活族效果）；可致死（走 _check_death 四层）。
+        # target 走通用选择器通道（1217 E2 免死"队友回复至 50%"首实例——旧实现无视
+        # target 键恒作用 hook 持有者（1205 刃 target:self 恰好自洽未暴露）；上限读
+        # 被 set 者有效面板）
+        source_id = st.actor.actor_id
+        death_source_id = ""
+        source_ref = str(eff.get("source") or "")
+        if source_ref:
+            if not source_ref.startswith("modifier:"):
+                raise ValueError(f"set_hp_to_percent 的 source 无法解析：{source_ref!r}")
+            held = st.modifiers.get(source_ref.split(":", 1)[1])
+            source = (self._engine.state.actors.get(held.source_id)
+                      if held is not None else None)
+            if source is None:
+                raise ValueError(f"set_hp_to_percent 的 source 无法解析：{source_ref!r}")
+            source_id = source.actor.actor_id
+            death_source_id = source_id
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            pct = self._hook_amount(eff.get("percent", eff.get("amount", 0)), st, payload,
+                                    target_st=t2)
+            max_hp = float(self._engine.pipeline.effective_stats(t2)["hp"])
+            old_hp = t2.current_hp
+            t2.current_hp = max(0.0, min(max_hp, max_hp * pct))
+            if t2.current_hp < old_hp:
+                # HP 下降发射点（HP 消耗族——mechanics 11 §11.3；reason='set_hp'，词表冻结见 _execute_action）
+                self._engine.bus.emit("on_hp_decrease", {
+                    "amount": old_hp - t2.current_hp, "source": source_id,
+                    "reason": "set_hp", "target": t2.actor.actor_id}, self._engine.state)
+            if t2.current_hp <= 0:
+                self._engine._check_death(t2, death_source_id)
+
+
+    def _h_drain_hp(self, st, eff, payload, updates):
+        # 生命流失/汲取（05_effects §生命汲取/生命流失 v1 收编——遐蝶耗血/小伊卡反哺族）：
+        # 每目标实际流失 = min(amount, 当前 HP - floor)（floor 保底耗不致死，缺省 0 可致死）；
+        # 发 on_hp_decrease（reason='drain'，词表冻结见 _execute_action）；不是伤害——
+        # 不走 before_take_damage/护盾/总伤记账；drain_ratio × 总额走统一治疗管线。
+        # before_drain 可改写口（2026-09-10 收编——遐蝶 E2 炽意抵扣首实例）：逐目标扣减前
+        # 走 waterfall（modify_amount 改写扣量 0=免扣 / cancel 整笔跳过；payload action_id
+        # 继承触发上下文——焰息耗血=1140702 族定位锚），改写/取消后无扣减不发 on_hp_decrease
+        floor = self._hook_amount(eff.get("floor", 0), st, payload)
+        drained_total = 0.0
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            amt = self._hook_amount(eff.get("amount", 0), st, payload, target_st=t2)
+            wp = self._engine.bus.waterfall("before_drain", {
+                "source": st.actor.actor_id, "target": t2.actor.actor_id,
+                "amount": amt, "floor": floor, "reason": "drain",
+                "action_id": str(payload.get("action_id") or "")}, self._engine.state)
+            if wp.get("cancel"):
+                continue   # 抵扣整笔取消——无扣减不发射（遐蝶 E2 炽意全额抵扣族）
+            amt = float(wp.get("amount", amt))
+            actual = min(amt, max(0.0, t2.current_hp - floor))
+            if actual <= 0:
+                continue
+            t2.current_hp -= actual
+            drained_total += actual
+            # HP 下降发射点（HP 消耗族——mechanics 11 §11.3；reason='drain'，spec 钉死）
+            self._engine.bus.emit("on_hp_decrease", {
+                "amount": actual, "source": st.actor.actor_id,
+                "reason": "drain", "target": t2.actor.actor_id}, self._engine.state)
+            if t2.current_hp <= 0:
+                self._engine._check_death(t2, st.actor.actor_id)
+        ratio = self._hook_amount(eff.get("drain_ratio", 1.0), st, payload)
+        if ratio > 0 and drained_total > 0:
+            for t2 in self._hook_target_states(eff.get("heal_target", "self"), st, payload):
+                result = self._engine.pipeline.heal(st, t2, drained_total * ratio)
+                # 反哺治疗后段 = _emit_heal_settled 统一通道（与 heal 同口径）
+                self._emit_heal_settled(st, t2, result, payload)
+        if eff.get("into_resource") is not None and drained_total > 0:
+            # 流失实际总额灌资源（光锥 23042 累计计数族；统一入口同 gain_resource）
+            self._engine._gain_resource(st, str(eff["into_resource"]), drained_total,
+                                        source_id=st.actor.actor_id)
+
+
+    def _h_heal(self, st, eff, payload, updates):
+        # 治疗（忆灵/丰饶族；12_summon 收编）：target 选择器 + ratio/amount **逐目标**
+        # 求值（$target 注入——"按受疗者生命上限治疗"族首实例：阿格莱雅 1402 战技
+        # param(140202,1)×$target.max_hp（官方"为衣匠回复等同于其生命上限的生命"）；ratio=施放者 HP 比例 + amount=固定量进 rulebook heal 公式
+        # flat_heal 槽——风堇族"MaxHP×比例 + 定值"结构）——与 heal_self 同一管线口径
+        # （吃治疗源 heal_bonus（召唤物施放归主人面板——2026-09-21 裁决）+ 受疗者
+        # incoming_heal）；施放者侧写法求值不变（ratio/amount 表达式仍按钩持有者 $self 求值）
+        healed_total = 0.0
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            ratio = self._hook_amount(eff.get("ratio", 0), st, payload, t2)
+            flat = self._hook_amount(eff.get("amount", 0), st, payload, t2)
+            result = self._engine.pipeline.heal(st, t2, flat, hp_scaling=ratio)
+            # 后段（溢出/0 值发射/月茧判定）= _emit_heal_settled 统一通道；actual 自累记账
+            healed_total += self._emit_heal_settled(st, t2, result, payload)
+        if getattr(self, "_chain_last", None) is not None:
+            self._chain_last["actual_amount"] = healed_total   # $last/$prev 前序快照
+
+
+    def _h_summon(self, st, eff, payload, updates):
+        # 召唤物入场（12_summon）：布场/继承/上行动条/actor_enter 全在引擎单漏斗
+        position = str(eff.get("position", "after_owner"))
+        summon_id = str(eff.get("summon_id") or "")
+        if "summon_id_source" in eff:
+            selected = self._hook_amount(eff["summon_id_source"], st, payload)
+            key = str(int(selected)) if float(selected).is_integer() else str(selected)
+            variants = {str(k): str(v) for k, v in (eff.get("summon_variants") or {}).items()}
+            summon_id = variants.get(key, "")
+            if not summon_id:
+                raise ValueError(f"动态召唤 ID {key!r} 不在已登记候选闭集")
+        self._engine.summon_actor(
+            st, summon_id, position=position,
+            reference_actor_id=str(payload.get("target", "")) if position == "last_die" else "",
+            summon_group=str(eff.get("summon_group") or ""))
+
+
+    def _h_dismiss_summon(self, st, eff, payload, updates):
+        # 召唤物离场（12_summon；未登记/未在场由引擎按 no-op/报错口径处理）
+        self._engine.dismiss_summon_actor(str(eff["summon_id"]))
+
+
+    def _h_modify_shield(self, st, eff, payload, updates):
+        modifier_ids = {str(item) for item in eff.get("modifier_ids") or []}
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            for shield in t2.shields:
+                if modifier_ids and shield.modifier_id not in modifier_ids:
                     continue
-                value = self._hook_amount(eff["amount"], st, payload, target_st=t2)
-                if eff.get("mode", "set") == "add":
-                    value += self._modifier_dynamic_value(
-                        t2, modifier.modifier_id, str(eff["dynamic_key"]))
-                modifier.dynamic_values[str(eff["dynamic_key"])] = float(value)
-        elif t == "bind_roll":
-            # 执行帧共享掷骰绑定锚（23 §23.15 / 05_effects §bind_roll）：编译器概率分支
-            # （ByRandomChance/RandomConfig）翻译的前置绑定——绑定值 = roll(roll_key) × scale。
-            # roll 模式采 pipeline.rng（消耗主流一次）；expected 模式绑 0.5 的下邻浮点
-            # （与 mechanic_chance 的 p>=0.5 期望口径逐比特一致，两通道不许两种期望语义）。
-            # 帧外调用显式报错（roll 只活在行动执行内）。
-            frame = self._engine.current_frame
-            if frame is None:
-                raise ExpressionError(
-                    f"bind_roll({eff.get('roll_key')!r}) 需要活动执行帧"
-                    f"——仅行动执行内的 effect 表达式可用")
-            scale = self._hook_amount(eff["scale"], st, payload) if "scale" in eff else 1.0
-            key = _scoped_roll_key(eff["roll_key"], payload)
-            if self._engine.pipeline.mode == MODE_ROLL:
-                frame.roll_bind(key, lambda: self._engine.pipeline.rng.random() * scale)
-            else:
-                frame.roll_bind(key, lambda: math.nextafter(0.5, 0.0) * scale)
-        elif t == "refund_bank":
-            # bank 返还（16 §16.12 糖展开原语）：<rid>_bank → <rid> clamp 回填——
-            # ③防递归：from_bank=True（不回流）；多出作废（银行全清，钉字面口径）
-            rid = str(eff["resource_id"])
-            bank_rid = f"{rid}_bank"
-            bank_cur = st.resources.get(bank_rid, 0.0)
-            if bank_cur > 0:
-                moved = self._engine._gain_resource(st, rid, bank_cur, from_bank=True)
-                st.resources[bank_rid] = 0.0
-                if moved < bank_cur:
-                    self._engine.state.log.append(
-                        f"AV{self._engine.state.clock:.1f}: {st.actor.name} 的 {bank_rid}"
-                        f" 返还截断——回填 {moved}，超出上限部分 {bank_cur - moved} 作废")
-                self._engine.bus.emit("on_resource_gain", {
-                    "actor": st.actor.actor_id, "resource_id": bank_rid,
-                    "amount": -bank_cur, "current": 0.0}, self._engine.state)
-        elif t == "heal_self":
-            ratio = self._hook_amount(eff.get("ratio", 0), st, payload)
-            # 走管线统一治疗路径（rulebook heal 式：hp_scaling=ratio × 施放者有效 HP，
-            # 吃治疗源 heal_bonus（召唤物施放归主人面板——2026-09-21 裁决）+ 受疗者
-            # incoming_heal——mechanics 01 §1.3）
-            result = self._engine.pipeline.heal(st, st, hp_scaling=ratio)
-            # 后段（on_hp_increase 发射 + 月茧解除）= _emit_heal_settled 统一通道
-            self._emit_heal_settled(st, st, result, payload)
-        elif t == "set_hp_to_percent":
-            # B9 原语：HP 设为生命上限×比例（刃 120503/复活族效果）；可致死（走 _check_death 四层）。
-            # target 走通用选择器通道（1217 E2 免死"队友回复至 50%"首实例——旧实现无视
-            # target 键恒作用 hook 持有者（1205 刃 target:self 恰好自洽未暴露）；上限读
-            # 被 set 者有效面板）
-            source_id = st.actor.actor_id
-            death_source_id = ""
-            source_ref = str(eff.get("source") or "")
-            if source_ref:
-                if not source_ref.startswith("modifier:"):
-                    raise ValueError(f"set_hp_to_percent 的 source 无法解析：{source_ref!r}")
-                held = st.modifiers.get(source_ref.split(":", 1)[1])
+                amount = self._hook_amount(eff.get("amount", 0), st, payload, target_st=t2)
+                if eff.get("max"):
+                    shield.max_value = max(0.0, float(amount))
+                    shield.remaining = min(shield.remaining, shield.max_value)
+                else:
+                    base = shield.remaining if eff.get("mode", "set") == "add" else 0.0
+                    shield.remaining = max(0.0, base + float(amount))
+                    if shield.max_value > 0 and not eff.get("allow_expand_max"):
+                        shield.remaining = min(shield.remaining, shield.max_value)
+
+
+    def _h_remove_shield(self, st, eff, payload, updates):
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            t2.shields.clear()
+
+
+    def _h_leave_battle(self, st, eff, payload, updates):
+        # 非击杀离场/逃跑：与 summon dismiss 共用 actor_exit 链，但不走 _check_death/on_kill
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            self._engine.leave_actor(t2.actor.actor_id, reason=str(eff.get("reason", "flee")))
+
+
+    def _h_apply_modifier(self, st, eff, payload, updates):
+        tgt = self._hook_target_states(eff.get("target", "self"), st, payload)
+        base_spec = dict(eff.get("modifier") or {})
+        # 现场求值族（蒙福者"暴伤=施加者暴伤×比例+定值"）：stat_effects 字符串值
+        # 按 hook 上下文求值后烘焙成定值——施加时刻快照（重挂重算），与
+        # trigger_action 的 scaling_atk 动态倍率同一 _hook_amount 通道。
+        # 多目标烘焙一次（2026-09-12 布洛妮娅 110103 钓出）：逐目标重烘在"修饰件本身
+        # 改写烘焙读数"时串染（全体暴伤 buff 读 $self.crit_dmg——首目标挂完自己暴伤
+        # 变 0.78，后续目标按 0.78 重烘越挂越高）；_hook_amount 只吃 (st, payload)
+        # 与 t2 无关，提前烘焙语义等价且全目标同值。
+        se = base_spec.get("stat_effects")
+        if se:
+            base_spec["stat_effects"] = {
+                k: (self._hook_amount(v, st, payload) if isinstance(v, str) else v)
+                for k, v in se.items()}
+        overrides = base_spec.get("override_effects")
+        if overrides:
+            base_spec["override_effects"] = {
+                k: (self._hook_amount(v, st, payload) if isinstance(v, str) else v)
+                for k, v in overrides.items()}
+        # DoT 载体槽同走现场求值烘焙（2026-09-22 DoT 双通道合并——dot_ratio 表达式族：
+        # 桂乃芬 S2「param(121002,4)×(1+0.4×res__s2_burn)」/桑博 E6「param(110804,2)
+        # +0.15×marker」——星魂闩运行期读数，编译期 param() 只能取档不能求值；
+        # 烘焙一次全目标同值，与 stat_effects 同口径）。stacks 同槽（计数驱动载荷族：
+        # 海瑟音 Zone 追加「min(实例数, cap−trigs) 层」/黄泉集真赤转移「stacks($event.actor,…)」
+        # ——运行期层数编译期不可求值；烘焙 float 由 _modifier_from_spec int() 取整）。
+        for _dk in ("dot_ratio", "dot_base_chance"):
+            _dv = base_spec.get(_dk)
+            if isinstance(_dv, str):
+                base_spec[_dk] = self._hook_amount(_dv, st, payload)
+        stacks_expr = base_spec.get("stacks")
+        source = st
+        source_ref = str(eff.get("source") or "")
+        if source_ref:
+            if source_ref.startswith("$event."):
+                source = self._event_actor(source_ref, payload)
+            elif source_ref.startswith("modifier:"):
+                holder = (self._event_actor("$event.actor", payload)
+                          if "actor" in payload else st)
+                held = (holder.modifiers.get(source_ref.split(":", 1)[1])
+                        if holder is not None else None)
                 source = (self._engine.state.actors.get(held.source_id)
                           if held is not None else None)
-                if source is None:
-                    raise ValueError(f"set_hp_to_percent 的 source 无法解析：{source_ref!r}")
-                source_id = source.actor.actor_id
-                death_source_id = source_id
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                pct = self._hook_amount(eff.get("percent", eff.get("amount", 0)), st, payload,
-                                        target_st=t2)
-                max_hp = float(self._engine.pipeline.effective_stats(t2)["hp"])
-                old_hp = t2.current_hp
-                t2.current_hp = max(0.0, min(max_hp, max_hp * pct))
-                if t2.current_hp < old_hp:
-                    # HP 下降发射点（HP 消耗族——mechanics 11 §11.3；reason='set_hp'，词表冻结见 _execute_action）
-                    self._engine.bus.emit("on_hp_decrease", {
-                        "amount": old_hp - t2.current_hp, "source": source_id,
-                        "reason": "set_hp", "target": t2.actor.actor_id}, self._engine.state)
-                if t2.current_hp <= 0:
-                    self._engine._check_death(t2, death_source_id)
-        elif t == "drain_hp":
-            # 生命流失/汲取（05_effects §生命汲取/生命流失 v1 收编——遐蝶耗血/小伊卡反哺族）：
-            # 每目标实际流失 = min(amount, 当前 HP - floor)（floor 保底耗不致死，缺省 0 可致死）；
-            # 发 on_hp_decrease（reason='drain'，词表冻结见 _execute_action）；不是伤害——
-            # 不走 before_take_damage/护盾/总伤记账；drain_ratio × 总额走统一治疗管线。
-            # before_drain 可改写口（2026-09-10 收编——遐蝶 E2 炽意抵扣首实例）：逐目标扣减前
-            # 走 waterfall（modify_amount 改写扣量 0=免扣 / cancel 整笔跳过；payload action_id
-            # 继承触发上下文——焰息耗血=1140702 族定位锚），改写/取消后无扣减不发 on_hp_decrease
-            floor = self._hook_amount(eff.get("floor", 0), st, payload)
-            drained_total = 0.0
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                amt = self._hook_amount(eff.get("amount", 0), st, payload, target_st=t2)
-                wp = self._engine.bus.waterfall("before_drain", {
-                    "source": st.actor.actor_id, "target": t2.actor.actor_id,
-                    "amount": amt, "floor": floor, "reason": "drain",
-                    "action_id": str(payload.get("action_id") or "")}, self._engine.state)
-                if wp.get("cancel"):
-                    continue   # 抵扣整笔取消——无扣减不发射（遐蝶 E2 炽意全额抵扣族）
-                amt = float(wp.get("amount", amt))
-                actual = min(amt, max(0.0, t2.current_hp - floor))
-                if actual <= 0:
-                    continue
-                t2.current_hp -= actual
-                drained_total += actual
-                # HP 下降发射点（HP 消耗族——mechanics 11 §11.3；reason='drain'，spec 钉死）
-                self._engine.bus.emit("on_hp_decrease", {
-                    "amount": actual, "source": st.actor.actor_id,
-                    "reason": "drain", "target": t2.actor.actor_id}, self._engine.state)
-                if t2.current_hp <= 0:
-                    self._engine._check_death(t2, st.actor.actor_id)
-            ratio = self._hook_amount(eff.get("drain_ratio", 1.0), st, payload)
-            if ratio > 0 and drained_total > 0:
-                for t2 in self._hook_target_states(eff.get("heal_target", "self"), st, payload):
-                    result = self._engine.pipeline.heal(st, t2, drained_total * ratio)
-                    # 反哺治疗后段 = _emit_heal_settled 统一通道（与 heal 同口径）
-                    self._emit_heal_settled(st, t2, result, payload)
-            if eff.get("into_resource") is not None and drained_total > 0:
-                # 流失实际总额灌资源（光锥 23042 累计计数族；统一入口同 gain_resource）
-                self._engine._gain_resource(st, str(eff["into_resource"]), drained_total,
-                                            source_id=st.actor.actor_id)
-        elif t == "heal":
-            # 治疗（忆灵/丰饶族；12_summon 收编）：target 选择器 + ratio/amount **逐目标**
-            # 求值（$target 注入——"按受疗者生命上限治疗"族首实例：阿格莱雅 1402 战技
-            # param(140202,1)×$target.max_hp（官方"为衣匠回复等同于其生命上限的生命"）；ratio=施放者 HP 比例 + amount=固定量进 rulebook heal 公式
-            # flat_heal 槽——风堇族"MaxHP×比例 + 定值"结构）——与 heal_self 同一管线口径
-            # （吃治疗源 heal_bonus（召唤物施放归主人面板——2026-09-21 裁决）+ 受疗者
-            # incoming_heal）；施放者侧写法求值不变（ratio/amount 表达式仍按钩持有者 $self 求值）
-            healed_total = 0.0
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                ratio = self._hook_amount(eff.get("ratio", 0), st, payload, t2)
-                flat = self._hook_amount(eff.get("amount", 0), st, payload, t2)
-                result = self._engine.pipeline.heal(st, t2, flat, hp_scaling=ratio)
-                # 后段（溢出/0 值发射/月茧判定）= _emit_heal_settled 统一通道；actual 自累记账
-                healed_total += self._emit_heal_settled(st, t2, result, payload)
-            if getattr(self, "_chain_last", None) is not None:
-                self._chain_last["actual_amount"] = healed_total   # $last/$prev 前序快照
-        elif t == "summon":
-            # 召唤物入场（12_summon）：布场/继承/上行动条/actor_enter 全在引擎单漏斗
-            position = str(eff.get("position", "after_owner"))
-            summon_id = str(eff.get("summon_id") or "")
-            if "summon_id_source" in eff:
-                selected = self._hook_amount(eff["summon_id_source"], st, payload)
-                key = str(int(selected)) if float(selected).is_integer() else str(selected)
-                variants = {str(k): str(v) for k, v in (eff.get("summon_variants") or {}).items()}
-                summon_id = variants.get(key, "")
-                if not summon_id:
-                    raise ValueError(f"动态召唤 ID {key!r} 不在已登记候选闭集")
-            self._engine.summon_actor(
-                st, summon_id, position=position,
-                reference_actor_id=str(payload.get("target", "")) if position == "last_die" else "",
-                summon_group=str(eff.get("summon_group") or ""))
-        elif t == "dismiss_summon":
-            # 召唤物离场（12_summon；未登记/未在场由引擎按 no-op/报错口径处理）
-            self._engine.dismiss_summon_actor(str(eff["summon_id"]))
-        elif t == "modify_shield":
-            modifier_ids = {str(item) for item in eff.get("modifier_ids") or []}
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                for shield in t2.shields:
-                    if modifier_ids and shield.modifier_id not in modifier_ids:
-                        continue
-                    amount = self._hook_amount(eff.get("amount", 0), st, payload, target_st=t2)
-                    if eff.get("max"):
-                        shield.max_value = max(0.0, float(amount))
-                        shield.remaining = min(shield.remaining, shield.max_value)
-                    else:
-                        base = shield.remaining if eff.get("mode", "set") == "add" else 0.0
-                        shield.remaining = max(0.0, base + float(amount))
-                        if shield.max_value > 0 and not eff.get("allow_expand_max"):
-                            shield.remaining = min(shield.remaining, shield.max_value)
-        elif t == "remove_shield":
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                t2.shields.clear()
-        elif t == "leave_battle":
-            # 非击杀离场/逃跑：与 summon dismiss 共用 actor_exit 链，但不走 _check_death/on_kill
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                self._engine.leave_actor(t2.actor.actor_id, reason=str(eff.get("reason", "flee")))
-        elif t == "apply_modifier":
-            tgt = self._hook_target_states(eff.get("target", "self"), st, payload)
-            base_spec = dict(eff.get("modifier") or {})
-            # 现场求值族（蒙福者"暴伤=施加者暴伤×比例+定值"）：stat_effects 字符串值
-            # 按 hook 上下文求值后烘焙成定值——施加时刻快照（重挂重算），与
-            # trigger_action 的 scaling_atk 动态倍率同一 _hook_amount 通道。
-            # 多目标烘焙一次（2026-09-12 布洛妮娅 110103 钓出）：逐目标重烘在"修饰件本身
-            # 改写烘焙读数"时串染（全体暴伤 buff 读 $self.crit_dmg——首目标挂完自己暴伤
-            # 变 0.78，后续目标按 0.78 重烘越挂越高）；_hook_amount 只吃 (st, payload)
-            # 与 t2 无关，提前烘焙语义等价且全目标同值。
-            se = base_spec.get("stat_effects")
-            if se:
-                base_spec["stat_effects"] = {
-                    k: (self._hook_amount(v, st, payload) if isinstance(v, str) else v)
-                    for k, v in se.items()}
-            overrides = base_spec.get("override_effects")
-            if overrides:
-                base_spec["override_effects"] = {
-                    k: (self._hook_amount(v, st, payload) if isinstance(v, str) else v)
-                    for k, v in overrides.items()}
-            # DoT 载体槽同走现场求值烘焙（2026-09-22 DoT 双通道合并——dot_ratio 表达式族：
-            # 桂乃芬 S2「param(121002,4)×(1+0.4×res__s2_burn)」/桑博 E6「param(110804,2)
-            # +0.15×marker」——星魂闩运行期读数，编译期 param() 只能取档不能求值；
-            # 烘焙一次全目标同值，与 stat_effects 同口径）。stacks 同槽（计数驱动载荷族：
-            # 海瑟音 Zone 追加「min(实例数, cap−trigs) 层」/黄泉集真赤转移「stacks($event.actor,…)」
-            # ——运行期层数编译期不可求值；烘焙 float 由 _modifier_from_spec int() 取整）。
-            for _dk in ("dot_ratio", "dot_base_chance"):
-                _dv = base_spec.get(_dk)
-                if isinstance(_dv, str):
-                    base_spec[_dk] = self._hook_amount(_dv, st, payload)
-            stacks_expr = base_spec.get("stacks")
-            source = st
-            source_ref = str(eff.get("source") or "")
-            if source_ref:
-                if source_ref.startswith("$event."):
-                    source = self._event_actor(source_ref, payload)
-                elif source_ref.startswith("modifier:"):
-                    holder = (self._event_actor("$event.actor", payload)
-                              if "actor" in payload else st)
-                    held = (holder.modifiers.get(source_ref.split(":", 1)[1])
-                            if holder is not None else None)
-                    source = (self._engine.state.actors.get(held.source_id)
-                              if held is not None else None)
-                else:
-                    source = self._engine.state.actors.get(source_ref)
-                if source is None:
-                    raise ValueError(f"apply_modifier 的 source 无法解析：{source_ref!r}")
-            for t2 in tgt:
-                # stacks 允许 $target 逐目标取值（RL 双倍投注按各目标现有点数翻倍）；
-                # 与 stat_effects/DoT 的一次烘焙隔离，避免目标间串值。
-                spec = dict(base_spec)
-                if isinstance(stacks_expr, str):
-                    spec["stacks"] = self._hook_amount(stacks_expr, st, payload, target_st=t2)
-                for field in ("duration", "max_stack"):
-                    value = base_spec.get(field)
-                    if isinstance(value, str):
-                        spec[field] = self._hook_amount(value, st, payload, target_st=t2)
-                # F2 来源记账：kind=hook；ref=修饰件可展示名（hook 编译产物无更细出处，没有就空）
-                self._engine._apply_modifier_spec(
-                    t2, spec, source,
-                    source_kind="hook",
-                    source_ref=str(spec.get("name", "")),
-                    apply_chance=self._hook_amount(eff.get("apply_chance", 1.0), st, payload),
-                    payload=payload)
-        elif t == "barrage_damage":
-            instances = int(self._hook_amount(eff.get("instances_expr", 1), st, payload))
-            if instances <= 0:
-                return
-            hit_ids = set()
-            for _ in range(instances):
-                alive = self._engine._allies_alive()
-                if not alive:
-                    break
-                remaining = [t2 for t2 in alive if t2.actor.actor_id not in hit_ids]
-                if remaining:
-                    target = remaining[-1]
-                elif self._engine.pipeline.mode == MODE_ROLL and self._engine.pipeline.rng is not None:
-                    target = self._engine.pipeline.rng.choice(alive)
-                else:
-                    # expected 确定化：优先命中后的随机段取编队首个，不掷骰。
-                    target = alive[0]
-                nested_payload = {**payload, "barrage_target": target.actor.actor_id}
-                base = dict(eff)
-                base["effect_type"] = "deal_damage"
-                base["target"] = "$event.barrage_target"
-                base.pop("instances_expr", None)
-                base.pop("repeat_scaling_atk", None)
-                repeated = target.actor.actor_id in hit_ids
-                self._run_hook_effect(st, base, nested_payload, updates)
-                if repeated:
-                    bonus = dict(base)
-                    bonus["scaling_atk"] = eff.get("repeat_scaling_atk", 0.0)
-                    self._run_hook_effect(st, bonus, nested_payload, updates)
-                hit_ids.add(target.actor.actor_id)
-        elif t == "random_choice":
-            options = eff.get("options") or []
-            if not options:
-                return
-            if self._engine.pipeline.mode == MODE_ROLL and self._engine.pipeline.rng is not None:
-                if any("weight" in option for option in options):
-                    total = sum(float(option.get("weight", 1.0)) for option in options)
-                    threshold = self._engine.pipeline.rng.random() * total
-                    cumulative = 0.0
-                    option = options[-1]
-                    for candidate in options:
-                        cumulative += float(candidate.get("weight", 1.0))
-                        if threshold < cumulative:
-                            option = candidate
-                            break
-                else:
-                    option = self._engine.pipeline.rng.choice(options)
             else:
-                option = options[0]
-            self._run_hook_effect(st, dict(option), payload, updates)
-        elif t == "deal_damage":
-            targets = self._hook_target_states(eff.get("target", "enemy_first"), st, payload)
-            if not targets:
-                return
-            # 基数区二态（互斥，编译期闸）：amount = ability_multiplier 直写（资源值即基数——
-            # 风堇忆灵技 tally×比例族，01_formula §1.1 "由 effect 的 amount 表达式喂入"）；
-            # scaling_atk / scaling_hp 合并同一行（scaling 列表逐行=等级档，拆开会被当成两档）
-            # amount 逐目标求值通道（2026-09-24 收编）：`$target` 注入与 heal/gain_energy
-            # 同槽——池选目标在数值槽内经 `$target` 引用（桑博 1108 E4「命中目标的风化
-            # 层数」首实例：池 where 选层数达标者、amount 按命中目标层数结算——事件主目标
-            # 与池选目标错位时不再错读主目标层数）；不引用 `$target` 的表达式逐目标同值，
-            # 与旧一次性求值语义等价。惰性闭包：elation/true 分支的「须配 amount」判空
-            # 读 amount_raw，不在此预求值（$target 引用须在逐目标循环内有注入点）
-            amount_raw = eff.get("amount")
+                source = self._engine.state.actors.get(source_ref)
+            if source is None:
+                raise ValueError(f"apply_modifier 的 source 无法解析：{source_ref!r}")
+        for t2 in tgt:
+            # stacks 允许 $target 逐目标取值（RL 双倍投注按各目标现有点数翻倍）；
+            # 与 stat_effects/DoT 的一次烘焙隔离，避免目标间串值。
+            spec = dict(base_spec)
+            if isinstance(stacks_expr, str):
+                spec["stacks"] = self._hook_amount(stacks_expr, st, payload, target_st=t2)
+            for field in ("duration", "max_stack"):
+                value = base_spec.get(field)
+                if isinstance(value, str):
+                    spec[field] = self._hook_amount(value, st, payload, target_st=t2)
+            # F2 来源记账：kind=hook；ref=修饰件可展示名（hook 编译产物无更细出处，没有就空）
+            self._engine._apply_modifier_spec(
+                t2, spec, source,
+                source_kind="hook",
+                source_ref=str(spec.get("name", "")),
+                apply_chance=self._hook_amount(eff.get("apply_chance", 1.0), st, payload),
+                payload=payload)
 
-            def _base_override(t2: ActorState) -> Optional[float]:
-                if amount_raw is None:
-                    return None
-                return self._hook_amount(amount_raw, st, payload, target_st=t2)
-            row: Dict[str, float] = {}
-            if eff.get("scaling_atk") is not None:
-                row["atk"] = self._hook_amount(eff["scaling_atk"], st, payload)
-            if eff.get("scaling_hp") is not None:
-                row["hp"] = self._hook_amount(eff["scaling_hp"], st, payload)
-            # category: "additional" = 角色附加伤害（mechanics 02 §2.1 生效表：吃常规乘区，
-            # 不吃类型限定增伤——action_type 归 "additional"，dmg_bonus_by_type 桶不命中）；
-            # "true" = 真实伤害（rulebook true_damage 式：amount=fixed_value 直写，常规乘区
-            # 全不命中，护盾同走——昔涟结界"原伤害%"族，mechanics 02 §2.8）
-            category = str(eff.get("category", ""))
-            ignore_shield = bool(eff.get("ignore_shield", False))
-            # damage_type 二态（动态元素族——丹恒•腾荒 1414 同袍"相应属性"附加伤害首实例）：
-            # 元素字面量直用；词表外按白名单表达式现场求值（element_of/who_has 宿主），
-            # 求值结果词表闸（编译期已预编译——静态非法炸在编译期，动态结果非法炸在这里）；
-            # category "true" 的真伤可写伪属性字面量 "true"（真伤分支不读 damage_type——
-            # 编译期同口径豁免，勿按元素/表达式校验）
-            dtype = eff.get("damage_type")
-            if str(eff.get("category", "")) == "true" and dtype == "true":
-                dtype = None
-            if isinstance(dtype, str) and dtype and dtype.lower() not in ELEMENTS:
-                dtype = str(self._engine._expr.evaluate(
-                    self._engine._expr.compile(dtype, layer="effect"),
-                    self._hook_ctx(st, payload),
-                    functions=self._hook_functions(st, payload))).lower()
-                if dtype not in ELEMENTS:
-                    raise ValueError(
-                        f"deal_damage damage_type 表达式求值结果 {dtype!r} 非合法元素"
-                        f"（合法词表：{sorted(ELEMENTS)}——element_of 目标未声明 element 时得 ''）")
-            if category == "elation":
-                # 欢愉伤害（21_elation.md §21.2 路由）：amount=纯倍率表达式
-                #（比例量纲不基于角色属性，02 §2.14 abilityMultiplier 口径）；
-                # punchline_source 表达式槽定槽——缺省持有者好活当赏合并值（其他欢愉伤害），
-                # 欢愉技段族写 "res_punchline"（阿哈笑点池实时值；覆写域内读取点拦截
-                # 同锚——engine._resource_value 单点，字面值特判退役 2026-10-11）；
-                # 爻光「触发角色无好活用爻光的算」族写 resource_of('1502','certified_banger')
-                if amount_raw is None:
-                    raise ValueError(
-                        "deal_damage category 'elation' 须配 amount（纯倍率表达式槽——"
-                        "比例量纲，02 §2.14）")
-                pl_src = eff.get("punchline_source")
-                if pl_src is None:
-                    pl_val = self._engine._resource_value(st, "certified_banger")
-                else:
-                    pl_val = float(self._hook_amount(pl_src, st, payload))
-                # 削韧开闸（2026-10-11——火花 150104 天赋附伤 stance [15,0,0]÷3=5 米游社
-                # /tbgd 双源实证，原「口径待实测」编译互斥闸退役）：与直伤同走
-                # _apply_toughness_damage 单漏斗（own_element 默认闸/双效率池/击破判定/
-                # 多韧性条/超击破转化全同口径），逐目标各削；pseudo action 建制同直伤分支
-                #（削韧参 + 伪行动类别 + decl_action_type 命中域事件字段喂入——
-                # 「强化普攻期间」族行动域隔离 scoped 判定读，04_modifier §hit_condition）
-                toughness = 0.0
-                if eff.get("toughness_dmg") is not None:
-                    toughness = float(self._hook_amount(eff["toughness_dmg"], st, payload))
-                pseudo = Action(
-                    action_id=f"hook_{eff.get('name', 'dmg')}", name=str(eff.get("name", "hook")),
-                    action_type=str(eff.get("action_type") or "follow_up"),
-                    target_type="aoe" if len(targets) > 1 else "single",
-                    damage_type=dtype, is_indirect=bool(eff.get("is_indirect", False)),
-                    damage_tags=[int(tag) for tag in eff.get("damage_tags") or []],
-                    damage_custom_name=str(eff.get("damage_custom_name") or ""),
-                    toughness_dmg=toughness,
-                    toughness_scope=str(eff.get("toughness_scope") or ""),
-                )
-                # elation 覆写槽（2026-10-11——大吉大利择优族：爻光「攻击者欢愉度低于爻光
-                # 用爻光的算」max(elation_of(触发者), $self.elation) 表达式现场求值喂
-                # params；缺省不喂=读攻击者面板（rulebook elation_multi override_param））
-                params: Dict[str, Any] = {"punchline_source": pl_val}
-                if eff.get("elation") is not None:
-                    params["elation"] = self._hook_amount(eff["elation"], st, payload)
-                dealt_el = 0.0
-                seg_idx = getattr(self, "_chain_hit_seq", None)   # 链内命中序号（after_being_hit seg_index）
-                for t2 in targets:
-                    with self._engine._damage_event():  # 每个 hook 伤害目标一批（月茧同时致死批处理域）
-                        was_broken = t2.broken   # 超击破快照（同直伤分支）：破的那一击本身不触发
-                        result = self._engine.pipeline.settle_damage(
-                            "elation", st, t2, action=pseudo,
-                            element=str(dtype or "physical"),
-                            params={"ability_multiplier": _base_override(t2), **params})
-                        dealt_el += float(result.value)
-                        overflow = result.value if ignore_shield else self._engine._absorb_with_shields(
-                        t2, result.value, st.actor.actor_id)
-                        t2.current_hp -= overflow
-                        if overflow > 0:
-                            # HP 下降发射点（同 hit 族携带 damage_type/action_type——
-                            # 伪行动类别经 action_type 声明槽（欢愉技段族标 elation_skill））
-                            self._engine.bus.emit("on_hp_decrease", {
-                                "amount": overflow, "source": st.actor.actor_id,
-                                "reason": "hit", "target": t2.actor.actor_id,
-                                "damage_type": str(dtype or ""),
-                                "action_type": pseudo.action_type,
-                                "is_critical": result.node.get("isCrit", False)}, self._engine.state)
-                        self._engine.state.total_damage += result.value
-                        self._engine.state.damage_by_actor[st.actor.actor_id] += result.value
-                        self._engine.state.log.append(
-                            f"AV{self._engine.state.clock:.1f}: {st.actor.name} 对 {t2.actor.name} "
-                            f"造成 {result.value:,.0f} 欢愉伤害（{str(eff.get('name', 'elation'))}）")
-                        # 削韧落点与直伤分支同位（伤害入账后、死亡检查前——击破致死链同序）
-                        if self._engine._is_enemy(t2.actor):
-                            self._engine._apply_toughness_damage(st.actor, pseudo, t2)
-                            self._engine._try_super_break(
-                                st, pseudo, t2, was_broken=was_broken,
-                                source_action_id=str(payload.get("action_id") or ""))
-                        self._engine._check_death(
-                            t2, st.actor.actor_id,
-                            action_id=str(payload.get("action_id") or ""))
-                        # after_being_hit（受击链收尾——欢愉伤害是真攻击，action 层欢愉技段同发）
-                        self._engine._emit_after_being_hit(
-                            amount=float(result.value), absorbed=float(result.value) - overflow,
-                            damage_type=str(dtype or "physical"), source_id=st.actor.actor_id,
-                            target_id=t2.actor.actor_id,
-                            is_critical=result.node.get("isCrit", False),
-                            seg_index=seg_idx or 0, actor_type=st.actor.actor_type,
-                            action_type=pseudo.action_type,
-                            hit_targets=[t3.actor.actor_id for t3 in targets], action_id=pseudo.action_id,
-                            split=str(eff.get("split") or ""), is_indirect=pseudo.is_indirect,
-                            damage_tags=pseudo.damage_tags,
-                            damage_custom_name=pseudo.damage_custom_name)
-                if seg_idx is not None:
-                    self._chain_hit_seq = (seg_idx or 0) + 1
-                if getattr(self, "_chain_last", None) is not None:
-                    self._chain_last["actual_amount"] = dealt_el   # $last/$prev 前序快照
-                return
-            if category in {"true", "atrophy"}:
-                if amount_raw is None:
-                    raise ValueError(
-                        f"deal_damage category {category!r} 须配 amount（fixed_value 直写槽）")
-                dealt_true = 0.0
-                for t2 in targets:
-                    with self._engine._damage_event():  # 每个 hook 伤害目标一批（月茧同时致死批处理域）
-                        result = self._engine.pipeline.settle_damage("true", st, t2,
-                                                       params={"fixed_value": _base_override(t2)})
-                        dealt_true += float(result.value)
-                        overflow = result.value if ignore_shield else self._engine._absorb_with_shields(
-                        t2, result.value, st.actor.actor_id)
-                        t2.current_hp -= overflow
-                        if overflow > 0:
-                            # HP 下降发射点：真伤保留 damage_type='true'（昔涟结界防递归闸）；
-                            # Atrophy 保留声明元素与源行动类别，供命中域条件按量子/技能识别。
-                            self._engine.bus.emit("on_hp_decrease", {
-                                "amount": overflow, "source": st.actor.actor_id,
-                                "reason": "hit", "target": t2.actor.actor_id,
-                                "damage_type": ("true" if category == "true" else str(dtype or "")),
-                                "action_type": ("follow_up" if category == "true" else str(
-                                    payload.get("action_type") or "skill")),
-                                "is_critical": False}, self._engine.state)
-                        self._engine.state.total_damage += result.value
-                        self._engine.state.damage_by_actor[st.actor.actor_id] += result.value
-                        self._engine.state.log.append(
-                            f"AV{self._engine.state.clock:.1f}: {st.actor.name} 对 {t2.actor.name} "
-                            f"造成 {result.value:,.0f} "
-                            f"{'真实伤害' if category == 'true' else 'Atrophy 伤害'}"
-                            f"（{str(eff.get('name', category))}）")
-                        energy_grant = float(eff.get("energy_grant", 0.0) or 0.0)
-                        grant_action = Action(
-                            action_id=str(payload.get("action_id") or f"hook_{eff.get('name', 'dmg')}"),
-                            name=str(eff.get("name", "hook")), action_type="skill",
-                            target_type="single", damage_type=dtype,
-                            toughness_dmg=int(eff.get("toughness_dmg", 0) or 0),
-                            energy_grant=energy_grant)
-                        if eff.get("toughness_dmg") is not None and self._engine._is_enemy(t2.actor):
-                            self._engine._apply_toughness_damage(st.actor, grant_action, t2)
-                        self._engine._check_death(
-                            t2, st.actor.actor_id,
-                            action_id=str(payload.get("action_id") or ""))
-                        if t2.alive and energy_grant > 0:
-                            self._engine._grant_hit_energy(st.actor, grant_action, t2)
-                if getattr(self, "_chain_last", None) is not None:
-                    self._chain_last["actual_amount"] = dealt_true   # $last/$prev 前序快照
-                return
-            # 削韧（2026-09-07 收编，05_effects §造成伤害）：toughness_dmg 与 action 层同键
-            # 同语义——缺省 0=不削；同走引擎 _apply_toughness_damage 单漏斗（own_element 默认闸/
-            # 双效率池/击破判定/多韧性条全同口径），逐目标各削（多段=多个 deal_damage 各声明）；
-            # category "true" 互斥由编译期闸拦（真伤无属性不削韧，上方分支不触碰本参）
+
+    def _h_barrage_damage(self, st, eff, payload, updates):
+        instances = int(self._hook_amount(eff.get("instances_expr", 1), st, payload))
+        if instances <= 0:
+            return
+        hit_ids = set()
+        for _ in range(instances):
+            alive = self._engine._allies_alive()
+            if not alive:
+                break
+            remaining = [t2 for t2 in alive if t2.actor.actor_id not in hit_ids]
+            if remaining:
+                target = remaining[-1]
+            elif self._engine.pipeline.mode == MODE_ROLL and self._engine.pipeline.rng is not None:
+                target = self._engine.pipeline.rng.choice(alive)
+            else:
+                # expected 确定化：优先命中后的随机段取编队首个，不掷骰。
+                target = alive[0]
+            nested_payload = {**payload, "barrage_target": target.actor.actor_id}
+            base = dict(eff)
+            base["effect_type"] = "deal_damage"
+            base["target"] = "$event.barrage_target"
+            base.pop("instances_expr", None)
+            base.pop("repeat_scaling_atk", None)
+            repeated = target.actor.actor_id in hit_ids
+            self._run_hook_effect(st, base, nested_payload, updates)
+            if repeated:
+                bonus = dict(base)
+                bonus["scaling_atk"] = eff.get("repeat_scaling_atk", 0.0)
+                self._run_hook_effect(st, bonus, nested_payload, updates)
+            hit_ids.add(target.actor.actor_id)
+
+
+    def _h_random_choice(self, st, eff, payload, updates):
+        options = eff.get("options") or []
+        if not options:
+            return
+        if self._engine.pipeline.mode == MODE_ROLL and self._engine.pipeline.rng is not None:
+            if any("weight" in option for option in options):
+                total = sum(float(option.get("weight", 1.0)) for option in options)
+                threshold = self._engine.pipeline.rng.random() * total
+                cumulative = 0.0
+                option = options[-1]
+                for candidate in options:
+                    cumulative += float(candidate.get("weight", 1.0))
+                    if threshold < cumulative:
+                        option = candidate
+                        break
+            else:
+                option = self._engine.pipeline.rng.choice(options)
+        else:
+            option = options[0]
+        self._run_hook_effect(st, dict(option), payload, updates)
+
+
+    def _h_deal_damage(self, st, eff, payload, updates):
+        targets = self._hook_target_states(eff.get("target", "enemy_first"), st, payload)
+        if not targets:
+            return
+        # 基数区二态（互斥，编译期闸）：amount = ability_multiplier 直写（资源值即基数——
+        # 风堇忆灵技 tally×比例族，01_formula §1.1 "由 effect 的 amount 表达式喂入"）；
+        # scaling_atk / scaling_hp 合并同一行（scaling 列表逐行=等级档，拆开会被当成两档）
+        # amount 逐目标求值通道（2026-09-24 收编）：`$target` 注入与 heal/gain_energy
+        # 同槽——池选目标在数值槽内经 `$target` 引用（桑博 1108 E4「命中目标的风化
+        # 层数」首实例：池 where 选层数达标者、amount 按命中目标层数结算——事件主目标
+        # 与池选目标错位时不再错读主目标层数）；不引用 `$target` 的表达式逐目标同值，
+        # 与旧一次性求值语义等价。惰性闭包：elation/true 分支的「须配 amount」判空
+        # 读 amount_raw，不在此预求值（$target 引用须在逐目标循环内有注入点）
+        amount_raw = eff.get("amount")
+
+        def _base_override(t2: ActorState) -> Optional[float]:
+            if amount_raw is None:
+                return None
+            return self._hook_amount(amount_raw, st, payload, target_st=t2)
+        row: Dict[str, float] = {}
+        if eff.get("scaling_atk") is not None:
+            row["atk"] = self._hook_amount(eff["scaling_atk"], st, payload)
+        if eff.get("scaling_hp") is not None:
+            row["hp"] = self._hook_amount(eff["scaling_hp"], st, payload)
+        # category: "additional" = 角色附加伤害（mechanics 02 §2.1 生效表：吃常规乘区，
+        # 不吃类型限定增伤——action_type 归 "additional"，dmg_bonus_by_type 桶不命中）；
+        # "true" = 真实伤害（rulebook true_damage 式：amount=fixed_value 直写，常规乘区
+        # 全不命中，护盾同走——昔涟结界"原伤害%"族，mechanics 02 §2.8）
+        category = str(eff.get("category", ""))
+        ignore_shield = bool(eff.get("ignore_shield", False))
+        # damage_type 二态（动态元素族——丹恒•腾荒 1414 同袍"相应属性"附加伤害首实例）：
+        # 元素字面量直用；词表外按白名单表达式现场求值（element_of/who_has 宿主），
+        # 求值结果词表闸（编译期已预编译——静态非法炸在编译期，动态结果非法炸在这里）；
+        # category "true" 的真伤可写伪属性字面量 "true"（真伤分支不读 damage_type——
+        # 编译期同口径豁免，勿按元素/表达式校验）
+        dtype = eff.get("damage_type")
+        if str(eff.get("category", "")) == "true" and dtype == "true":
+            dtype = None
+        if isinstance(dtype, str) and dtype and dtype.lower() not in ELEMENTS:
+            dtype = str(self._engine._expr.evaluate(
+                self._engine._expr.compile(dtype, layer="effect"),
+                self._hook_ctx(st, payload),
+                functions=self._hook_functions(st, payload))).lower()
+            if dtype not in ELEMENTS:
+                raise ValueError(
+                    f"deal_damage damage_type 表达式求值结果 {dtype!r} 非合法元素"
+                    f"（合法词表：{sorted(ELEMENTS)}——element_of 目标未声明 element 时得 ''）")
+        if category == "elation":
+            # 欢愉伤害（21_elation.md §21.2 路由）：amount=纯倍率表达式
+            #（比例量纲不基于角色属性，02 §2.14 abilityMultiplier 口径）；
+            # punchline_source 表达式槽定槽——缺省持有者好活当赏合并值（其他欢愉伤害），
+            # 欢愉技段族写 "res_punchline"（阿哈笑点池实时值；覆写域内读取点拦截
+            # 同锚——engine._resource_value 单点，字面值特判退役 2026-10-11）；
+            # 爻光「触发角色无好活用爻光的算」族写 resource_of('1502','certified_banger')
+            if amount_raw is None:
+                raise ValueError(
+                    "deal_damage category 'elation' 须配 amount（纯倍率表达式槽——"
+                    "比例量纲，02 §2.14）")
+            pl_src = eff.get("punchline_source")
+            if pl_src is None:
+                pl_val = self._engine._resource_value(st, "certified_banger")
+            else:
+                pl_val = float(self._hook_amount(pl_src, st, payload))
+            # 削韧开闸（2026-10-11——火花 150104 天赋附伤 stance [15,0,0]÷3=5 米游社
+            # /tbgd 双源实证，原「口径待实测」编译互斥闸退役）：与直伤同走
+            # _apply_toughness_damage 单漏斗（own_element 默认闸/双效率池/击破判定/
+            # 多韧性条/超击破转化全同口径），逐目标各削；pseudo action 建制同直伤分支
+            #（削韧参 + 伪行动类别 + decl_action_type 命中域事件字段喂入——
+            # 「强化普攻期间」族行动域隔离 scoped 判定读，04_modifier §hit_condition）
             toughness = 0.0
             if eff.get("toughness_dmg") is not None:
                 toughness = float(self._hook_amount(eff["toughness_dmg"], st, payload))
             pseudo = Action(
                 action_id=f"hook_{eff.get('name', 'dmg')}", name=str(eff.get("name", "hook")),
-                # 伪行动类别：缺省 follow_up/additional；模板可经 action_type 声明槽改写
-                #（飞霄 1220 终结技子击标 ultimate——"终结技伤害"身份族（E6 穿透
-                # scoped/Formshift 反向族）的挂载点，2026-09-14 接线；
-                # "dot" = DoT 路由——桑博 1108 风化 tick 族 2026-09-22 接线：通用
-                # deal_damage 路径增伤区按 f"{action_type}_dmg_boost" 读 dot_dmg_boost
-                # 桶（「持续伤害提高」），攻击侧池与声明式 DoT 跳伤（settle "dot" 路由）
-                # 增伤合成同口径；
-                # 边界①暴击口径不变——事件承载含期望暴击（R-SV1/R-KF3 在案结构差，
-                # 官方 DoT 不暴击，待迁移声明式通道后统一）；②一次性结算读现值，
-                # 非施加-跳伤模型，快照切分不适用）
-                action_type=str(eff.get("action_type")
-                                or ("additional" if category == "additional" else "follow_up")),
+                action_type=str(eff.get("action_type") or "follow_up"),
                 target_type="aoe" if len(targets) > 1 else "single",
                 damage_type=dtype, is_indirect=bool(eff.get("is_indirect", False)),
                 damage_tags=[int(tag) for tag in eff.get("damage_tags") or []],
-                damage_custom_name=str(eff.get("damage_custom_name") or ""), scaling=[row],
+                damage_custom_name=str(eff.get("damage_custom_name") or ""),
                 toughness_dmg=toughness,
-                energy_grant=float(eff.get("energy_grant", 0.0) or 0.0),
-                # toughness_scope（黄泉秘技"无视弱点削减全体韧性"族——action 层同键同语义，
-                # 缺省 own_element 默认闸；首个 hook 层实例 130807）
                 toughness_scope=str(eff.get("toughness_scope") or ""),
             )
-            dealt_total = 0.0
-            # 链内命中序号（after_being_hit seg_index 口径；附加伤害不发不占段——
-            # 03_actor §3.8 tags「不再触发命中类监听」）
-            seg_idx = getattr(self, "_chain_hit_seq", None)
+            # elation 覆写槽（2026-10-11——大吉大利择优族：爻光「攻击者欢愉度低于爻光
+            # 用爻光的算」max(elation_of(触发者), $self.elation) 表达式现场求值喂
+            # params；缺省不喂=读攻击者面板（rulebook elation_multi override_param））
+            params: Dict[str, Any] = {"punchline_source": pl_val}
+            if eff.get("elation") is not None:
+                params["elation"] = self._hook_amount(eff["elation"], st, payload)
+            dealt_el = 0.0
+            seg_idx = getattr(self, "_chain_hit_seq", None)   # 链内命中序号（after_being_hit seg_index）
             for t2 in targets:
                 with self._engine._damage_event():  # 每个 hook 伤害目标一批（月茧同时致死批处理域）
-                    was_broken = t2.broken   # 超击破快照：破的那一击本身不触发
+                    was_broken = t2.broken   # 超击破快照（同直伤分支）：破的那一击本身不触发
                     result = self._engine.pipeline.settle_damage(
-                        "direct", st, t2, action=pseudo,
-                        params={"target_broken": t2.broken, "base_override": _base_override(t2)})
-                    wp = self._engine.bus.waterfall("before_take_damage", {
-                        "amount": result.value, "damage_type": dtype,
-                        "source": st.actor.actor_id, "target": t2.actor.actor_id,
-                        "action_id": pseudo.action_id, "action_type": pseudo.action_type,
-                        "is_critical": result.node.get("isCrit", False),
-                        "split": str(eff.get("split") or ""), "is_indirect": pseudo.is_indirect,
-                        "damage_tags": list(pseudo.damage_tags),
-                        "damage_custom_name": pseudo.damage_custom_name,
-                        "block_damage_triggered": any(
-                            mod.block_damage for mod in t2.all_modifiers())}, self._engine.state)
-                    if wp.get("cancel"):
-                        continue
-                    final_amount = float(wp.get("amount", result.value))
-                    dealt_total += final_amount
-                    overflow = final_amount if ignore_shield else self._engine._absorb_with_shields(
-                        t2, final_amount, st.actor.actor_id)
+                        "elation", st, t2, action=pseudo,
+                        element=str(dtype or "physical"),
+                        params={"ability_multiplier": _base_override(t2), **params})
+                    dealt_el += float(result.value)
+                    overflow = result.value if ignore_shield else self._engine._absorb_with_shields(
+                    t2, result.value, st.actor.actor_id)
                     t2.current_hp -= overflow
                     if overflow > 0:
-                        # HP 下降发射点（hook 附加/追加伤害——受击族；reason='hit'，词表冻结见 _execute_action）
-                        # damage_type 仅 'hit' 族携带（昔涟结界真伤防递归闸同口径）；
-                        # action_type 同族携带=伪行动类别（"指定技能造成的伤害"族过滤——遐蝶 E1）
+                        # HP 下降发射点（同 hit 族携带 damage_type/action_type——
+                        # 伪行动类别经 action_type 声明槽（欢愉技段族标 elation_skill））
                         self._engine.bus.emit("on_hp_decrease", {
                             "amount": overflow, "source": st.actor.actor_id,
                             "reason": "hit", "target": t2.actor.actor_id,
                             "damage_type": str(dtype or ""),
                             "action_type": pseudo.action_type,
                             "is_critical": result.node.get("isCrit", False)}, self._engine.state)
-                    self._engine.state.total_damage += final_amount
-                    self._engine.state.damage_by_actor[st.actor.actor_id] += final_amount
-                    self._engine._log(st.actor, pseudo, t2, final_amount, result.node.get("isCrit", False))
-                    # 削韧落点与 action 层同位（伤害入账后、死亡检查前——击破致死链同序）
+                    self._engine.state.total_damage += result.value
+                    self._engine.state.damage_by_actor[st.actor.actor_id] += result.value
+                    self._engine.state.log.append(
+                        f"AV{self._engine.state.clock:.1f}: {st.actor.name} 对 {t2.actor.name} "
+                        f"造成 {result.value:,.0f} 欢愉伤害（{str(eff.get('name', 'elation'))}）")
+                    # 削韧落点与直伤分支同位（伤害入账后、死亡检查前——击破致死链同序）
                     if self._engine._is_enemy(t2.actor):
                         self._engine._apply_toughness_damage(st.actor, pseudo, t2)
                         self._engine._try_super_break(
@@ -2185,453 +2114,650 @@ class HookRuntime:
                     self._engine._check_death(
                         t2, st.actor.actor_id,
                         action_id=str(payload.get("action_id") or ""))
-                    # 与 action 层同序：存活目标逐段受击回能，打盾照回，致死段不回。
-                    if t2.alive and pseudo.energy_grant > 0:
-                        self._engine._grant_hit_energy(st.actor, pseudo, t2)
-                    if pseudo.action_type != "additional" and result.value > 0:
-                        # after_being_hit 受击链收尾（镜像 action 层 _execute_action 发法——
-                        # 契约单口 engine._emit_after_being_hit）；附加伤害不发（03_actor §3.8 tags）；
-                        # 0 伤害非命中不发——模板「×(条件)」置零=不发惯用法（1308 结爆
-                        # n=0 族）的收尾事件对齐：盾全吸收 result.value>0 照发，置零幻影
-                        # （无扣血无吸收）不算被击中（2026-09-17 组队对拍钓出：黄泉大招
-                        # 返渡/Core 段幻影结爆误触发缇宝境界 7 次）
-                        self._engine._emit_after_being_hit(
-                            amount=float(final_amount), absorbed=float(final_amount) - overflow,
-                            damage_type=dtype, source_id=st.actor.actor_id,
-                            target_id=t2.actor.actor_id,
-                            is_critical=result.node.get("isCrit", False),
-                            seg_index=seg_idx or 0, actor_type=st.actor.actor_type,
-                            action_type=pseudo.action_type,
-                            hit_targets=[t3.actor.actor_id for t3 in targets], action_id=pseudo.action_id,
-                            split=str(eff.get("split") or ""), is_indirect=pseudo.is_indirect,
-                            damage_tags=pseudo.damage_tags,
-                            damage_custom_name=pseudo.damage_custom_name,
-                            block_damage_triggered=bool(wp.get("block_damage_triggered")))
-            if (pseudo.action_type != "additional" and seg_idx is not None
-                    and dealt_total > 0):
-                # 链内命中序号只计真发伤的 deal_damage（0 置零幻影不占段——与发射闸同口径）
+                    # after_being_hit（受击链收尾——欢愉伤害是真攻击，action 层欢愉技段同发）
+                    self._engine._emit_after_being_hit(
+                        amount=float(result.value), absorbed=float(result.value) - overflow,
+                        damage_type=str(dtype or "physical"), source_id=st.actor.actor_id,
+                        target_id=t2.actor.actor_id,
+                        is_critical=result.node.get("isCrit", False),
+                        seg_index=seg_idx or 0, actor_type=st.actor.actor_type,
+                        action_type=pseudo.action_type,
+                        hit_targets=[t3.actor.actor_id for t3 in targets], action_id=pseudo.action_id,
+                        split=str(eff.get("split") or ""), is_indirect=pseudo.is_indirect,
+                        damage_tags=pseudo.damage_tags,
+                        damage_custom_name=pseudo.damage_custom_name)
+            if seg_idx is not None:
                 self._chain_hit_seq = (seg_idx or 0) + 1
             if getattr(self, "_chain_last", None) is not None:
-                self._chain_last["actual_amount"] = dealt_total   # $last/$prev 前序快照
-        elif t == "trigger_action":
-            aid = str(eff.get("action_id", ""))
-            if aid == "$event.action_id":
-                # 动态行动（奇袭"复制即将施放的战技"族）：行动与施放者都按事件寻址——
-                # 复刻事件方刚施放的行动并由其再放一次（刻律德菈军功持有者的战技复制；
-                # 与静态版的差别：行动属于事件方而非 hook 持有者）
-                src_st = self._engine.state.actors.get(str(payload.get("actor")))
-                action = None
-                if src_st is not None:
-                    action = next((a for a in self._engine.actions_by_actor.get(
-                        src_st.actor.actor_id, [])
-                        if a.action_id == str(payload.get("action_id"))), None)
-                if src_st is not None and action is not None:
-                    # 奇袭可见性：复制本身要留名——否则日志只有一条无头"插入发动"，
-                    # 用户看不出是刻律德菈复制的（前端体验反馈 2026-09-05）
-                    self._engine.state.log.append(
-                        f"AV{self._engine.state.clock:.1f}: {st.actor.name} 奇袭复制——"
-                        f"{src_st.actor.name} 再次施放 {action.name}")
-                    self._engine.trigger_action(src_st, action, tag="hook")
-                return
-            # v1 跨 actor（开拓者•欢愉终结技代放队友欢愉技族）：caster 缺省 self=
-            # hook 持有者；action_id 在 caster 行动表解析；action_type 按类索引
-            #（各角色欢愉技 id 不同——恰 1 件，0/>1 大声炸不许静默）
-            casters = self._hook_target_states(eff.get("caster", "self"), st, payload)
-            if len(casters) != 1:
+                self._chain_last["actual_amount"] = dealt_el   # $last/$prev 前序快照
+            return
+        if category in {"true", "atrophy"}:
+            if amount_raw is None:
                 raise ValueError(
-                    f"trigger_action 的 caster 须解析为单一目标（实得 {len(casters)} 个："
-                    f"{eff.get('caster', 'self')!r}）——代放执行者不定即语义不定")
-            cst = casters[0]
-            atype = eff.get("action_type")
-            if atype is not None:
-                cands = [a for a in self._engine.actions_by_actor.get(cst.actor.actor_id, [])
-                         if a.action_type == str(atype)]
-                if len(cands) != 1:
-                    raise ValueError(
-                        f"trigger_action 按 action_type {atype!r} 在 {cst.actor.name} "
-                        f"行动表恰取 1 件失败（实得 {len(cands)}）——0=无此类行动、"
-                        f">1=选择子歧义，都不许静默")
-                action = cands[0]
-            else:
-                action = next((a for a in self._engine.actions_by_actor.get(cst.actor.actor_id, [])
-                               if a.action_id == aid), None)
-            if action is not None:
-                if eff.get("scaling_atk") is not None:
-                    # 动态倍率覆写（计数器反击族：倍率随 stacks/资源现场求值，见 05_effects trigger_action）
-                    action = replace(
-                        action,
-                        scaling=[{"atk": self._hook_amount(eff["scaling_atk"], st, payload)}],
-                    )
-                # pool_override（欢愉代放固定笑点档——欢愉主终结技「固定计入 20 笑点」族，
-                # 05_effects trigger_action；表达式槽现场求值）
-                pool_ov = (self._hook_amount(eff["pool_override"], st, payload)
-                           if eff.get("pool_override") is not None else None)
-                forced_target = None
-                if "target" in eff:
-                    # 显式 target = 强制主目标；空候选 = 不代放（递归自然终止），不回落默认目标。
-                    targets = self._hook_target_states(eff["target"], st, payload)
-                    if not targets:
-                        return
-                    if len(targets) != 1:
-                        raise ValueError(
-                            f"trigger_action 的 target 须解析为单一目标（实得 {len(targets)} 个）")
-                    forced_target = targets[0]
-                self._engine.trigger_action(
-                    cst, action, tag="hook", pool_override=pool_ov, forced_target=forced_target)
-        elif t == "aha_instant":
-            # 额外阿哈时刻（爻光终结技族——21_elation.md §21.4：结算档=模板 amount 槽
-            # 声明（表达式经 _hook_amount 现场求值，同三行之上 pool_override 先例；
-            # 引擎零游戏数值——缺槽编译期炸）、不耗当前池、照授同值好活当赏；
-            # 具有额外回合特性不可插入终结技）
-            self._engine._run_aha_turn(
-                extra_pool=self._hook_amount(eff["amount"], st, payload))
-        elif t == "absorb_modifier":
-            # 按名称吸收可驱散 modifier：逐目标累计层数，资源统一记到 hook 持有者。
-            modifier_name = str(eff["modifier_name"])
-            resource_id = str(eff["resource_id"])
-            absorbed = 0.0
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                for mod in list(t2.all_modifiers()):
-                    if not mod.dispellable or mod.name != modifier_name:
-                        continue
-                    absorbed += max(1.0, float(mod.stacks))
-                    self._engine._remove_modifier(t2, mod.modifier_id, "absorb")
-            if absorbed > 0:
-                self._engine._gain_resource(st, resource_id, absorbed,
-                                              source_id=st.actor.actor_id)
-        elif t == "remove_modifier":
-            # 摘除 modifier（计数器消耗/状态解除族；target 默认 self，支持全体/事件寻址——
-            # 缇宝天赋计数重置、境界易伤联动摘除族；与 05_effects remove_modifier 声明对齐）
-            # filter（$mod 绑定，2026-09-07 落地）：按类摘除（长夜月天赋"驱散控制类 debuff"族）——
-            # 与 modifier_id 至少其一（都写=交集）；命中仅限 dispellable，LIFO 逐个
-            # max_count（2026-09-08 落地）：逐目标截断——命中清单（LIFO 序）只摘前 N 个
-            # （丹恒•腾荒 141404 龙灵"解除我方全体的 1 个负面效果"族首实例）
-            mid = str(eff.get("modifier_id") or "")
-            filt = eff.get("filter")
-            max_count = eff.get("max_count")
-            reason = str(eff.get("reason", "remove"))
-            order = str(eff.get("order", "newest"))
-            if order not in {"newest", "oldest"}:
-                raise ValueError(f"remove_modifier.order 非法：{order!r}")
-            removed_count = 0
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                if not filt:
-                    if mid in t2.modifiers:
-                        removed_count += 1
-                    self._engine._remove_modifier(t2, mid, reason)
-                    continue
-                prepared = self._engine._expr.compile(str(filt), layer="effect")
-                hit: List[str] = []
-                modifiers = list(t2.all_modifiers())
-                if order == "newest":
-                    modifiers = list(reversed(modifiers))
-                for mod in modifiers:
-                    if not mod.dispellable:
-                        continue
-                    if mid and mod.modifier_id != mid:
-                        continue
-                    kind = mod.debuff_kind or ("control" if mod.control_kind else mod.modifier_type)
-                    mod_ns = types.SimpleNamespace(
-                        modifier_id=mod.modifier_id, modifier_type=mod.modifier_type,
-                        debuff_kind=mod.debuff_kind, control_kind=mod.control_kind,
-                        dot_element=mod.dot_element, dispellable=mod.dispellable, kind=kind,
-                        behavior_flags=list(mod.behavior_flags),
-                        prevent_action=mod.prevent_action, name=mod.name, source=mod.source_id)
-                    ctx = self._hook_ctx(st, payload)
-                    ctx["mod"] = mod_ns
-                    if self._engine._expr.evaluate(
-                            prepared, ctx, functions=self._hook_functions(st, payload)):
-                        hit.append(mod.modifier_id)
-                if max_count is not None:
-                    hit = hit[: int(max_count)]
-                for hid in hit:
-                    self._engine._remove_modifier(t2, hid, reason)
-                removed_count += len(hit)
-            if getattr(self, "_chain_last", None) is not None:
-                self._chain_last["removed_count"] = float(removed_count)
-        elif t == "clear_protected_weakness":
-            removed = {str(element) for element in eff["weak_list"]}
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                for mod in t2.all_modifiers():
-                    if mod.protected_weakness:
-                        mod.protected_weakness = [
-                            element for element in mod.protected_weakness if element not in removed]
-        elif t == "clear_attached_weakness":
-            removed = {str(element) for element in eff["weak_list"]}
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                for mod in t2.all_modifiers():
-                    if mod.weakness_add:
-                        mod.weakness_add = [
-                            element for element in mod.weakness_add if element not in removed]
-        elif t == "clear_secret_weakness":
-            removed = {str(element) for element in eff["weak_list"]}
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                for mod in t2.all_modifiers():
-                    if mod.secret_weakness:
-                        mod.secret_weakness = [
-                            element for element in mod.secret_weakness if element not in removed]
-        elif t == "adjust_duration":
-            # 时长 ±N（B9 原语；≠ refresh 重置满值——刃族"延长/缩短持续回合"）：
-            # clamp ≥0，调到 0 即按到期移除（与走字到期同口径 reason=expire）
-            mid = str(eff["modifier_id"])
-            delta = int(self._hook_amount(eff.get("delta", 0), st, payload))
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                m = t2.modifiers.get(mid)
-                if m is None:
-                    continue
-                m.duration = max(0, m.duration + delta)
-                if m.duration == 0:
-                    self._engine._remove_modifier(t2, mid, "expire")
-        elif t == "trigger_dot":
-            # 强制结算目标 DoT（卡芙卡"立即触发持续伤害"族）——不消耗 duration，
-            # on_dot_retrigger 照发（与自然跳伤共用 _settle_one_dot 单漏斗）。
-            # 选择性（缺省全结=旧行为不变）：scope="all"（缺省）/"self"（仅触发者施加的）/
-            # modifier_id（只结指定件）；dot_element 非空按跳伤属性再窄化（AND 叠加——
-            # 卢卡「只引爆裂伤」族首实例；与 modifier 的 dot_element 字段同名对齐）；
-            # ratio=引爆比例（缺省 1.0 全额——「立即产生原伤害 X%」族，表达式通道同
-            # break_damage 先例，引爆值=ratio×正典跳伤值）
-            scope = str(eff.get("scope") or "all")
-            ratio = float(self._hook_amount(eff.get("ratio", 1.0), st, payload))
-            for t2 in self._hook_target_states(eff.get("target", "enemy_first"), st, payload):
-                self._engine._modifiers.trigger_dots(
-                    t2, scope=scope, dot_element=str(eff.get("dot_element") or ""),
-                    ratio=ratio, source_id=st.actor.actor_id)
-        elif t == "trigger_stance_countdown":
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                self._engine.bus.emit("on_stance_countdown", {
-                    "source": st.actor.actor_id, "target": t2.actor.actor_id,
-                    "ignore_mute_break": bool(eff.get("ignore_mute_break", False)),
-                }, self._engine.state)
-        elif t == "trigger_break":
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                if t2.bars_exhausted or (not eff.get("ignore_mute_break", False) and any(
-                        "MuteBreak" in modifier.behavior_flags
-                        for modifier in t2.all_modifiers())):
-                    continue
-                damage_type = str(eff.get("damage_type") or "physical")
-                if damage_type.startswith("$event."):
-                    damage_type = str(self._engine._expr.evaluate(
-                        self._engine._expr.compile(damage_type, layer="effect"),
-                        self._hook_ctx(st, payload),
-                        functions=self._hook_functions(st, payload))).lower()
-                pseudo = Action(
-                    action_id="trigger_break", name="trigger_break", target_type="single",
-                    action_type="skill", damage_type=damage_type)
-                self._engine._trigger_break(st.actor, pseudo, t2)
-        elif t == "reduce_toughness":
-            # 固定削韧（05_effects §reduce_toughness）：不吃效率池；floor>0 只钳下限不击破。
-            for t2 in self._hook_target_states(eff.get("target", "enemy_first"), st, payload):
-                if not self._engine._is_enemy(t2.actor):
-                    continue
-                amount = float(self._hook_amount(eff["amount"], st, payload, target_st=t2))
-                floor = float(self._hook_amount(eff.get("floor", 0), st, payload, target_st=t2))
-                if amount < 0 or floor < 0:
-                    raise ValueError("reduce_toughness 的 amount/floor 必须非负")
-                if t2.bars_exhausted or any(mod.toughness_lock for mod in t2.all_modifiers()):
-                    continue
-                current = float(t2.toughness)
-                actual = min(amount, max(0.0, current - floor))
-                if actual > 0:
-                    t2.toughness = current - actual
-                    self._engine.bus.emit("on_toughness_damage", {
-                        "amount": actual, "source": st.actor.actor_id,
-                        "target": t2.actor.actor_id, "bar_index": t2.bar_index}, self._engine.state)
-                if t2.toughness <= 0 and not t2.bars_exhausted:
-                    pseudo = Action(
-                        action_id="reduce_toughness", name="reduce_toughness",
-                        action_type="skill", damage_type=str(eff.get("damage_type") or "physical"))
-                    self._engine._trigger_break(st.actor, pseudo, t2)
-        elif t == "exit_break_state":
-            for t2 in self._hook_target_states(eff.get("target", "enemy_first"), st, payload):
-                t2.broken = False
-                self._engine.state.log.append(
-                    f"AV{self._engine.state.clock:.1f}: {t2.actor.name} 退出击破状态")
-        elif t == "reset_stance":
-            for t2 in self._hook_target_states(eff.get("target", "enemy_first"), st, payload):
-                t2.bar_index = 0
-                maximum = float(self._engine.pipeline.effective_stats(t2)["max_toughness"])
-                if "amount" not in eff:
-                    t2.toughness = maximum
-                else:
-                    amount = self._hook_amount(eff["amount"], st, payload, target_st=t2)
-                    mode = str(eff.get("mode") or "set")
-                    if mode == "add":
-                        value = t2.toughness + amount
-                    elif mode == "set":
-                        value = amount
-                    else:
-                        raise ValueError(f"reset_stance 的 mode 非法值 {mode!r}")
-                    t2.toughness = min(maximum, max(0.0, value))
-                self._engine.state.log.append(
-                    f"AV{self._engine.state.clock:.1f}: {t2.actor.name} 韧性重置")
-        elif t == "set_targetable":
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                before = {key: bool(t2.actor.summon_flags.get(key, True))
-                          for key in ("enemy_targetable", "ally_targetable")}
-                for key, old in before.items():
-                    if key in eff:
-                        t2.actor.summon_flags[key] = bool(eff[key])
-                current = {key: bool(t2.actor.summon_flags.get(key, True)) for key in before}
-                if any(old and not current[key] for key, old in before.items()):
-                    self._engine.bus.emit("on_unselectable_start", {
-                        "target": t2.actor.actor_id, "source": st.actor.actor_id,
-                        "enemy_targetable": current["enemy_targetable"],
-                        "ally_targetable": current["ally_targetable"],
-                    }, self._engine.state)
-                if any(not old and current[key] for key, old in before.items()):
-                    self._engine.bus.emit("on_unselectable_end", {
-                        "target": t2.actor.actor_id, "source": st.actor.actor_id,
-                        "enemy_targetable": current["enemy_targetable"],
-                        "ally_targetable": current["ally_targetable"],
-                    }, self._engine.state)
-        elif t == "restore_toughness":
-            # 韧性恢复（05_effects §restore_toughness）：与自然恢复同态——回主条、补满、
-            # 追加条保留；未击破时仅补足当前韧性，不另发事件。
-            for t2 in self._hook_target_states(eff.get("target", "enemy_first"), st, payload):
-                t2.broken = False
-                t2.bar_index = 0
-                t2.toughness = float(self._engine.pipeline.effective_stats(t2)["max_toughness"])
-                self._engine.state.log.append(
-                    f"AV{self._engine.state.clock:.1f}: {t2.actor.name} 韧性恢复")
-        elif t == "add_toughness_bar":
-            # 追加韧性条（03_actor §3.10 虚韧性族机制赋予）：运行期追加条（max=amount，
-            # 按加入序承接；恢复不消失——随下次主条破再切入）；
-            # amount **逐目标求值**（target_st 语境——云火昭「等同于各自韧性上限×比例」族
-            # （122504 param×$target.max_toughness），drain_hp 同通道；旧版循环外单算
-            # 无 $target 消费未暴露）
-            for t2 in self._hook_target_states(eff.get("target", "enemy_first"), st, payload):
-                amount = self._hook_amount(eff.get("amount", 0), st, payload, target_st=t2)
-                t2.added_bars.append(amount)
-                self._engine.state.log.append(
-                    f"AV{self._engine.state.clock:.1f}: {t2.actor.name} 被赋予追加韧性条"
-                    f"（{amount:.0f}，第 {len(t2.extra_bars)} 条）")
-        elif t == "break_damage":
-            # 击破伤害执行体（阮梅天赋/残梅绽族）：pipeline.break_damage × ratio（击破公式，非直伤）
-            # 扣血分工：pipeline 纯结算不扣血，本层按 val=值×ratio 一次性扣（恰降 ratio×击破值）；
-            # 绕盾直扣（不走 _absorb_with_shields）= 冻结口径（注记见 _trigger_break docstring）
-            targets = self._hook_target_states(eff.get("target", "enemy_first"), st, payload)
-            if not targets:
-                return
-            element = str(eff.get("element", "physical"))
-            ratio = self._hook_amount(eff.get("ratio", 1.0), st, payload)
+                    f"deal_damage category {category!r} 须配 amount（fixed_value 直写槽）")
+            dealt_true = 0.0
             for t2 in targets:
-                with self._engine._damage_event():  # 每个 hook 击破伤害目标一批（月茧同时致死批处理域）
-                    res = self._engine.pipeline.settle_damage("break", st, t2, element=element)
-                    val = res.value * ratio
-                    t2.current_hp -= val
-                    if val > 0:
-                        # HP 下降发射点（hook 击破伤害；reason='break'，词表冻结见 _execute_action）
+                with self._engine._damage_event():  # 每个 hook 伤害目标一批（月茧同时致死批处理域）
+                    result = self._engine.pipeline.settle_damage("true", st, t2,
+                                                   params={"fixed_value": _base_override(t2)})
+                    dealt_true += float(result.value)
+                    overflow = result.value if ignore_shield else self._engine._absorb_with_shields(
+                    t2, result.value, st.actor.actor_id)
+                    t2.current_hp -= overflow
+                    if overflow > 0:
+                        # HP 下降发射点：真伤保留 damage_type='true'（昔涟结界防递归闸）；
+                        # Atrophy 保留声明元素与源行动类别，供命中域条件按量子/技能识别。
                         self._engine.bus.emit("on_hp_decrease", {
-                            "amount": val, "source": st.actor.actor_id,
-                            "reason": "break", "target": t2.actor.actor_id}, self._engine.state)
-                    self._engine.state.total_damage += val
-                    self._engine.state.damage_by_actor[st.actor.actor_id] += val
+                            "amount": overflow, "source": st.actor.actor_id,
+                            "reason": "hit", "target": t2.actor.actor_id,
+                            "damage_type": ("true" if category == "true" else str(dtype or "")),
+                            "action_type": ("follow_up" if category == "true" else str(
+                                payload.get("action_type") or "skill")),
+                            "is_critical": False}, self._engine.state)
+                    self._engine.state.total_damage += result.value
+                    self._engine.state.damage_by_actor[st.actor.actor_id] += result.value
                     self._engine.state.log.append(
                         f"AV{self._engine.state.clock:.1f}: {st.actor.name} 对 {t2.actor.name} "
-                        f"造成 {val:,.0f} 击破伤害（{str(eff.get('name', 'break'))}）"
-                    )
+                        f"造成 {result.value:,.0f} "
+                        f"{'真实伤害' if category == 'true' else 'Atrophy 伤害'}"
+                        f"（{str(eff.get('name', category))}）")
+                    energy_grant = float(eff.get("energy_grant", 0.0) or 0.0)
+                    grant_action = Action(
+                        action_id=str(payload.get("action_id") or f"hook_{eff.get('name', 'dmg')}"),
+                        name=str(eff.get("name", "hook")), action_type="skill",
+                        target_type="single", damage_type=dtype,
+                        toughness_dmg=int(eff.get("toughness_dmg", 0) or 0),
+                        energy_grant=energy_grant)
+                    if eff.get("toughness_dmg") is not None and self._engine._is_enemy(t2.actor):
+                        self._engine._apply_toughness_damage(st.actor, grant_action, t2)
                     self._engine._check_death(
                         t2, st.actor.actor_id,
                         action_id=str(payload.get("action_id") or ""))
-        elif t == "grant_extra_turn":
-            # target 同其他 hook effect 走统一解析（曾恒授 hook 携带者——1313 拉目标
-            # 变拉自己的雷）；缺省 self = 再现/青雀族原行为不变
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                self._engine.scheduler.grant_extra_turn(t2.actor.actor_id, EXTRA_NORMAL)
-        elif t == "immediate_action":
-            # 立即行动（05_effects §立即行动）：剩余距离置 0 直接到顶（无视推条）——
-            # 产出行动轴上的普通回合（吃回合事件、消耗 buff），星期日/布洛妮娅战技族
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                assert self._engine.scheduler is not None
-                self._engine.scheduler.act_now(t2.actor)
-        elif t == "set_action_delay":
-            if "near_target" in eff:
-                near_targets = self._hook_target_states(eff["near_target"], st, payload)
-                if not near_targets:
-                    return
-                if len(near_targets) != 1:
-                    raise ValueError("set_action_delay 的 near_target 必须恰好一个实体")
-                for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                    assert self._engine.scheduler is not None
-                    self._engine.scheduler.set_action_delay_near(t2.actor, near_targets[0].actor)
-                return
-            pct = self._hook_amount(eff.get("amount", 0), st, payload) / 100.0
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                assert self._engine.scheduler is not None
-                self._engine.scheduler.set_action_delay(t2.actor, pct)
-        elif t == "delay_action":
-            # 行动延后（05_effects §delay_action；amount 为百分数——30 = 延后 30% 行动条）
-            pct = self._hook_amount(eff.get("amount", 0), st, payload) / 100.0
-            apply_chance = self._hook_amount(eff.get("apply_chance", 1.0), st, payload)
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                assert self._engine.scheduler is not None
-                if self._engine._effect_application_succeeded(
-                        st, t2, apply_chance,
-                        modifier_id=str(payload.get("action_id") or "delay_action"), label="行动延后"):
-                    if self._engine._action_delay_change_allowed(
-                            t2, st.actor.actor_id, "increase"):
-                        self._engine.scheduler.delay_action(t2.actor, pct)
-        elif t == "advance_action":
-            # 行动提前（05_effects §advance_action 收编；amount 为百分数——30 = 提前 30% 行动条；
-            # 剩余距离 ≤ 0 时无效（scheduler 内部口径，mechanics 03 钉死）——小伊卡消失拉忆师族）
-            pct = self._hook_amount(eff.get("amount", 0), st, payload) / 100.0
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                assert self._engine.scheduler is not None
-                if self._engine._action_delay_change_allowed(
-                        t2, st.actor.actor_id, "decrease"):
-                    self._engine.scheduler.advance_action(t2.actor, pct)
-        elif t == "set_team_location":
-            position = str(eff["position"])
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                if position in {"first", "last"}:
-                    reference = t2.actor.actor_id
-                else:
-                    refs = self._hook_target_states(eff.get("reference", "self"), st, payload)
-                    if not refs:
-                        continue
-                    if len(refs) != 1:
-                        raise ValueError("编队移动的参照目标必须唯一")
-                    reference = refs[0].actor.actor_id
-                    if reference == t2.actor.actor_id:
-                        continue
-                self._engine._place_relative_owner(
-                    t2.actor.actor_id, reference, position)
-        elif t == "lock_action_delay":
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                key = f"{st.actor.actor_id}:{eff['lock_id']}"
-                if eff.get("locked", True):
-                    source_id = (st.actor.actor_id
-                                 if eff.get("whitelist_source") == "self" else "")
-                    t2.action_delay_locks[key] = {
-                        "source_id": source_id,
-                        "change_type": str(eff.get("whitelist_change_type") or ""),
-                    }
-                else:
-                    t2.action_delay_locks.pop(key, None)
-        elif t == "adjust_stacks":
-            mid = str(eff.get("modifier_id", ""))
-            # target 跨 actor 层写（05_effects §adjust_stacks——昔涟 1141519 风堇施放
-            # 战技/终结技后消耗 1 层「天空」首实例）；目标未持有 = 该目标无效果（不报错）
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                m = t2.modifiers.get(mid)
-                if m is not None:
-                    # clamp [0, max_stack]（05_effects §adjust_stacks）——max_stack=0 的
-                    # 0 层件不再被抬到 1（曾钳 [1, max]：max=0 时下界压上界的退化）
-                    m.stacks = max(0, min(int(m.stacks + self._hook_amount(
-                        eff.get("delta", 0), st, payload, target_st=t2)),
-                        m.max_stack))
-        elif t == "activate_ultimate":
-            # 激活终结技（05_effects §激活终结技 收编——昔涟 141503"激活全体队友的终结技"族）：
-            # 目标终结技立即作为插入行动发动、不耗充能（v1 口径）；缺省 other_allies（"队友"主语）
-            for t2 in self._hook_target_states(eff.get("target", "other_allies"), st, payload):
-                self._engine._activate_ultimate(t2)
-        elif t == "exit_state":
-            # 退出当前形态（17_actor_state §17.6 收编——非倒计时退出条件族（致命/锁血即收、
-            # 玩家选择完毕）的 hook 通道，1510 拓星者首实例）：走 engine.exit_state 单漏斗
-            # （摘标记/境界清理/on_state_change 广播同口径）；无形态时安全空转
-            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                self._engine.exit_state(t2, reason=str(eff.get("reason", "hook")))
+                    if t2.alive and energy_grant > 0:
+                        self._engine._grant_hit_energy(st.actor, grant_action, t2)
+            if getattr(self, "_chain_last", None) is not None:
+                self._chain_last["actual_amount"] = dealt_true   # $last/$prev 前序快照
+            return
+        # 削韧（2026-09-07 收编，05_effects §造成伤害）：toughness_dmg 与 action 层同键
+        # 同语义——缺省 0=不削；同走引擎 _apply_toughness_damage 单漏斗（own_element 默认闸/
+        # 双效率池/击破判定/多韧性条全同口径），逐目标各削（多段=多个 deal_damage 各声明）；
+        # category "true" 互斥由编译期闸拦（真伤无属性不削韧，上方分支不触碰本参）
+        toughness = 0.0
+        if eff.get("toughness_dmg") is not None:
+            toughness = float(self._hook_amount(eff["toughness_dmg"], st, payload))
+        pseudo = Action(
+            action_id=f"hook_{eff.get('name', 'dmg')}", name=str(eff.get("name", "hook")),
+            # 伪行动类别：缺省 follow_up/additional；模板可经 action_type 声明槽改写
+            #（飞霄 1220 终结技子击标 ultimate——"终结技伤害"身份族（E6 穿透
+            # scoped/Formshift 反向族）的挂载点，2026-09-14 接线；
+            # "dot" = DoT 路由——桑博 1108 风化 tick 族 2026-09-22 接线：通用
+            # deal_damage 路径增伤区按 f"{action_type}_dmg_boost" 读 dot_dmg_boost
+            # 桶（「持续伤害提高」），攻击侧池与声明式 DoT 跳伤（settle "dot" 路由）
+            # 增伤合成同口径；
+            # 边界①暴击口径不变——事件承载含期望暴击（R-SV1/R-KF3 在案结构差，
+            # 官方 DoT 不暴击，待迁移声明式通道后统一）；②一次性结算读现值，
+            # 非施加-跳伤模型，快照切分不适用）
+            action_type=str(eff.get("action_type")
+                            or ("additional" if category == "additional" else "follow_up")),
+            target_type="aoe" if len(targets) > 1 else "single",
+            damage_type=dtype, is_indirect=bool(eff.get("is_indirect", False)),
+            damage_tags=[int(tag) for tag in eff.get("damage_tags") or []],
+            damage_custom_name=str(eff.get("damage_custom_name") or ""), scaling=[row],
+            toughness_dmg=toughness,
+            energy_grant=float(eff.get("energy_grant", 0.0) or 0.0),
+            # toughness_scope（黄泉秘技"无视弱点削减全体韧性"族——action 层同键同语义，
+            # 缺省 own_element 默认闸；首个 hook 层实例 130807）
+            toughness_scope=str(eff.get("toughness_scope") or ""),
+        )
+        dealt_total = 0.0
+        # 链内命中序号（after_being_hit seg_index 口径；附加伤害不发不占段——
+        # 03_actor §3.8 tags「不再触发命中类监听」）
+        seg_idx = getattr(self, "_chain_hit_seq", None)
+        for t2 in targets:
+            with self._engine._damage_event():  # 每个 hook 伤害目标一批（月茧同时致死批处理域）
+                was_broken = t2.broken   # 超击破快照：破的那一击本身不触发
+                result = self._engine.pipeline.settle_damage(
+                    "direct", st, t2, action=pseudo,
+                    params={"target_broken": t2.broken, "base_override": _base_override(t2)})
+                wp = self._engine.bus.waterfall("before_take_damage", {
+                    "amount": result.value, "damage_type": dtype,
+                    "source": st.actor.actor_id, "target": t2.actor.actor_id,
+                    "action_id": pseudo.action_id, "action_type": pseudo.action_type,
+                    "is_critical": result.node.get("isCrit", False),
+                    "split": str(eff.get("split") or ""), "is_indirect": pseudo.is_indirect,
+                    "damage_tags": list(pseudo.damage_tags),
+                    "damage_custom_name": pseudo.damage_custom_name,
+                    "block_damage_triggered": any(
+                        mod.block_damage for mod in t2.all_modifiers())}, self._engine.state)
+                if wp.get("cancel"):
+                    continue
+                final_amount = float(wp.get("amount", result.value))
+                dealt_total += final_amount
+                overflow = final_amount if ignore_shield else self._engine._absorb_with_shields(
+                    t2, final_amount, st.actor.actor_id)
+                t2.current_hp -= overflow
+                if overflow > 0:
+                    # HP 下降发射点（hook 附加/追加伤害——受击族；reason='hit'，词表冻结见 _execute_action）
+                    # damage_type 仅 'hit' 族携带（昔涟结界真伤防递归闸同口径）；
+                    # action_type 同族携带=伪行动类别（"指定技能造成的伤害"族过滤——遐蝶 E1）
+                    self._engine.bus.emit("on_hp_decrease", {
+                        "amount": overflow, "source": st.actor.actor_id,
+                        "reason": "hit", "target": t2.actor.actor_id,
+                        "damage_type": str(dtype or ""),
+                        "action_type": pseudo.action_type,
+                        "is_critical": result.node.get("isCrit", False)}, self._engine.state)
+                self._engine.state.total_damage += final_amount
+                self._engine.state.damage_by_actor[st.actor.actor_id] += final_amount
+                self._engine._log(st.actor, pseudo, t2, final_amount, result.node.get("isCrit", False))
+                # 削韧落点与 action 层同位（伤害入账后、死亡检查前——击破致死链同序）
+                if self._engine._is_enemy(t2.actor):
+                    self._engine._apply_toughness_damage(st.actor, pseudo, t2)
+                    self._engine._try_super_break(
+                        st, pseudo, t2, was_broken=was_broken,
+                        source_action_id=str(payload.get("action_id") or ""))
+                self._engine._check_death(
+                    t2, st.actor.actor_id,
+                    action_id=str(payload.get("action_id") or ""))
+                # 与 action 层同序：存活目标逐段受击回能，打盾照回，致死段不回。
+                if t2.alive and pseudo.energy_grant > 0:
+                    self._engine._grant_hit_energy(st.actor, pseudo, t2)
+                if pseudo.action_type != "additional" and result.value > 0:
+                    # after_being_hit 受击链收尾（镜像 action 层 _execute_action 发法——
+                    # 契约单口 engine._emit_after_being_hit）；附加伤害不发（03_actor §3.8 tags）；
+                    # 0 伤害非命中不发——模板「×(条件)」置零=不发惯用法（1308 结爆
+                    # n=0 族）的收尾事件对齐：盾全吸收 result.value>0 照发，置零幻影
+                    # （无扣血无吸收）不算被击中（2026-09-17 组队对拍钓出：黄泉大招
+                    # 返渡/Core 段幻影结爆误触发缇宝境界 7 次）
+                    self._engine._emit_after_being_hit(
+                        amount=float(final_amount), absorbed=float(final_amount) - overflow,
+                        damage_type=dtype, source_id=st.actor.actor_id,
+                        target_id=t2.actor.actor_id,
+                        is_critical=result.node.get("isCrit", False),
+                        seg_index=seg_idx or 0, actor_type=st.actor.actor_type,
+                        action_type=pseudo.action_type,
+                        hit_targets=[t3.actor.actor_id for t3 in targets], action_id=pseudo.action_id,
+                        split=str(eff.get("split") or ""), is_indirect=pseudo.is_indirect,
+                        damage_tags=pseudo.damage_tags,
+                        damage_custom_name=pseudo.damage_custom_name,
+                        block_damage_triggered=bool(wp.get("block_damage_triggered")))
+        if (pseudo.action_type != "additional" and seg_idx is not None
+                and dealt_total > 0):
+            # 链内命中序号只计真发伤的 deal_damage（0 置零幻影不占段——与发射闸同口径）
+            self._chain_hit_seq = (seg_idx or 0) + 1
+        if getattr(self, "_chain_last", None) is not None:
+            self._chain_last["actual_amount"] = dealt_total   # $last/$prev 前序快照
+
+
+    def _h_trigger_action(self, st, eff, payload, updates):
+        aid = str(eff.get("action_id", ""))
+        if aid == "$event.action_id":
+            # 动态行动（奇袭"复制即将施放的战技"族）：行动与施放者都按事件寻址——
+            # 复刻事件方刚施放的行动并由其再放一次（刻律德菈军功持有者的战技复制；
+            # 与静态版的差别：行动属于事件方而非 hook 持有者）
+            src_st = self._engine.state.actors.get(str(payload.get("actor")))
+            action = None
+            if src_st is not None:
+                action = next((a for a in self._engine.actions_by_actor.get(
+                    src_st.actor.actor_id, [])
+                    if a.action_id == str(payload.get("action_id"))), None)
+            if src_st is not None and action is not None:
+                # 奇袭可见性：复制本身要留名——否则日志只有一条无头"插入发动"，
+                # 用户看不出是刻律德菈复制的（前端体验反馈 2026-09-05）
+                self._engine.state.log.append(
+                    f"AV{self._engine.state.clock:.1f}: {st.actor.name} 奇袭复制——"
+                    f"{src_st.actor.name} 再次施放 {action.name}")
+                self._engine.trigger_action(src_st, action, tag="hook")
+            return
+        # v1 跨 actor（开拓者•欢愉终结技代放队友欢愉技族）：caster 缺省 self=
+        # hook 持有者；action_id 在 caster 行动表解析；action_type 按类索引
+        #（各角色欢愉技 id 不同——恰 1 件，0/>1 大声炸不许静默）
+        casters = self._hook_target_states(eff.get("caster", "self"), st, payload)
+        if len(casters) != 1:
+            raise ValueError(
+                f"trigger_action 的 caster 须解析为单一目标（实得 {len(casters)} 个："
+                f"{eff.get('caster', 'self')!r}）——代放执行者不定即语义不定")
+        cst = casters[0]
+        atype = eff.get("action_type")
+        if atype is not None:
+            cands = [a for a in self._engine.actions_by_actor.get(cst.actor.actor_id, [])
+                     if a.action_type == str(atype)]
+            if len(cands) != 1:
+                raise ValueError(
+                    f"trigger_action 按 action_type {atype!r} 在 {cst.actor.name} "
+                    f"行动表恰取 1 件失败（实得 {len(cands)}）——0=无此类行动、"
+                    f">1=选择子歧义，都不许静默")
+            action = cands[0]
         else:
-            # 编译期闸在 build_compiler._compile_hooks（同读 effect_types 单一事实源）；
-            # 走到这里=绕过编译层手写 CompiledHook，同口径炸，不许静默吞
-            raise ValueError(f"未知 effect_type {t!r}，已实现集合见 sim_schema/effect_types.py")
+            action = next((a for a in self._engine.actions_by_actor.get(cst.actor.actor_id, [])
+                           if a.action_id == aid), None)
+        if action is not None:
+            if eff.get("scaling_atk") is not None:
+                # 动态倍率覆写（计数器反击族：倍率随 stacks/资源现场求值，见 05_effects trigger_action）
+                action = replace(
+                    action,
+                    scaling=[{"atk": self._hook_amount(eff["scaling_atk"], st, payload)}],
+                )
+            # pool_override（欢愉代放固定笑点档——欢愉主终结技「固定计入 20 笑点」族，
+            # 05_effects trigger_action；表达式槽现场求值）
+            pool_ov = (self._hook_amount(eff["pool_override"], st, payload)
+                       if eff.get("pool_override") is not None else None)
+            forced_target = None
+            if "target" in eff:
+                # 显式 target = 强制主目标；空候选 = 不代放（递归自然终止），不回落默认目标。
+                targets = self._hook_target_states(eff["target"], st, payload)
+                if not targets:
+                    return
+                if len(targets) != 1:
+                    raise ValueError(
+                        f"trigger_action 的 target 须解析为单一目标（实得 {len(targets)} 个）")
+                forced_target = targets[0]
+            self._engine.trigger_action(
+                cst, action, tag="hook", pool_override=pool_ov, forced_target=forced_target)
+
+
+    def _h_aha_instant(self, st, eff, payload, updates):
+        # 额外阿哈时刻（爻光终结技族——21_elation.md §21.4：结算档=模板 amount 槽
+        # 声明（表达式经 _hook_amount 现场求值，同三行之上 pool_override 先例；
+        # 引擎零游戏数值——缺槽编译期炸）、不耗当前池、照授同值好活当赏；
+        # 具有额外回合特性不可插入终结技）
+        self._engine._run_aha_turn(
+            extra_pool=self._hook_amount(eff["amount"], st, payload))
+
+
+    def _h_absorb_modifier(self, st, eff, payload, updates):
+        # 按名称吸收可驱散 modifier：逐目标累计层数，资源统一记到 hook 持有者。
+        modifier_name = str(eff["modifier_name"])
+        resource_id = str(eff["resource_id"])
+        absorbed = 0.0
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            for mod in list(t2.all_modifiers()):
+                if not mod.dispellable or mod.name != modifier_name:
+                    continue
+                absorbed += max(1.0, float(mod.stacks))
+                self._engine._remove_modifier(t2, mod.modifier_id, "absorb")
+        if absorbed > 0:
+            self._engine._gain_resource(st, resource_id, absorbed,
+                                          source_id=st.actor.actor_id)
+
+
+    def _h_remove_modifier(self, st, eff, payload, updates):
+        # 摘除 modifier（计数器消耗/状态解除族；target 默认 self，支持全体/事件寻址——
+        # 缇宝天赋计数重置、境界易伤联动摘除族；与 05_effects remove_modifier 声明对齐）
+        # filter（$mod 绑定，2026-09-07 落地）：按类摘除（长夜月天赋"驱散控制类 debuff"族）——
+        # 与 modifier_id 至少其一（都写=交集）；命中仅限 dispellable，LIFO 逐个
+        # max_count（2026-09-08 落地）：逐目标截断——命中清单（LIFO 序）只摘前 N 个
+        # （丹恒•腾荒 141404 龙灵"解除我方全体的 1 个负面效果"族首实例）
+        mid = str(eff.get("modifier_id") or "")
+        filt = eff.get("filter")
+        max_count = eff.get("max_count")
+        reason = str(eff.get("reason", "remove"))
+        order = str(eff.get("order", "newest"))
+        if order not in {"newest", "oldest"}:
+            raise ValueError(f"remove_modifier.order 非法：{order!r}")
+        removed_count = 0
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            if not filt:
+                if mid in t2.modifiers:
+                    removed_count += 1
+                self._engine._remove_modifier(t2, mid, reason)
+                continue
+            prepared = self._engine._expr.compile(str(filt), layer="effect")
+            hit: List[str] = []
+            modifiers = list(t2.all_modifiers())
+            if order == "newest":
+                modifiers = list(reversed(modifiers))
+            for mod in modifiers:
+                if not mod.dispellable:
+                    continue
+                if mid and mod.modifier_id != mid:
+                    continue
+                kind = mod.debuff_kind or ("control" if mod.control_kind else mod.modifier_type)
+                mod_ns = types.SimpleNamespace(
+                    modifier_id=mod.modifier_id, modifier_type=mod.modifier_type,
+                    debuff_kind=mod.debuff_kind, control_kind=mod.control_kind,
+                    dot_element=mod.dot_element, dispellable=mod.dispellable, kind=kind,
+                    behavior_flags=list(mod.behavior_flags),
+                    prevent_action=mod.prevent_action, name=mod.name, source=mod.source_id)
+                ctx = self._hook_ctx(st, payload)
+                ctx["mod"] = mod_ns
+                if self._engine._expr.evaluate(
+                        prepared, ctx, functions=self._hook_functions(st, payload)):
+                    hit.append(mod.modifier_id)
+            if max_count is not None:
+                hit = hit[: int(max_count)]
+            for hid in hit:
+                self._engine._remove_modifier(t2, hid, reason)
+            removed_count += len(hit)
+        if getattr(self, "_chain_last", None) is not None:
+            self._chain_last["removed_count"] = float(removed_count)
+
+
+    def _h_clear_protected_weakness(self, st, eff, payload, updates):
+        removed = {str(element) for element in eff["weak_list"]}
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            for mod in t2.all_modifiers():
+                if mod.protected_weakness:
+                    mod.protected_weakness = [
+                        element for element in mod.protected_weakness if element not in removed]
+
+
+    def _h_clear_attached_weakness(self, st, eff, payload, updates):
+        removed = {str(element) for element in eff["weak_list"]}
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            for mod in t2.all_modifiers():
+                if mod.weakness_add:
+                    mod.weakness_add = [
+                        element for element in mod.weakness_add if element not in removed]
+
+
+    def _h_clear_secret_weakness(self, st, eff, payload, updates):
+        removed = {str(element) for element in eff["weak_list"]}
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            for mod in t2.all_modifiers():
+                if mod.secret_weakness:
+                    mod.secret_weakness = [
+                        element for element in mod.secret_weakness if element not in removed]
+
+
+    def _h_adjust_duration(self, st, eff, payload, updates):
+        # 时长 ±N（B9 原语；≠ refresh 重置满值——刃族"延长/缩短持续回合"）：
+        # clamp ≥0，调到 0 即按到期移除（与走字到期同口径 reason=expire）
+        mid = str(eff["modifier_id"])
+        delta = int(self._hook_amount(eff.get("delta", 0), st, payload))
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            m = t2.modifiers.get(mid)
+            if m is None:
+                continue
+            m.duration = max(0, m.duration + delta)
+            if m.duration == 0:
+                self._engine._remove_modifier(t2, mid, "expire")
+
+
+    def _h_trigger_dot(self, st, eff, payload, updates):
+        # 强制结算目标 DoT（卡芙卡"立即触发持续伤害"族）——不消耗 duration，
+        # on_dot_retrigger 照发（与自然跳伤共用 _settle_one_dot 单漏斗）。
+        # 选择性（缺省全结=旧行为不变）：scope="all"（缺省）/"self"（仅触发者施加的）/
+        # modifier_id（只结指定件）；dot_element 非空按跳伤属性再窄化（AND 叠加——
+        # 卢卡「只引爆裂伤」族首实例；与 modifier 的 dot_element 字段同名对齐）；
+        # ratio=引爆比例（缺省 1.0 全额——「立即产生原伤害 X%」族，表达式通道同
+        # break_damage 先例，引爆值=ratio×正典跳伤值）
+        scope = str(eff.get("scope") or "all")
+        ratio = float(self._hook_amount(eff.get("ratio", 1.0), st, payload))
+        for t2 in self._hook_target_states(eff.get("target", "enemy_first"), st, payload):
+            self._engine._modifiers.trigger_dots(
+                t2, scope=scope, dot_element=str(eff.get("dot_element") or ""),
+                ratio=ratio, source_id=st.actor.actor_id)
+
+
+    def _h_trigger_stance_countdown(self, st, eff, payload, updates):
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            self._engine.bus.emit("on_stance_countdown", {
+                "source": st.actor.actor_id, "target": t2.actor.actor_id,
+                "ignore_mute_break": bool(eff.get("ignore_mute_break", False)),
+            }, self._engine.state)
+
+
+    def _h_trigger_break(self, st, eff, payload, updates):
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            if t2.bars_exhausted or (not eff.get("ignore_mute_break", False) and any(
+                    "MuteBreak" in modifier.behavior_flags
+                    for modifier in t2.all_modifiers())):
+                continue
+            damage_type = str(eff.get("damage_type") or "physical")
+            if damage_type.startswith("$event."):
+                damage_type = str(self._engine._expr.evaluate(
+                    self._engine._expr.compile(damage_type, layer="effect"),
+                    self._hook_ctx(st, payload),
+                    functions=self._hook_functions(st, payload))).lower()
+            pseudo = Action(
+                action_id="trigger_break", name="trigger_break", target_type="single",
+                action_type="skill", damage_type=damage_type)
+            self._engine._trigger_break(st.actor, pseudo, t2)
+
+
+    def _h_reduce_toughness(self, st, eff, payload, updates):
+        # 固定削韧（05_effects §reduce_toughness）：不吃效率池；floor>0 只钳下限不击破。
+        for t2 in self._hook_target_states(eff.get("target", "enemy_first"), st, payload):
+            if not self._engine._is_enemy(t2.actor):
+                continue
+            amount = float(self._hook_amount(eff["amount"], st, payload, target_st=t2))
+            floor = float(self._hook_amount(eff.get("floor", 0), st, payload, target_st=t2))
+            if amount < 0 or floor < 0:
+                raise ValueError("reduce_toughness 的 amount/floor 必须非负")
+            if t2.bars_exhausted or any(mod.toughness_lock for mod in t2.all_modifiers()):
+                continue
+            current = float(t2.toughness)
+            actual = min(amount, max(0.0, current - floor))
+            if actual > 0:
+                t2.toughness = current - actual
+                self._engine.bus.emit("on_toughness_damage", {
+                    "amount": actual, "source": st.actor.actor_id,
+                    "target": t2.actor.actor_id, "bar_index": t2.bar_index}, self._engine.state)
+            if t2.toughness <= 0 and not t2.bars_exhausted:
+                pseudo = Action(
+                    action_id="reduce_toughness", name="reduce_toughness",
+                    action_type="skill", damage_type=str(eff.get("damage_type") or "physical"))
+                self._engine._trigger_break(st.actor, pseudo, t2)
+
+
+    def _h_exit_break_state(self, st, eff, payload, updates):
+        for t2 in self._hook_target_states(eff.get("target", "enemy_first"), st, payload):
+            t2.broken = False
+            self._engine.state.log.append(
+                f"AV{self._engine.state.clock:.1f}: {t2.actor.name} 退出击破状态")
+
+
+    def _h_reset_stance(self, st, eff, payload, updates):
+        for t2 in self._hook_target_states(eff.get("target", "enemy_first"), st, payload):
+            t2.bar_index = 0
+            maximum = float(self._engine.pipeline.effective_stats(t2)["max_toughness"])
+            if "amount" not in eff:
+                t2.toughness = maximum
+            else:
+                amount = self._hook_amount(eff["amount"], st, payload, target_st=t2)
+                mode = str(eff.get("mode") or "set")
+                if mode == "add":
+                    value = t2.toughness + amount
+                elif mode == "set":
+                    value = amount
+                else:
+                    raise ValueError(f"reset_stance 的 mode 非法值 {mode!r}")
+                t2.toughness = min(maximum, max(0.0, value))
+            self._engine.state.log.append(
+                f"AV{self._engine.state.clock:.1f}: {t2.actor.name} 韧性重置")
+
+
+    def _h_set_targetable(self, st, eff, payload, updates):
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            before = {key: bool(t2.actor.summon_flags.get(key, True))
+                      for key in ("enemy_targetable", "ally_targetable")}
+            for key, old in before.items():
+                if key in eff:
+                    t2.actor.summon_flags[key] = bool(eff[key])
+            current = {key: bool(t2.actor.summon_flags.get(key, True)) for key in before}
+            if any(old and not current[key] for key, old in before.items()):
+                self._engine.bus.emit("on_unselectable_start", {
+                    "target": t2.actor.actor_id, "source": st.actor.actor_id,
+                    "enemy_targetable": current["enemy_targetable"],
+                    "ally_targetable": current["ally_targetable"],
+                }, self._engine.state)
+            if any(not old and current[key] for key, old in before.items()):
+                self._engine.bus.emit("on_unselectable_end", {
+                    "target": t2.actor.actor_id, "source": st.actor.actor_id,
+                    "enemy_targetable": current["enemy_targetable"],
+                    "ally_targetable": current["ally_targetable"],
+                }, self._engine.state)
+
+
+    def _h_restore_toughness(self, st, eff, payload, updates):
+        # 韧性恢复（05_effects §restore_toughness）：与自然恢复同态——回主条、补满、
+        # 追加条保留；未击破时仅补足当前韧性，不另发事件。
+        for t2 in self._hook_target_states(eff.get("target", "enemy_first"), st, payload):
+            t2.broken = False
+            t2.bar_index = 0
+            t2.toughness = float(self._engine.pipeline.effective_stats(t2)["max_toughness"])
+            self._engine.state.log.append(
+                f"AV{self._engine.state.clock:.1f}: {t2.actor.name} 韧性恢复")
+
+
+    def _h_add_toughness_bar(self, st, eff, payload, updates):
+        # 追加韧性条（03_actor §3.10 虚韧性族机制赋予）：运行期追加条（max=amount，
+        # 按加入序承接；恢复不消失——随下次主条破再切入）；
+        # amount **逐目标求值**（target_st 语境——云火昭「等同于各自韧性上限×比例」族
+        # （122504 param×$target.max_toughness），drain_hp 同通道；旧版循环外单算
+        # 无 $target 消费未暴露）
+        for t2 in self._hook_target_states(eff.get("target", "enemy_first"), st, payload):
+            amount = self._hook_amount(eff.get("amount", 0), st, payload, target_st=t2)
+            t2.added_bars.append(amount)
+            self._engine.state.log.append(
+                f"AV{self._engine.state.clock:.1f}: {t2.actor.name} 被赋予追加韧性条"
+                f"（{amount:.0f}，第 {len(t2.extra_bars)} 条）")
+
+
+    def _h_break_damage(self, st, eff, payload, updates):
+        # 击破伤害执行体（阮梅天赋/残梅绽族）：pipeline.break_damage × ratio（击破公式，非直伤）
+        # 扣血分工：pipeline 纯结算不扣血，本层按 val=值×ratio 一次性扣（恰降 ratio×击破值）；
+        # 绕盾直扣（不走 _absorb_with_shields）= 冻结口径（注记见 _trigger_break docstring）
+        targets = self._hook_target_states(eff.get("target", "enemy_first"), st, payload)
+        if not targets:
+            return
+        element = str(eff.get("element", "physical"))
+        ratio = self._hook_amount(eff.get("ratio", 1.0), st, payload)
+        for t2 in targets:
+            with self._engine._damage_event():  # 每个 hook 击破伤害目标一批（月茧同时致死批处理域）
+                res = self._engine.pipeline.settle_damage("break", st, t2, element=element)
+                val = res.value * ratio
+                t2.current_hp -= val
+                if val > 0:
+                    # HP 下降发射点（hook 击破伤害；reason='break'，词表冻结见 _execute_action）
+                    self._engine.bus.emit("on_hp_decrease", {
+                        "amount": val, "source": st.actor.actor_id,
+                        "reason": "break", "target": t2.actor.actor_id}, self._engine.state)
+                self._engine.state.total_damage += val
+                self._engine.state.damage_by_actor[st.actor.actor_id] += val
+                self._engine.state.log.append(
+                    f"AV{self._engine.state.clock:.1f}: {st.actor.name} 对 {t2.actor.name} "
+                    f"造成 {val:,.0f} 击破伤害（{str(eff.get('name', 'break'))}）"
+                )
+                self._engine._check_death(
+                    t2, st.actor.actor_id,
+                    action_id=str(payload.get("action_id") or ""))
+
+
+    def _h_grant_extra_turn(self, st, eff, payload, updates):
+        # target 同其他 hook effect 走统一解析（曾恒授 hook 携带者——1313 拉目标
+        # 变拉自己的雷）；缺省 self = 再现/青雀族原行为不变
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            self._engine.scheduler.grant_extra_turn(t2.actor.actor_id, EXTRA_NORMAL)
+
+
+    def _h_immediate_action(self, st, eff, payload, updates):
+        # 立即行动（05_effects §立即行动）：剩余距离置 0 直接到顶（无视推条）——
+        # 产出行动轴上的普通回合（吃回合事件、消耗 buff），星期日/布洛妮娅战技族
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            assert self._engine.scheduler is not None
+            self._engine.scheduler.act_now(t2.actor)
+
+
+    def _h_set_action_delay(self, st, eff, payload, updates):
+        if "near_target" in eff:
+            near_targets = self._hook_target_states(eff["near_target"], st, payload)
+            if not near_targets:
+                return
+            if len(near_targets) != 1:
+                raise ValueError("set_action_delay 的 near_target 必须恰好一个实体")
+            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+                assert self._engine.scheduler is not None
+                self._engine.scheduler.set_action_delay_near(t2.actor, near_targets[0].actor)
+            return
+        pct = self._hook_amount(eff.get("amount", 0), st, payload) / 100.0
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            assert self._engine.scheduler is not None
+            self._engine.scheduler.set_action_delay(t2.actor, pct)
+
+
+    def _h_delay_action(self, st, eff, payload, updates):
+        # 行动延后（05_effects §delay_action；amount 为百分数——30 = 延后 30% 行动条）
+        pct = self._hook_amount(eff.get("amount", 0), st, payload) / 100.0
+        apply_chance = self._hook_amount(eff.get("apply_chance", 1.0), st, payload)
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            assert self._engine.scheduler is not None
+            if self._engine._effect_application_succeeded(
+                    st, t2, apply_chance,
+                    modifier_id=str(payload.get("action_id") or "delay_action"), label="行动延后"):
+                if self._engine._action_delay_change_allowed(
+                        t2, st.actor.actor_id, "increase"):
+                    self._engine.scheduler.delay_action(t2.actor, pct)
+
+
+    def _h_advance_action(self, st, eff, payload, updates):
+        # 行动提前（05_effects §advance_action 收编；amount 为百分数——30 = 提前 30% 行动条；
+        # 剩余距离 ≤ 0 时无效（scheduler 内部口径，mechanics 03 钉死）——小伊卡消失拉忆师族）
+        pct = self._hook_amount(eff.get("amount", 0), st, payload) / 100.0
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            assert self._engine.scheduler is not None
+            if self._engine._action_delay_change_allowed(
+                    t2, st.actor.actor_id, "decrease"):
+                self._engine.scheduler.advance_action(t2.actor, pct)
+
+
+    def _h_set_team_location(self, st, eff, payload, updates):
+        position = str(eff["position"])
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            if position in {"first", "last"}:
+                reference = t2.actor.actor_id
+            else:
+                refs = self._hook_target_states(eff.get("reference", "self"), st, payload)
+                if not refs:
+                    continue
+                if len(refs) != 1:
+                    raise ValueError("编队移动的参照目标必须唯一")
+                reference = refs[0].actor.actor_id
+                if reference == t2.actor.actor_id:
+                    continue
+            self._engine._place_relative_owner(
+                t2.actor.actor_id, reference, position)
+
+
+    def _h_lock_action_delay(self, st, eff, payload, updates):
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            key = f"{st.actor.actor_id}:{eff['lock_id']}"
+            if eff.get("locked", True):
+                source_id = (st.actor.actor_id
+                             if eff.get("whitelist_source") == "self" else "")
+                t2.action_delay_locks[key] = {
+                    "source_id": source_id,
+                    "change_type": str(eff.get("whitelist_change_type") or ""),
+                }
+            else:
+                t2.action_delay_locks.pop(key, None)
+
+
+    def _h_adjust_stacks(self, st, eff, payload, updates):
+        mid = str(eff.get("modifier_id", ""))
+        # target 跨 actor 层写（05_effects §adjust_stacks——昔涟 1141519 风堇施放
+        # 战技/终结技后消耗 1 层「天空」首实例）；目标未持有 = 该目标无效果（不报错）
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            m = t2.modifiers.get(mid)
+            if m is not None:
+                # clamp [0, max_stack]（05_effects §adjust_stacks）——max_stack=0 的
+                # 0 层件不再被抬到 1（曾钳 [1, max]：max=0 时下界压上界的退化）
+                m.stacks = max(0, min(int(m.stacks + self._hook_amount(
+                    eff.get("delta", 0), st, payload, target_st=t2)),
+                    m.max_stack))
+
+
+    def _h_activate_ultimate(self, st, eff, payload, updates):
+        # 激活终结技（05_effects §激活终结技 收编——昔涟 141503"激活全体队友的终结技"族）：
+        # 目标终结技立即作为插入行动发动、不耗充能（v1 口径）；缺省 other_allies（"队友"主语）
+        for t2 in self._hook_target_states(eff.get("target", "other_allies"), st, payload):
+            self._engine._activate_ultimate(t2)
+
+
+    def _h_exit_state(self, st, eff, payload, updates):
+        # 退出当前形态（17_actor_state §17.6 收编——非倒计时退出条件族（致命/锁血即收、
+        # 玩家选择完毕）的 hook 通道，1510 拓星者首实例）：走 engine.exit_state 单漏斗
+        # （摘标记/境界清理/on_state_change 广播同口径）；无形态时安全空转
+        for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+            self._engine.exit_state(t2, reason=str(eff.get("reason", "hook")))
+
