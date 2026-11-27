@@ -1335,10 +1335,11 @@ class CombatEngine:
             "max_hit_split_count": max_hit_split_count}, self.state)
 
     def _check_death(self, target: ActorState, source_id: str = "", *, action_id: str = "") -> None:
-        """死亡检查：锁血 → 月茧 → 复活 → 真死（受击链末段四层分工）.
+        """死亡检查：allow_negative_hp 前置放行 → 锁血 → 月茧 → 复活 → 真死（受击链末段分工，条目自枚举）.
 
         与免死（before_take_damage waterfall cancel 伤害本身，test_death_immunity）的分工：
         - 免死：伤害根本不落账（cancel；140805"受到致命攻击不死"族）
+        - allow_negative_hp（modifier 旗标）：允许 HP 为负，直接放行不做死亡检查（前置闸）
         - 锁血（modifier.hp_lock）：伤害照算，HP 钳 1 不死（发 on_hp_lock——
           "无法被继续削减生命值"族挂载点，遐蝶 1407102 死龙半支）
         - 月茧（modifier.moon_cocoon 授予件 + state.moon_cocoon_used 战斗级次数）：
@@ -1347,7 +1348,7 @@ class CombatEngine:
           **全队每场共用 1 次**；同一伤害事件内多人同时致死 → 一次全部进茧；
           之后（含茧中人自己）再受致命击 → 直接真死（茧中不再保 1 血，无"延迟倒下"）
         - 复活（modifier.revive_percent）：HP 归零后消费复活件，按生命上限百分比回拉（发 on_revive）
-        - 真死：四层全放行 → before_actor_exit（alive=False 之前——生前结算族挂载点，
+        - 真死：各前置层全放行 → before_actor_exit（alive=False 之前——生前结算族挂载点，
           与 dismiss 漏斗同一事件；召唤物被打死由本发射点覆盖）→ alive=False →
           来源件生命周期摘除（remove_on_source_death 旗标件全场扫描，04_modifier §4.15）
           → actor_exit（死亡后清理族挂载点）
@@ -1401,7 +1402,7 @@ class CombatEngine:
             self.state.log.append(
                 f"AV{self.state.clock:.1f}: {target.actor.name} 触发复活，HP 回复至 {target.current_hp:,.0f}")
             return
-        # 真死定论（锁血/月茧/复活三层均已放行）——before_actor_exit 在 alive=False 之前
+        # 真死定论（锁血/月茧/复活均已放行）——before_actor_exit 在 alive=False 之前
         # 发射：持有者在世（alive 闸不挡），「死亡时」生前结算族挂载点；与 dismiss 漏斗
         # 同一事件（payload actor/reason 同 actor_exit——召唤物被打死不过 dismiss 漏斗，
         # 由本发射点盖「被打死」消失原因，2026-09-17 时序扶正）
