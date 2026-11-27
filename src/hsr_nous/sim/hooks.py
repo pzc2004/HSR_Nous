@@ -1082,6 +1082,11 @@ class HookRuntime:
             st2 = _resolve(target)
             if st2 is None:
                 return 0.0
+            # battle_event 实体天然不可选（不进普通目标池，pool:'unselectable' 按
+            # actor_type 含它）——与池口径一致；创建时未设 summon_flags（默认 True），
+            # 只读 flags 会误判可选（与池矛盾）
+            if st2.actor.actor_type == "battle_event":
+                return 1.0
             flags = st2.actor.summon_flags
             if side == "dark":
                 return float(not flags.get("enemy_targetable", True))

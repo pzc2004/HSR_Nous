@@ -185,6 +185,19 @@ class TestHookAlgebraDirect:
         assert funcs["target_lists_intersect"](spec, {"pool": "enemies", "take": 1}) == 1.0
         assert funcs["target_lists_intersect"]({"pool": "allies"}, {"pool": "enemies"}) == 0.0
 
+    def test_target_unselectable_battle_event_matches_pool(self):
+        """battle_event 实体：target_unselectable 谓词与 pool:'unselectable' 口径一致
+        （旧谓词读 summon_flags 默认 True 返回 0，池按 actor_type 含它 → 矛盾）。"""
+        eng = _mk_engine()
+        hero = eng.state.actors["hero"]
+        eng._hooks._run_hook_effect(hero, {
+            "effect_type": "create_battle_event", "event_id": 60001, "team": ""}, {})
+        ev = eng.battle_events[60001]["actor_state"]
+        funcs = eng._hooks._hook_functions(hero, {})
+        assert funcs["target_unselectable"](ev.actor.actor_id) == 1.0
+        pool = eng._hooks._hook_target_states({"pool": "unselectable"}, hero, {})
+        assert ev in pool, "池含 battle_event，谓词须同判不可选"
+
     def test_take_int_random_targets(self):
         """实例垫底（敌方 "Deals … to 3 random targets"）：take 3 + mode random——
         roll 同 seed 复现；expected 按序取前 N 不掷骰（确定化口径）."""
