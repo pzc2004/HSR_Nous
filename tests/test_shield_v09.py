@@ -79,6 +79,18 @@ class TestModifyShieldBreakF12:
         assert [p["shield_id"] for p in broken] == ["SH_X"]
 
 
+class TestTeamShieldPseudoF11:
+    def test_pseudo_entity_not_absorb_light_team_shield(self):
+        """F11：$dark_team 等伪实体非我方成员，打它不应吸我方队伍盾."""
+        eng = _engine()
+        team = eng._team_entity_state("TeamLight")
+        eng._apply_modifier_spec(team, _shield_spec("TEAM_SH", 500.0), team)
+        dark = eng._pseudo_entity_state("$dark_team")
+        overflow = eng._modifiers._absorb_with_shields(dark, 100.0, "e")
+        assert overflow == 100.0, "伪实体全额本体承伤，不吸我方队伍盾"
+        assert team.shields[0].remaining == 500.0, "我方队伍盾纹丝不动"
+
+
 class TestShieldAbsorb:
     def test_parallel_absorb_high_shield_survives(self):
         """两盾同时扣全额；低盾破高盾留，本体不掉血."""

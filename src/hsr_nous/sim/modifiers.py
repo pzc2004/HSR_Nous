@@ -571,8 +571,11 @@ class ModifierBook:
         成员按获得先后 FIFO 逐扣（独立实例 = 单成员单元，逐比特退化为旧语义）。
         """
         shield_owners = [(target, shield) for shield in target.shields]
+        # F11：队伍盾只辐射真实我方战斗员；伪实体（$dark_team/$battle_event/$level，
+        # actor_id 带 $ 前缀）非敌方但不是我方可吸盾成员，二分敌我会误吸——显式排除
         team = (self._engine._light_team_state_obj
-                if not self._engine._is_enemy(target.actor) else None)
+                if not self._engine._is_enemy(target.actor)
+                and not str(target.actor.actor_id).startswith("$") else None)
         if team is not None and team is not target:
             shield_owners.extend((team, shield) for shield in team.shields)
         if amount <= 0 or not shield_owners:
