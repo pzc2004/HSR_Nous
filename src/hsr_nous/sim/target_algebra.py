@@ -161,7 +161,9 @@ def resolve_pool(spec: Any, *, engine: Any, st: Any, payload: Dict[str, Any],
         return [target] if target is not None else []
     if isinstance(spec, str) and spec.startswith("$event."):
         if spec in ("$event.targets", "$event.hit_targets"):
-            return [s for s in (engine.state.actors.get(str(i))
+            # battle_event 实体不进 state.actors，须回落 battle_event_actor（与其他
+            # $event 字段分支同口径）——旧只查 state.actors 丢 $battle_event:* 目标
+            return [s for s in (engine.state.actors.get(str(i)) or battle_event_actor(engine, i)
                                 for i in payload.get(spec.split(".", 1)[1]) or [])
                     if s is not None and (include_dead or s.alive)]
         aid = payload.get(spec.split(".", 1)[1])

@@ -307,9 +307,13 @@ class HookRuntime:
         # （施加者——昔涟"标记消耗后回源追忆"族；source 由发射点供给/实例反查兜底）/
         # stacks / duration / max_stacks（注意复数 max_stacks，映射 modifier.max_stack 字段）
         if "modifier_id" in payload:
+            from hsr_nous.sim.target_algebra import battle_event_actor
             target_id = str(payload.get("target", st.actor.actor_id))
+            # battle_event 实体不进 state.actors/伪实体表，须回落 battle_event_actor——
+            # 旧查不到 → modifier 实例 None，$modifier.stacks 等恒 0（与 stacks() 分叉）
             t_st = (self._engine.state.actors.get(target_id)
-                    or self._engine._pseudo_entity_state(target_id))
+                    or self._engine._pseudo_entity_state(target_id)
+                    or battle_event_actor(self._engine, target_id))
             m = t_st.modifiers.get(str(payload["modifier_id"])) if t_st else None
             src = payload.get("source", "")
             if not src:

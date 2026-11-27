@@ -147,6 +147,32 @@ class TestHookAlgebraDirect:
         other = eng.state.actors["e2"]
         assert eng._hooks._hook_target_states(spec, other, {}) == [], "私有绑定不串他人"
 
+    def test_event_targets_includes_battle_event(self):
+        """battle_event 实体不进 state.actors，$event.targets/hit_targets 须回落
+        battle_event_actor（旧只查 state.actors 丢 $battle_event:* 目标）。"""
+        eng = _mk_engine()
+        hero = eng.state.actors["hero"]
+        eng._hooks._run_hook_effect(hero, {
+            "effect_type": "create_battle_event", "event_id": 60001, "team": ""}, {})
+        ev = eng.battle_events[60001]["actor_state"]
+        for field in ("targets", "hit_targets"):
+            resolved = eng._hooks._hook_target_states(
+                f"$event.{field}", hero, {field: [ev.actor.actor_id]})
+            assert [s.actor.actor_id for s in resolved] == [ev.actor.actor_id], field
+
+    def test_modifier_namespace_battle_event_stacks(self):
+        """$modifier 命名空间对 battle_event 目标须读其实例（旧查不到 → stacks 恒 0，
+        与 stacks() 函数分叉）。"""
+        eng = _mk_engine()
+        hero = eng.state.actors["hero"]
+        eng._hooks._run_hook_effect(hero, {
+            "effect_type": "create_battle_event", "event_id": 60001, "team": ""}, {})
+        ev = eng.battle_events[60001]["actor_state"]
+        eng._apply_modifier(ev, Modifier(
+            modifier_id="m", name="m", modifier_type="debuff", duration=0, stacks=2))
+        ctx = eng._hooks._hook_ctx(hero, {"modifier_id": "m", "target": ev.actor.actor_id})
+        assert ctx["modifier"].stacks == 2, "battle_event 目标的 $modifier.stacks 须读实例"
+
     def test_take_int_random_targets(self):
         """实例垫底（敌方 "Deals … to 3 random targets"）：take 3 + mode random——
         roll 同 seed 复现；expected 按序取前 N 不掷骰（确定化口径）."""
