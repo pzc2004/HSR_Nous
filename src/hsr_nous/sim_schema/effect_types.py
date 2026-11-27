@@ -17,6 +17,7 @@ ENGINE_EFFECT_TYPES = frozenset({
     "barrage_damage",    # 右侧优先的连续攻击；重复目标追加 repeat_scaling_atk 段
     "random_choice",     # options 中随机执行一个 effect（expected 取首项）
     "break_damage",      # 击破伤害（通用 settle "break" 路由 × ratio）
+    "trigger_break",     # 触发完整击破链（复用 _trigger_break；damage_type + ignore_mute_break 尊重 MuteBreak）
     "trigger_dot",       # 强制结算目标 DoT（卡芙卡族；不消耗 duration，on_dot_retrigger 照发；
                          # scope="all"（缺省全结）/"self"/modifier_id + dot_element 属性窄化可选；
                          # ratio=引爆比例（缺省 1.0——「立即产生原伤害 X%」族，卢卡 111104 首实例））
@@ -62,6 +63,7 @@ ENGINE_EFFECT_TYPES = frozenset({
                          # 发 on_hp_decrease reason='drain'，不触发伤害类 hook——遐蝶耗血族）
     "summon",            # 召唤物入场（summon_id 或 summon_id_source+summon_variants → 布场+上行动条+actor_enter；12_summon）
     "dismiss_summon",    # 召唤物离场（summon_id → actor_exit reason=dismiss）
+    "remove_shield",     # 清空目标全部护盾（target 选择器；shields.clear()——RemoveShield 节点收编）
     "leave_battle",      # 非击杀离场/逃跑（actor_exit reason=flee，不发 on_kill）
     "grant_extra_turn",  # 授予额外回合
     "immediate_action",  # 立即行动（剩余距离置 0 到顶，无视推条；普通回合口径）

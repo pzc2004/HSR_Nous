@@ -135,6 +135,7 @@ hooks:
 | `heal` / `summon` / `dismiss_summon` / `trigger_dot` / `adjust_duration` / `add_toughness_bar` / `restore_toughness` / `exit_break_state` / `reset_stance` / `reduce_toughness` | **已实现**（hook 通道——2026-09 收编：heal=任意目标治疗；summon/dismiss=召唤物入离场；trigger_dot=强制结算目标 DoT 不耗 duration（scope/dot_element 选择性过滤 + ratio 引爆比例可选，缺省全结全额）；adjust_duration=时长 ±N ≠ refresh；add_toughness_bar=追加韧性条（虚韧性族，`03_actor.md` §3.10 条序模型）；restore_toughness=恢复韧性并解除击破态；exit_break_state=仅解击破态；reset_stance=仅重置韧性；reduce_toughness=固定削韧并支持 floor 保底） |
 | `trigger_stance_countdown` | **已实现**（hook 通道——逐目标发射 `on_stance_countdown`，载荷 `source` / `target` / `ignore_mute_break`；只发事件，不直接改韧性或击破状态） |
 | `trigger_break` | **已实现**（hook 通道——复用引擎 `_trigger_break`，逐目标执行完整击破链；已条尽目标跳过以防重入；`damage_type` 可用事件元素表达式；`ignore_mute_break=false` 时尊重目标 MuteBreak 行为旗标） |
+| `remove_shield` | **已实现**（hook 通道——清空目标全部护盾，`target` 选择器，`shields.clear()`；RemoveShield 节点收编） |
 | `leave_battle` | **已实现**（hook 通道——非击杀离场/逃跑，`actor_exit` 默认 `reason: "flee"`，不走死亡检查、不发 `on_kill`） |
 | `clear_protected_weakness` | **已实现**（hook 通道——按 `weak_list` 清除 Protected 元素保护，保留承载其他效果的 modifier；全七保护同时解除原全韧性锁件） |
 | `clear_attached_weakness` | **已实现**（hook 通道——按 `weak_list` 从各 modifier 的 `weakness_add` 撤销附加弱点，不动 Protected、Secret 或基底弱点） |

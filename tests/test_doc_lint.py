@@ -202,6 +202,25 @@ def test_effect_type_usage_in_inventory():
     assert not bad, "\n".join(sorted(set(bad)))
 
 
+def test_effect_types_mirror_implementation():
+    """G4 实现↔登记派生闸：ENGINE_EFFECT_TYPES == hooks.py 分派分支集（双向）。
+
+    effect_types.py 头注「与 _run_hook_effect 分支一一对应」是可机械派生的断言，
+    不该只靠口头约定。实现了未登记→编译器拒（F15 remove_shield/trigger_break
+    四件套漏件，已复发）；登记了无实现→静默空转。集合从源现算，零维护。
+    """
+    from hsr_nous.sim_schema.effect_types import ENGINE_EFFECT_TYPES
+    src = (ROOT / "src" / "hsr_nous" / "sim" / "hooks.py").read_text(encoding="utf-8")
+    # 词边界前缀锚必须带：否则 phase_event == "..." 会被误当分派分支
+    impl = set(re.findall(r'(?:elif|if)\s+t == "([a-z_]+)"', src))
+    # 分派前置处理（once_per_battle 是 latch，在 inner 提前消费）
+    impl |= set(re.findall(r'eff\.get\("effect_type"\) == "([a-z_]+)"', src))
+    assert not (impl - ENGINE_EFFECT_TYPES), (
+        f"实现了但未登记（编译器会拒）: {sorted(impl - ENGINE_EFFECT_TYPES)}")
+    assert not (ENGINE_EFFECT_TYPES - impl), (
+        f"登记了但无实现（静默空转）: {sorted(ENGINE_EFFECT_TYPES - impl)}")
+
+
 def _trigger_inventory():
     inv = set()
     text = (DOCS / "04_modifier.md").read_text(encoding="utf-8")
