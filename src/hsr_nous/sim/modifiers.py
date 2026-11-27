@@ -86,7 +86,9 @@ class ModifierBook:
                 return False
 
         if mod.singleton_group.startswith("global:"):
-            for other in self._engine.state.actors.values():
+            # F13：快照单位集——_remove_modifier 的 on_remove 可召唤新单位插 actors，
+            # 边遍历边改 dict 会 RuntimeError 中断整局
+            for other in list(self._engine.state.actors.values()):
                 for old in list(other.all_modifiers()):
                     if (old.singleton_group == mod.singleton_group
                             and (other is not target or old.modifier_id != mod.modifier_id)):
