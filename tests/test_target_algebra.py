@@ -173,6 +173,18 @@ class TestHookAlgebraDirect:
         ctx = eng._hooks._hook_ctx(hero, {"modifier_id": "m", "target": ev.actor.actor_id})
         assert ctx["modifier"].stacks == 2, "battle_event 目标的 $modifier.stacks 须读实例"
 
+    def test_target_predicates_accept_parsed_dict(self):
+        """target_lists_intersect/target_in_selected 接受已解析 dict 规格——旧
+        json.loads(str(dict)) 把 dict 转 Python repr（单引号/True）再解析必炸。"""
+        eng = _mk_engine()
+        hero = eng.state.actors["hero"]
+        funcs = eng._hooks._hook_functions(hero, {})
+        spec = {"pool": "enemies"}
+        assert funcs["target_in_selected"](spec, "e1") == 1.0
+        assert funcs["target_in_selected"](spec, "hero") == 0.0
+        assert funcs["target_lists_intersect"](spec, {"pool": "enemies", "take": 1}) == 1.0
+        assert funcs["target_lists_intersect"]({"pool": "allies"}, {"pool": "enemies"}) == 0.0
+
     def test_take_int_random_targets(self):
         """实例垫底（敌方 "Deals … to 3 random targets"）：take 3 + mode random——
         roll 同 seed 复现；expected 按序取前 N 不掷骰（确定化口径）."""

@@ -498,14 +498,19 @@ class HookRuntime:
                 return 0.0
             return 1.0 if abs(pool.index(st_t) - pool.index(st_r)) == 1 else 0.0
 
+        def _target_spec_arg(x: Any) -> Any:
+            # 接受已解析 dict 或 JSON 串——旧 json.loads(str(dict)) 把 dict 转 Python
+            # repr（单引号/True）再 json.loads 必炸（已解析规格直传即可）
+            return json.loads(x) if isinstance(x, str) else x
+
         def target_lists_intersect(first: Any, second: Any) -> float:
-            left = self._hook_target_states(json.loads(str(first)), st, payload or {})
-            right = self._hook_target_states(json.loads(str(second)), st, payload or {})
+            left = self._hook_target_states(_target_spec_arg(first), st, payload or {})
+            right = self._hook_target_states(_target_spec_arg(second), st, payload or {})
             right_ids = {state.actor.actor_id for state in right}
             return 1.0 if any(state.actor.actor_id in right_ids for state in left) else 0.0
 
         def target_in_selected(spec: Any, target: Any) -> float:
-            selected = self._hook_target_states(json.loads(str(spec)), st, payload or {})
+            selected = self._hook_target_states(_target_spec_arg(spec), st, payload or {})
             resolved = _resolve(target)
             if resolved is None:
                 return 0.0
