@@ -223,6 +223,28 @@ class TestHookAlgebraDirect:
             {"pool": "allies", "include_dead": True, "include_unselectable": True}, hero, {})}
         assert "a2" in ids3, "include_unselectable 放松可选性"
 
+    def test_synthetic_frame_not_counted_as_action(self):
+        """F21：帧外 hook 链合成帧非真行动——turn_owner_has_action_in_turn 行动前不
+        误报 1，current_turn_state InsertUltraSkillExecuting 结束后不误报 1。"""
+        from hsr_nous.sim.frame import ExecutionFrame
+        eng = _mk_engine()
+        hero = eng.state.actors["hero"]
+        eng._current_turn_actor_id = "hero"
+        funcs = eng._hooks._hook_functions(hero, {})
+        assert funcs["turn_owner_has_action_in_turn"]() == 0.0  # 无帧
+        synth = ExecutionFrame(action_id="on_action_end", actor_id="hero",
+                               action_type="ultimate", insert=True, synthetic=True)
+        eng._frame_stack.append(synth)
+        assert funcs["turn_owner_has_action_in_turn"]() == 0.0, "合成帧非真行动"
+        assert funcs["current_turn_state"]("InsertUltraSkillExecuting") == 0.0
+        eng._frame_stack.pop()
+        real = ExecutionFrame(action_id="ult", actor_id="hero",
+                              action_type="ultimate", insert=True)
+        eng._frame_stack.append(real)
+        assert funcs["turn_owner_has_action_in_turn"]() == 1.0, "真行动帧计入"
+        assert funcs["current_turn_state"]("InsertUltraSkillExecuting") == 1.0
+        eng._frame_stack.pop()
+
     def test_take_int_random_targets(self):
         """实例垫底（敌方 "Deals … to 3 random targets"）：take 3 + mode random——
         roll 同 seed 复现；expected 按序取前 N 不掷骰（确定化口径）."""

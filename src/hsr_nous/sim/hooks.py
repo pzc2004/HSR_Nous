@@ -242,7 +242,8 @@ class HookRuntime:
             frame = ExecutionFrame(
                 action_id=str(payload.get("action_id") or getattr(h, "event", "")),
                 actor_id=st.actor.actor_id,
-                action_type=str(payload.get("action_type") or ""), insert=bool(payload.get("insert", False)))
+                action_type=str(payload.get("action_type") or ""), insert=bool(payload.get("insert", False)),
+                synthetic=True)  # 帧外 hook 链合成帧，非真行动——行动语境谓词排除
             self._engine._frame_stack.append(frame)
         try:
             result = self._run_hook_effects_inner(st, h, payload)
@@ -1050,15 +1051,16 @@ class HookRuntime:
             if frame is None:
                 return 0.0
             if state == "InsertAbilityActionPhase":
-                return float(frame.insert and frame.action_type != "ultimate")
+                return float(frame.insert and frame.action_type != "ultimate" and not frame.synthetic)
             if state == "InsertUltraSkillExecuting":
-                return float(frame.insert and frame.action_type == "ultimate")
+                return float(frame.insert and frame.action_type == "ultimate" and not frame.synthetic)
             return 0.0
 
         def turn_owner_has_action_in_turn() -> float:
             owner = self._engine._current_turn_actor_id
             frame = self._engine.current_frame
-            in_action = frame is not None and frame.actor_id == owner
+            # 合成帧（帧外 hook 链）非真行动——行动前/结束后不误报「已在行动」
+            in_action = frame is not None and frame.actor_id == owner and not frame.synthetic
             return float(bool(owner) and (in_action or self._engine._turn_owner_action_phase_end))
 
         def is_top_action_delay_target(target: Any, team: Any = "", avatar_only: Any = False) -> float:

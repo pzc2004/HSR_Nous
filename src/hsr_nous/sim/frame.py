@@ -50,6 +50,10 @@ class ExecutionFrame:
     target_ids: List[str] = field(default_factory=list)  # 本行动解析出的技能目标，保留原顺序
     action_type: str = ""
     insert: bool = False
+    #: 合成帧标记（帧外 hook 链由 _run_hook_effects 自动建帧，非真行动执行）——
+    #: 行动语境谓词（turn_owner_has_action_in_turn/current_turn_state）据此排除，
+    #: 避免 on_turn_start 钩行动前误报「已在行动」、插入终结技结束后误报「执行中」
+    synthetic: bool = False
 
     def write(self, actor_id: str, key: str, value: float) -> None:
         """覆盖层写入（未提交——仅帧内读者可见，提交时才落已提交态）."""
