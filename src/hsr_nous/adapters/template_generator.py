@@ -52,6 +52,29 @@ _TOUGHNESS_DEFAULT = {"basic": 10, "skill": 20, "ultimate": 30}
 # 默认回能
 _ENERGY_GAIN = {"basic": 20, "skill": 30, "ultimate": 5}
 
+# 敌人收编生成期 override（证据驱动，数据化集中——原散落 enemy_id 特判迁此，
+# 新增 override 改表不改生成流程；机制级特判另迁结构化收编/正典）。
+# 额外收编技能后缀：AI 未显式调用但有上游证据（Ability/CharacterConfig/SummonIDList）的
+# 技能，按 enemy_id + 后缀补入 conversion_ids（后缀 "" = 本体 id）。
+_ENEMY_EXTRA_CONVERSION_SUFFIXES = {
+    "1004031": ("03",),            # Ability 明示两召唤物 ID；AI 未调 Skill03 按 raw-only 证据收编
+    "1003012": ("04",),            # RL CharacterConfig/Ability 明示 Skill08 双召唤 + OneMore
+    "1003013": ("04",),
+    "300302003": ("",),            # Skill03 SummonIDList 与两 DelayRatio 均有上游证据
+    "8033010": ("05", "06"),       # 720-Degree Review / Team Building 完整上游语义
+    "8033012": ("05", "06"),
+    "8033013": ("05", "06"),
+}
+# Fandom 语义变体页：某些敌人实例用变体页（非基础页）的技能语义。
+_ENEMY_FANDOM_VARIANT = {
+    "8032033": "Apocalyptic Shadow",  # RL 普通骰子用 Apocalyptic Shadow 的 Bet，非基础页 Fickle Fortune
+}
+# 技能别名（后缀）：仅当目标 id 在 covered_ids 时生效。
+_ENEMY_SKILL_ALIAS_SUFFIXES = {
+    "1003012": {"Skill09": "01"},  # RL Skill09 与 Skill01 共用 Assault 伤害/ParamList[0]，OneMore 由 hook 表达
+    "1003013": {"Skill09": "01"},
+}
+
 # desc 中"相邻目标…#N[i]%"占位符 → params[N-1] 即副目标倍率
 _BLAST_RE = re.compile(r"相邻目标[^#]{0,30}?#(\d+)\[i\]")
 
@@ -12717,13 +12740,14 @@ def generate_enemy_template(
             f'"{name_en}"', fandom_enemy_path=_p("fandom_enemy_data.json"),
             weakness=stats["weakness"])
     json_config = str((detail.get("_template") or {}).get("JsonConfig") or "")
-    if str(enemy_id) == "8032033":
-        # RL 普通骰子使用 Apocalyptic Shadow 的 Bet，而不是基础页的 Fickle Fortune。
-        apocalyptic = get_enemy_mechanics(
-            f"{name_en} (Apocalyptic Shadow)", fandom_enemy_path=_p("fandom_enemy_data.json"),
+    _variant = _ENEMY_FANDOM_VARIANT.get(str(enemy_id))
+    if _variant:
+        # 变体页语义（证据驱动 override 表 _ENEMY_FANDOM_VARIANT）
+        variant_data = get_enemy_mechanics(
+            f"{name_en} ({_variant})", fandom_enemy_path=_p("fandom_enemy_data.json"),
             weakness=stats["weakness"])
-        if apocalyptic is not None:
-            fdata = apocalyptic
+        if variant_data is not None:
+            fdata = variant_data
     if name_en == "Twig of Wintry Wind" and json_config.endswith("_RL.json"):
         # 该 RL 配置的 Ability 比普通页多施加 Wind Shear，且倍率槽为 120%；
         # 仅在这个已核实变体上切换 Illusion 语义，避免误用普通页的 200% 描述。
@@ -12788,18 +12812,10 @@ def generate_enemy_template(
                 conversion_ids.update(
                     str(sk["skill_id"]) for sk in active_raw
                     if str(sk.get("trigger_key")) in config_skill_names)
-            if str(enemy_id) == "1004031":
-                # Ability 明示两个召唤物 ID；AI 未调用 Skill03 也按 raw-only 证据收编。
-                conversion_ids.add("100403103")
-            if str(enemy_id) in {"1003012", "1003013"}:
-                # RL CharacterConfig/Ability 明示 Skill08 两次召唤与 OneMore，AI 未调用仍收编。
-                conversion_ids.add(f"{enemy_id}04")
-            if str(enemy_id) == "300302003":
-                # Skill03 的 SummonIDList 与两个 DelayRatio 均有上游证据，AI 未调用仍收编。
-                conversion_ids.add("300302003")
-            if str(enemy_id) in {"8033010", "8033012", "8033013"}:
-                # 720-Degree Review / Team Building 有完整上游语义；实例 AI 未引用也收编。
-                conversion_ids.update({f"{enemy_id}05", f"{enemy_id}06"})
+            # 额外收编技能（证据驱动 override 表 _ENEMY_EXTRA_CONVERSION_SUFFIXES）：
+            # AI 未显式调用但有上游证据的技能按 enemy_id + 后缀补入。
+            for _suf in _ENEMY_EXTRA_CONVERSION_SUFFIXES.get(str(enemy_id), ()):
+                conversion_ids.add(f"{enemy_id}{_suf}")
             candidate_actions: List[Dict[str, Any]] = []
             candidate_hooks: List[Dict[str, Any]] = []
             candidate_summons: List[Dict[str, Any]] = []
@@ -12983,9 +12999,11 @@ def generate_enemy_template(
             covered_ids = {a["action_id"] for a in candidate_actions}
             full_sequence = all(skill_id in covered_ids for skill_id in sequence)
             skill_id_aliases: Dict[str, str] = {}
-            if str(enemy_id) in {"1003012", "1003013"} and f"{enemy_id}01" in covered_ids:
-                # RL Skill09 与 Skill01 共用 Assault 伤害和 ParamList[0]，另由 hook 表达 OneMore。
-                skill_id_aliases["Skill09"] = f"{enemy_id}01"
+            # 技能别名（证据驱动 override 表 _ENEMY_SKILL_ALIAS_SUFFIXES，目标须在 covered_ids）
+            for _alias, _suf in _ENEMY_SKILL_ALIAS_SUFFIXES.get(str(enemy_id), {}).items():
+                _target_id = f"{enemy_id}{_suf}"
+                if _target_id in covered_ids:
+                    skill_id_aliases[_alias] = _target_id
             bad: Optional[set[str]] = None
             if ai_path and raw_config is not None:
                 available_skill_names = {
