@@ -1241,3 +1241,34 @@ class TestElementVocabGate:
              "max_toughness": 30, "resistance": {"Ice": 0.4}}]
         with pytest.raises(ValueError, match="resistance 非法值 'Ice'"):
             compile_encounter(_build(), st, template_roots=TEST_TEMPLATE_ROOTS)
+
+
+class TestScalingExpressionF09:
+    """F09：倍率表达式是编译契约（build_compiler 接受、引擎 _resolve_dynamic_action_scaling
+    运行时物化，见 test_native_dynamic_damage_scaling_runs_at_action_time）——消费端须
+    保留表达式串而非 float() 炸。敌人模板经 enemy_template 引用进关卡走 stage_compiler，
+    web 预览走 _scaling_rows，两处旧 float(v) 对动态倍率敌人当场崩。"""
+
+    def test_stage_compiler_preserves_expression_scaling(self):
+        from hsr_nous.sim.compile.stage_compiler import _parse_enemy_actions
+        acts = _parse_enemy_actions([{
+            "action_id": "a", "action_type": "skill", "damage_type": "quantum",
+            "scaling": [{"atk": "resource_of($self, 'x') * 4"}],
+            "toughness_dmg": "dynamic_of($self.actor_id, '_MaxStance')",
+        }], where="t")
+        assert acts[0].scaling == [{"atk": "resource_of($self, 'x') * 4"}]
+        assert acts[0].toughness_dmg == "dynamic_of($self.actor_id, '_MaxStance')"
+
+    def test_stage_compiler_numeric_scaling_still_float(self):
+        from hsr_nous.sim.compile.stage_compiler import _parse_enemy_actions
+        acts = _parse_enemy_actions([{
+            "action_id": "a", "action_type": "skill", "damage_type": "quantum",
+            "scaling": [{"atk": "3.0"}], "toughness_dmg": 10,
+        }], where="t")
+        assert acts[0].scaling == [{"atk": 3.0}]
+        assert acts[0].toughness_dmg == 10.0
+
+    def test_web_scaling_rows_preserves_expression(self):
+        from hsr_nous.sim.web import _scaling_rows
+        rows = _scaling_rows([{"atk": "resource_of($self, 'x') * 4"}, {"atk": 2.5}])
+        assert rows == [{"atk": "resource_of($self, 'x') * 4"}, {"atk": 2.5}]

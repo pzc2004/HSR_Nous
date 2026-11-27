@@ -112,11 +112,23 @@ def _serialize_action(action: Any, index: int) -> Dict[str, Any]:
     }
 
 
-def _scaling_rows(rows: Any) -> Optional[List[Dict[str, float]]]:
-    """倍率表（按等级 list）→ 可 JSON 的纯数据；None 直通。"""
+def _scaling_rows(rows: Any) -> Optional[List[Dict[str, Any]]]:
+    """倍率表（按等级 list）→ 可 JSON 的纯数据；None 直通。
+
+    表达式源串（动态倍率，引擎运行时物化）预览原样展示——旧 round(float(v),4)
+    对表达式串炸（F09）；数值仍 round 到 4 位。"""
     if rows is None:
         return None
-    return [{k: round(float(v), 4) for k, v in row.items()} for row in rows]
+
+    def _fmt(v: Any) -> Any:
+        if isinstance(v, str):
+            try:
+                return round(float(v), 4)
+            except ValueError:
+                return v
+        return round(float(v), 4)
+
+    return [{k: _fmt(v) for k, v in row.items()} for row in rows]
 
 
 def _serialize_skill(action: Any, desc: Optional[str], energy_gain_default_fn: Any = None) -> Dict[str, Any]:

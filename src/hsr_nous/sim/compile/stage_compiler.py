@@ -62,6 +62,18 @@ TERMINATION_MODES = frozenset({"fixed_av", "kill_target", "survival", "wipe"})
 TERMINATION_MODES_IMPLEMENTED = frozenset({"fixed_av", "kill_target", "survival", "wipe"})
 
 
+def _scaling_number(v: Any) -> Any:
+    """倍率/削韧槽：数值转 float，表达式源串保留（引擎 _resolve_dynamic_action_scaling
+    运行时物化）——与 build_compiler.compile_number_or_expression 同契约。旧 float(v)
+    对表达式串炸（动态倍率敌人模板经 enemy_template 引用进关卡即崩，F09）。"""
+    if isinstance(v, str):
+        try:
+            return float(v)
+        except ValueError:
+            return v
+    return float(v)
+
+
 def _parse_enemy_actions(items: Any, *, where: str) -> List[Any]:
     """敌人行动表（模板件与 inline 件同一形状/同一键闸）→ Action 列表."""
     from hsr_nous.sim_schema.action import Action
@@ -82,11 +94,11 @@ def _parse_enemy_actions(items: Any, *, where: str) -> List[Any]:
             action_type=a.get("action_type", "basic"),
             target_type=a.get("target_type", "single"),
             damage_type=a.get("damage_type") or None,
-            scaling=[{k: float(v) for k, v in s.items()} for s in a.get("scaling") or []],
-            scaling_blast=([{k: float(v) for k, v in s.items()}
+            scaling=[{k: _scaling_number(v) for k, v in s.items()} for s in a.get("scaling") or []],
+            scaling_blast=([{k: _scaling_number(v) for k, v in s.items()}
                             for s in a.get("scaling_blast") or []] or None),
-            toughness_dmg=float(a.get("toughness_dmg", 0.0)),
-            toughness_dmg_blast=(float(a["toughness_dmg_blast"])
+            toughness_dmg=_scaling_number(a.get("toughness_dmg", 0.0)),
+            toughness_dmg_blast=(_scaling_number(a["toughness_dmg_blast"])
                                  if "toughness_dmg_blast" in a else None),
             energy_gain=int(a["energy_gain"]) if "energy_gain" in a else None,
             energy_grant=float(a.get("energy_grant", 0.0)),
