@@ -22,6 +22,7 @@ actor_enter（wave_index≥1）补挂；modifier 回调经 ``_PASSIVE_EVENT_MAP`
 from __future__ import annotations
 
 import base64
+import copy
 import json
 from dataclasses import dataclass, field, replace
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -5403,7 +5404,9 @@ class AbilityCompiler:
                     and ctx.event in {"on_action", "before_action"}:
                 return "$event.actor"
             if ctx is not None and ctx.retarget is not None:
-                return ctx.retarget
+                # F14：交出副本——调用方就地写 where/include_dead/mode/index 等
+                # 不污染共享 ctx.retarget（同 Retarget 下后续 effect 静默多带过滤）
+                return copy.deepcopy(ctx.retarget)
             if alias in {"ParamEntityList", "TemplateParamEntityList"} and ctx.retarget is None:
                 return "$event.targets"
             if alias == "ParamEntity" and ctx is not None:
