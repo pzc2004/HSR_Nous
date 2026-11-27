@@ -777,7 +777,10 @@ class WebSession:
                 "banished": st.banished,
                 "toughness": round(st.toughness, 1),
                 "max_toughness": round(st.actor.stats.max_toughness, 1),
-                "weakness": list(st.actor.stats.weakness),
+                # 弱点显示排除 secret_weakness（modifier 标记的隐藏弱点——仅显示层，
+                # 实际弱点/削韧规则不变；旧直读 stats.weakness 致隐藏弱点未生效，只写不读）
+                "weakness": [w for w in st.actor.stats.weakness
+                             if not any(w in m.secret_weakness for m in st.all_modifiers())],
                 # 抗性小徽标取数（纯展示；只下发非零项，零抗不刷屏）
                 "resistance": {k: round(float(v), 4)
                                for k, v in st.actor.stats.resistance.items() if v},
