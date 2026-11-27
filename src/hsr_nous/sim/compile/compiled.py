@@ -29,6 +29,7 @@ from types import MappingProxyType
 from typing import Any, Dict, List, Mapping, Optional
 
 from hsr_nous.sim_schema.action import Action
+from hsr_nous.sim_schema.encounter import TerminationConfig
 from hsr_nous.sim_schema.actor import Actor
 from hsr_nous.sim_schema.encounter import Encounter, TerminationConfig
 
@@ -146,7 +147,8 @@ class CompiledStage:
     enemies: tuple[Actor, ...]                              # 初始阵容（第 1 波）
     waves: Mapping[int, tuple[Actor, ...]] = field(default_factory=dict)  # 第 2 波起
     termination_mode: str = "fixed_av"
-    max_action_value: float = 450.0
+    # 缺省单一来源 = sim_schema TerminationConfig（输入契约 1500）；旧 450 与 schema 分叉
+    max_action_value: float = float(TerminationConfig.max_action_value)
     enemy_actions: Mapping[str, List[Action]] = field(default_factory=dict)  # 敌人模板自带的行动表
     enemy_policies: Mapping[str, CompiledEnemyPolicy] = field(default_factory=dict)
     enemy_hooks: tuple = ()  # 敌人模板 hooks 块的编译产物（on_action/heal 等）

@@ -1272,3 +1272,20 @@ class TestScalingExpressionF09:
         from hsr_nous.sim.web import _scaling_rows
         rows = _scaling_rows([{"atk": "resource_of($self, 'x') * 4"}, {"atk": 2.5}])
         assert rows == [{"atk": "resource_of($self, 'x') * 4"}, {"atk": 2.5}]
+
+
+class TestMaxActionValueDefaultF26:
+    """max_action_value 缺省单一来源 = sim_schema TerminationConfig（1500）；
+    旧 compile 450 与 schema 分叉——省略该键的关卡两路缺省须一致。"""
+
+    def test_compile_default_matches_schema(self):
+        from hsr_nous.sim.compile.compiled import CompiledStage
+        from hsr_nous.sim_schema.encounter import TerminationConfig
+        assert CompiledStage.max_action_value == float(TerminationConfig.max_action_value)
+
+    def test_stage_omitting_av_uses_schema_default(self):
+        from hsr_nous.sim_schema.encounter import TerminationConfig
+        st = _stage()
+        st["stage"]["termination"] = {"mode": "fixed_av"}  # 省略 max_action_value
+        c = compile_encounter(_build(), st, template_roots=TEST_TEMPLATE_ROOTS)
+        assert c.stage.max_action_value == float(TerminationConfig.max_action_value)

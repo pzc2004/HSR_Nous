@@ -16,6 +16,7 @@ from hsr_nous.sim.compile.build_compiler import (
 from hsr_nous.sim.compile.compiled import CompiledEnemyPolicy, CompiledStage, SummonDef
 from hsr_nous.sim_schema.actor import Actor, StatBlock
 from hsr_nous.sim_schema.config_ai import MONSTER_RANK_VALUES
+from hsr_nous.sim_schema.encounter import TerminationConfig
 
 #: stage 顶层合法键（environment_overrides 暂留词表但显式报未实现）
 _STAGE_KEYS = frozenset({
@@ -495,7 +496,8 @@ class StageCompiler:
             enemies=tuple(enemies),
             waves=waves,
             termination_mode=term.get("mode", "fixed_av"),
-            max_action_value=float(term.get("max_action_value", 450.0)),
+            # 缺省单一来源 = sim_schema TerminationConfig（1500）；旧 450 与 schema 分叉
+            max_action_value=float(term.get("max_action_value", TerminationConfig.max_action_value)),
             enemy_actions=enemy_actions,
             enemy_policies=enemy_policies,
             enemy_hooks=tuple(enemy_hooks),
