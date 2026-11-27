@@ -720,6 +720,28 @@ class TestModifierContainerTypes:
         with pytest.raises(ValueError, match="stat_effects 须为 mapping，实得 list"):
             compile_encounter(bad, _stage())
 
+    def test_behavior_flags_str_rejected(self):
+        # F08：字符串会被逐字符拆（Stealth→S,t,e…）静默失效，须编译期炸
+        bad = _build()
+        bad["build"]["team"][0]["actions"][0]["apply_modifiers"] = [
+            {"modifier_id": "M", "behavior_flags": "Stealth"}]
+        with pytest.raises(ValueError, match="behavior_flags 须为 list，实得 str"):
+            compile_encounter(bad, _stage())
+
+    def test_locked_action_types_str_rejected(self):
+        bad = _build()
+        bad["build"]["team"][0]["actions"][0]["apply_modifiers"] = [
+            {"modifier_id": "M", "locked_action_types": "ultimate"}]
+        with pytest.raises(ValueError, match="locked_action_types 须为 list，实得 str"):
+            compile_encounter(bad, _stage())
+
+    def test_custom_unselectable_value_str_rejected(self):
+        bad = _build()
+        bad["build"]["team"][0]["actions"][0]["apply_modifiers"] = [
+            {"modifier_id": "M", "custom_unselectable": {"OPPOSITE": "light"}}]
+        with pytest.raises(ValueError, match=r"custom_unselectable.*须为 list"):
+            compile_encounter(bad, _stage())
+
     def test_legal_shapes_pass(self):
         ok = _build()
         ok["build"]["team"][0]["actions"][0]["apply_modifiers"] = [
