@@ -962,13 +962,14 @@ class HookRuntime:
             # 执行级随机绑定（23 §23.15）：effect 域首调采样一次（消耗主流 pipeline.rng）
             # 绑定当前帧、后续读取零消耗；condition（快照）域（_roll_readonly）只许读
             # 已绑定键、读未绑定显式报错——condition 无副作用的纯洁性不破；无活动
-            # 执行帧（策略/available_if 等决策期求值）显式报错——roll 只活在行动执行内。
+            # 执行帧（策略/available_if 等决策期求值）显式报错——roll 只活在活动执行帧内
+            # （真行动帧或帧外 hook 链合成帧，见 _run_hook_effects）。
             # 绑定不跨帧提交合并（frame.py docstring）。
             frame = self._engine.current_frame
             name = _scoped_roll_key(key, payload)
             if frame is None:
                 raise ExpressionError(
-                    f"roll({name!r}) 需要活动执行帧——仅行动执行内的 effect 表达式可用")
+                    f"roll({name!r}) 需要活动执行帧——仅执行帧（真行动/hook 链合成帧）内的 effect 表达式可用")
             if _roll_readonly:
                 return frame.roll_read(name)
             sampler = (self._engine.pipeline.rng.random
@@ -1666,9 +1667,16 @@ class HookRuntime:
                     if not float(value).is_integer():
                         raise ValueError(f"current_phase 必须为整数，得到 {value!r}")
                     new_phase = int(value)
-                    old_phase = (frame.writes.get(t2.actor.actor_id, {}).get(
-                        "current_phase", runtime["current_phase"])
-                        if frame is not None else runtime["current_phase"])
+                    # old_phase 沿帧栈覆盖链读（当前帧→父帧→已提交态）——子帧须见父帧
+                    # 覆盖层相位，否则写回原相位误判无变化、父帧仍发早先的净零转换，
+                    # 阶段进入被动为从未发生的转换触发（F20）
+                    old_phase = runtime["current_phase"]
+                    if frame is not None:
+                        for fr in reversed(self._engine._frame_stack):
+                            w = fr.writes.get(t2.actor.actor_id)
+                            if w and "current_phase" in w:
+                                old_phase = w["current_phase"]
+                                break
                     if frame is not None:
                         if new_phase != old_phase:
                             frame.record_phase_change(
@@ -1703,12 +1711,12 @@ class HookRuntime:
         # （ByRandomChance/RandomConfig）翻译的前置绑定——绑定值 = roll(roll_key) × scale。
         # roll 模式采 pipeline.rng（消耗主流一次）；expected 模式绑 0.5 的下邻浮点
         # （与 mechanic_chance 的 p>=0.5 期望口径逐比特一致，两通道不许两种期望语义）。
-        # 帧外调用显式报错（roll 只活在行动执行内）。
+        # 无活动执行帧显式报错（roll 只活在活动执行帧内——真行动或帧外 hook 链合成帧）。
         frame = self._engine.current_frame
         if frame is None:
             raise ExpressionError(
                 f"bind_roll({eff.get('roll_key')!r}) 需要活动执行帧"
-                f"——仅行动执行内的 effect 表达式可用")
+                f"——仅执行帧（真行动/hook 链合成帧）内的 effect 表达式可用")
         scale = self._hook_amount(eff["scale"], st, payload) if "scale" in eff else 1.0
         key = _scoped_roll_key(eff["roll_key"], payload)
         if self._engine.pipeline.mode == MODE_ROLL:

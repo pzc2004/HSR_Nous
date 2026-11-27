@@ -245,6 +245,30 @@ class TestHookAlgebraDirect:
         assert funcs["current_turn_state"]("InsertUltraSkillExecuting") == 1.0
         eng._frame_stack.pop()
 
+    def test_nested_phase_writeback_no_phantom_transition(self):
+        """F20：子帧写回原相位须见父帧覆盖层——净零转换（1→2→1）不发
+        monster_phase_changed（旧子帧读已提交态误判无变化，父帧仍发早先转换）。"""
+        from hsr_nous.sim.frame import ExecutionFrame
+        eng = _mk_engine()
+        e1 = eng.state.actors["e1"]
+        eng._enemy_policy_state.setdefault("e1", {"current_phase": 1, "dynamic_values": {}})
+        events = []
+        eng.bus.subscribe("monster_phase_changed", lambda et, p, ctx: events.append(dict(p)))
+        parent = ExecutionFrame(action_id="a", actor_id="e1")
+        eng._frame_stack.append(parent)
+        eng._hooks._h_set_dynamic_value(
+            e1, {"dynamic_key": "current_phase", "target": "self", "amount": 2}, {}, {})
+        sub = ExecutionFrame(action_id="b", actor_id="e1")
+        eng._frame_stack.append(sub)
+        eng._hooks._h_set_dynamic_value(
+            e1, {"dynamic_key": "current_phase", "target": "self", "amount": 1}, {}, {})
+        eng._frame_stack.pop()
+        eng._commit_frame(sub)
+        eng._frame_stack.pop()
+        eng._commit_frame(parent)
+        assert events == [], "净零转换（1→2→1）不应发相位变更"
+        assert eng._enemy_policy_state["e1"]["current_phase"] == 1
+
     def test_take_int_random_targets(self):
         """实例垫底（敌方 "Deals … to 3 random targets"）：take 3 + mode random——
         roll 同 seed 复现；expected 按序取前 N 不掷骰（确定化口径）."""
