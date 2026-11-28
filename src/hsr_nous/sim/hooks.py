@@ -505,13 +505,17 @@ class HookRuntime:
             return json.loads(x) if isinstance(x, str) else x
 
         def target_lists_intersect(first: Any, second: Any) -> float:
-            left = self._hook_target_states(_target_spec_arg(first), st, payload or {})
-            right = self._hook_target_states(_target_spec_arg(second), st, payload or {})
+            left = self._hook_target_states(_target_spec_arg(first), st, payload or {},
+                                            allow_sample=not _roll_readonly)
+            right = self._hook_target_states(_target_spec_arg(second), st, payload or {},
+                                             allow_sample=not _roll_readonly)
             right_ids = {state.actor.actor_id for state in right}
             return 1.0 if any(state.actor.actor_id in right_ids for state in left) else 0.0
 
         def target_in_selected(spec: Any, target: Any) -> float:
-            selected = self._hook_target_states(_target_spec_arg(spec), st, payload or {})
+            # 条件（快照）域不掷骰——_roll_readonly 时禁采样，与 count_selected 同口径
+            selected = self._hook_target_states(_target_spec_arg(spec), st, payload or {},
+                                                allow_sample=not _roll_readonly)
             resolved = _resolve(target)
             if resolved is None:
                 return 0.0

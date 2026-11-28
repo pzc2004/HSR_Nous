@@ -128,3 +128,18 @@ def test_function_level_where_applies_to_dict_spec():
     eng.state.actors["e1"].broken = True  # 击破 e1，e2 未击破
     funcs = eng._hooks._hook_functions(st, _roll_readonly=True)
     assert funcs["count_selected"]({"pool": "enemies"}, "$it.broken") == 1.0
+
+
+def test_target_predicates_do_not_advance_rng_in_condition_domain():
+    """target_in_selected/target_lists_intersect 在条件（快照）域禁采样——
+    旧未转发 allow_sample=False，random 规格下推进主 RNG（与 count_selected 分叉）。"""
+    eng = _multi_engine()
+    st = eng.state.actors["hero"]
+    rng = eng.pipeline.rng
+    funcs = eng._hooks._hook_functions(st, _roll_readonly=True)
+    spec = {"pool": "enemies", "take": 1, "mode": "random"}
+    for fn, args in (("target_in_selected", (spec, "e1")),
+                     ("target_lists_intersect", (spec, {"pool": "enemies"}))):
+        before = rng.getstate()
+        funcs[fn](*args)
+        assert rng.getstate() == before, f"{fn} 在条件域消耗了主随机流"
