@@ -483,6 +483,10 @@ def _save_engine_fields(engine: Any) -> Dict[str, Any]:
 
 def _restore_engine_fields(engine: Any, d: Dict[str, Any]) -> None:
     for fname in _ENGINE_RUNTIME_FIELDS:
+        if fname not in d:
+            raise ValueError(
+                f"存档缺运行期字段 {fname!r}——格式不兼容（SAVE_VERSION 未随字段演进升级），"
+                "需迁移通道（而非运行期 KeyError 谜语）")
         if fname == "battle_events":
             engine.battle_events = {
                 int(event_id): _restore_battle_event(payload, engine._expr)

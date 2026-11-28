@@ -429,8 +429,9 @@ class TestCompletenessGate:
         "_resource_decls": "编译产物",
         "state_entry_actions": "编译产物",
         "_trigger_order": "编译产物",
-        "_frame_stack": "执行帧栈（瞬态——随 _execute_action 调用栈生灭，行动结算完恒空；"
-                        "档间恒静息零值，同 bus._depth 口径；帧语义见 sim/frame.py）",
+        "_frame_stack": "执行帧栈（瞬态——随 _execute_action 调用栈生灭；save_state 已前置"
+                        "断言存档时帧栈空（F24：旧「档间恒空」假设被探针证伪——select_target/"
+                        "wait_segment 帧内 depth=1，改断言强制；帧语义见 sim/frame.py））",
     }
 
     def test_engine_attrs_partitioned(self):
@@ -448,6 +449,22 @@ class TestCompletenessGate:
             "或本测试 _ENGINE_STRUCTURAL 登记")
         stale = (saved - {"state", "scheduler"}) - set(vars(eng)) - self._ENGINE_LAZY_SAVED
         assert not stale, f"存档字段在引擎上已不存在：{sorted(stale)}——同步存档清单"
+
+    def test_save_mid_frame_rejected(self):
+        """F24：执行帧栈非空（行动结算中）存档须炸——帧覆盖层/roll 绑定瞬态不进存档。
+        旧「档间恒空」豁免假设被探针证伪（select_target/wait_segment 帧内 depth=1），
+        改 save_state 前置断言把前提变成强制。"""
+        from hsr_nous.sim.frame import ExecutionFrame
+        compiled = compile_encounter(_elation_build(), _elation_stage(),
+                                     template_roots=TEST_TEMPLATE_ROOTS)
+        eng = CombatEngine.from_compiled(compiled, mode=MODE_ROLL, seed=42)
+        eng.setup()
+        eng._frame_stack.append(ExecutionFrame(
+            action_id="x", actor_id="hero", action_type="skill", insert=False))
+        with pytest.raises(ValueError, match="执行帧栈非空"):
+            eng.save_state()
+        eng._frame_stack.pop()
+        eng.save_state()  # 场间静息态（帧栈空）存档正常
 
     #: 惰性存档字段（结算期才落实例——中场引擎 vars 不含属预期；恢复侧恒写，
     #: 与原引擎 getattr 缺省语义逐比特对齐）
@@ -594,7 +611,6 @@ def test_level_blackboard_roundtrip():
     assert "WeatherPhase01Flag" in restored._level_state_obj.modifiers
 
 
-
 def test_modifier_dynamic_values_roundtrip():
     compiled = compile_encounter(_pela_build(), _pela_stage(),
                                  template_roots=TEST_TEMPLATE_ROOTS)
@@ -613,3 +629,16 @@ def test_modifier_dynamic_values_roundtrip():
     assert modifier.dynamic_values == {"MDF_Value": 2.5}
     assert restored._hooks._hook_amount(
         "modifier_dynamic_of($self, 'InstancePayload', 'MDF_Value')", restored_st, {}) == 2.5
+
+
+def test_restore_missing_runtime_field_clear_error():
+    """存档缺运行期字段须抛清晰 ValueError（非 KeyError 谜语）。
+
+    SAVE_VERSION 恒 1 不随字段演进升级，旧档过版本闸后硬取 d[fname] 原会 KeyError；
+    守卫把缺字段转成明确诊断，指路迁移通道。
+    """
+    from hsr_nous.sim.save_load import _restore_engine_fields, _ENGINE_RUNTIME_FIELDS
+    fields = list(_ENGINE_RUNTIME_FIELDS)
+    d = {k: None for k in fields[1:]}   # 缺第一个字段
+    with pytest.raises(ValueError, match="存档缺运行期字段"):
+        _restore_engine_fields(object(), d)

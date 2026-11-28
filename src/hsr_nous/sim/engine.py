@@ -27,15 +27,14 @@ from hsr_nous.sim.save_load import restore_into, save_engine
 from hsr_nous.sim.scheduler import EXTRA_COUNTDOWN, EXTRA_NORMAL, Scheduler
 from hsr_nous.sim.state import BREAK_DOT_ID_PREFIX, MOON_COCOON_ID, ActorState, BattleState, Modifier, StateConfig
 from hsr_nous.sim_schema.action import DOT_KIND_ELEMENTS, Action
-from hsr_nous.sim_schema.actor import Actor, StatBlock
+from hsr_nous.sim_schema.actor import Actor, StatBlock, TARGET_POOL_EXCLUDE_FLAGS
 from hsr_nous.sim_schema.encounter import Encounter
 
 MAX_TURNS_SAFETY = 200  # 兜底防死循环
 
-#: 我方常规单位排除标记（系统单位语义标记中经 _allies_alive 单漏斗排除的三件——
-#: untargetable/no_wipe/no_aura；词表唯一源 sim_schema/actor.py SYSTEM_UNIT_FLAGS，
-#: wave_reset_exempt 走 scheduler 注册通道不在此集）
-_ALLY_EXCLUDE_FLAGS = frozenset({"untargetable", "no_wipe", "no_aura"})
+#: 我方常规单位排除标记——单一来源 sim_schema/actor.py TARGET_POOL_EXCLUDE_FLAGS
+#: （target_algebra include_dead 分支同读；旧本地 frozenset 重复定义已收编）
+_ALLY_EXCLUDE_FLAGS = TARGET_POOL_EXCLUDE_FLAGS
 
 #: 消费 AV 预算（max_action_value）截断的 termination.mode 集（10_termination.md）：
 #: fixed_av 主指标即窗口伤害；survival（生存测试——我方全灭为测量终点，满预算=存活
@@ -548,7 +547,15 @@ class CombatEngine:
         覆盖：BattleState 全字段全精度（含 actor/modifier 全字段——表达式槽存 source
         串）+ 调度器动态六件与 clock（红黑树逐句柄 insert 派生重建）+ RNG 流位置 +
         引擎运行期字段 + hooks 累积队列。契约与闸详见 sim/save_load.py 模块 docstring。
+
+        前置：须在场间静息态（执行帧栈空）存档——帧覆盖层/roll 绑定是瞬态，中场存档
+        会丢失帧内写回与随机绑定。旧豁免单假设「档间恒空」已被探针证伪（select_target/
+        wait_segment 帧内 depth=1），改为显式断言把前提变成强制（F24）。
         """
+        if self._frame_stack:
+            raise ValueError(
+                "行动结算中（执行帧栈非空）不可存档：帧覆盖层/roll 绑定属瞬态，"
+                "存档须在场间静息态——中场存档会静默丢失帧内写回与随机绑定（F24）")
         return save_engine(self)
 
     @classmethod
@@ -611,7 +618,9 @@ class CombatEngine:
         """
         toughness = actor.stats.max_toughness if self._is_enemy(actor) else 0.0
         st = ActorState(
-            actor=actor,
+            # F01 隔离：布场拷贝 Actor，引擎在私有副本上跑——任何 actor.* 就地写
+            # （set_targetable 写 summon_flags 等）不污染共享编译资产（跨引擎/跨局）
+            actor=copy.deepcopy(actor),
             current_hp=actor.stats.hp,
             current_energy=0.0,
             special_sp=actor.initial_special_sp,
@@ -1052,6 +1061,14 @@ class CombatEngine:
     # 终止判定
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _pseudo_state(actor_id: str, name: str, actor_type: str) -> ActorState:
+        """伪实体惰性载体（$level/队伍）单一构造点：常数 hp/spd/max_energy 不参与结算，
+        不占站位/目标池（F26 压缩——原三处重复 StatBlock(hp=1, spd=100, max_energy=0)）。"""
+        return ActorState(actor=Actor(
+            actor_id=actor_id, name=name, actor_type=actor_type,
+            stats=StatBlock(hp=1, spd=100, max_energy=0)), current_hp=1.0)
+
     @property
     def _level_state(self) -> ActorState:
         """关卡级共享黑板（决策卡 #31）：LevelEntity 的运行时载体——伪 ActorState，
@@ -1059,24 +1076,18 @@ class CombatEngine:
         modifier 池挂伪 state（天气阶段/士兵计数/limbo 标记等跨怪协调状态的住所）。
         """
         if self._level_state_obj is None:
-            self._level_state_obj = ActorState(actor=Actor(
-                actor_id="$level", name="关卡", actor_type="level",
-                stats=StatBlock(hp=1, spd=100, max_energy=0)), current_hp=1.0)
+            self._level_state_obj = self._pseudo_state("$level", "关卡", "level")
         return self._level_state_obj
 
     def _team_entity_state(self, team: str) -> ActorState:
         """TargetFetchTeamEntity 的阵营载体；不占站位或普通目标池."""
         if team == "TeamLight":
             if self._light_team_state_obj is None:
-                self._light_team_state_obj = ActorState(actor=Actor(
-                    actor_id="$light_team", name="我方队伍", actor_type="team",
-                    stats=StatBlock(hp=1, spd=100, max_energy=0)), current_hp=1.0)
+                self._light_team_state_obj = self._pseudo_state("$light_team", "我方队伍", "team")
             return self._light_team_state_obj
         if team == "TeamDark":
             if self._dark_team_state_obj is None:
-                self._dark_team_state_obj = ActorState(actor=Actor(
-                    actor_id="$dark_team", name="敌方队伍", actor_type="team",
-                    stats=StatBlock(hp=1, spd=100, max_energy=0)), current_hp=1.0)
+                self._dark_team_state_obj = self._pseudo_state("$dark_team", "敌方队伍", "team")
             return self._dark_team_state_obj
         raise ValueError(f"未知队伍实体：{team!r}")
 
@@ -1323,10 +1334,11 @@ class CombatEngine:
             "max_hit_split_count": max_hit_split_count}, self.state)
 
     def _check_death(self, target: ActorState, source_id: str = "", *, action_id: str = "") -> None:
-        """死亡检查：锁血 → 月茧 → 复活 → 真死（受击链末段四层分工）.
+        """死亡检查：allow_negative_hp 前置放行 → 锁血 → 月茧 → 复活 → 真死（受击链末段分工，条目自枚举）.
 
         与免死（before_take_damage waterfall cancel 伤害本身，test_death_immunity）的分工：
         - 免死：伤害根本不落账（cancel；140805"受到致命攻击不死"族）
+        - allow_negative_hp（modifier 旗标）：允许 HP 为负，直接放行不做死亡检查（前置闸）
         - 锁血（modifier.hp_lock）：伤害照算，HP 钳 1 不死（发 on_hp_lock——
           "无法被继续削减生命值"族挂载点，遐蝶 1407102 死龙半支）
         - 月茧（modifier.moon_cocoon 授予件 + state.moon_cocoon_used 战斗级次数）：
@@ -1335,7 +1347,7 @@ class CombatEngine:
           **全队每场共用 1 次**；同一伤害事件内多人同时致死 → 一次全部进茧；
           之后（含茧中人自己）再受致命击 → 直接真死（茧中不再保 1 血，无"延迟倒下"）
         - 复活（modifier.revive_percent）：HP 归零后消费复活件，按生命上限百分比回拉（发 on_revive）
-        - 真死：四层全放行 → before_actor_exit（alive=False 之前——生前结算族挂载点，
+        - 真死：各前置层全放行 → before_actor_exit（alive=False 之前——生前结算族挂载点，
           与 dismiss 漏斗同一事件；召唤物被打死由本发射点覆盖）→ alive=False →
           来源件生命周期摘除（remove_on_source_death 旗标件全场扫描，04_modifier §4.15）
           → actor_exit（死亡后清理族挂载点）
@@ -1389,7 +1401,7 @@ class CombatEngine:
             self.state.log.append(
                 f"AV{self.state.clock:.1f}: {target.actor.name} 触发复活，HP 回复至 {target.current_hp:,.0f}")
             return
-        # 真死定论（锁血/月茧/复活三层均已放行）——before_actor_exit 在 alive=False 之前
+        # 真死定论（锁血/月茧/复活均已放行）——before_actor_exit 在 alive=False 之前
         # 发射：持有者在世（alive 闸不挡），「死亡时」生前结算族挂载点；与 dismiss 漏斗
         # 同一事件（payload actor/reason 同 actor_exit——召唤物被打死不过 dismiss 漏斗，
         # 由本发射点盖「被打死」消失原因，2026-09-17 时序扶正）
@@ -2507,6 +2519,10 @@ class CombatEngine:
             return False
         ult = self._ult_action_of(st)
         if ult is None:
+            return False
+        # F03：free 路径同受 locked_action_types 闸（控制禁用终结技——AttachSkillTypeDisable
+        # 族），与 resources.ultimate_available 同口径，不许绕过
+        if any("ultimate" in mod.locked_action_types for mod in st.all_modifiers()):
             return False
         return self._fire_ultimate(st, ult, free=True)
 

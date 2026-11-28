@@ -86,7 +86,9 @@ class ModifierBook:
                 return False
 
         if mod.singleton_group.startswith("global:"):
-            for other in self._engine.state.actors.values():
+            # F13：快照单位集——_remove_modifier 的 on_remove 可召唤新单位插 actors，
+            # 边遍历边改 dict 会 RuntimeError 中断整局
+            for other in list(self._engine.state.actors.values()):
                 for old in list(other.all_modifiers()):
                     if (old.singleton_group == mod.singleton_group
                             and (other is not target or old.modifier_id != mod.modifier_id)):
@@ -184,8 +186,13 @@ class ModifierBook:
     def _remove_modifier(self, target: ActorState, modifier_id: str, reason: str = "expire") -> None:
         removed = target.modifiers.pop(modifier_id, None)
         if removed is not None:
-            # 反向摘盾：modifier 消失（过期/驱散/净化/破盾级联），其护盾实例一并移除
-            target.shields = [s for s in target.shields if s.modifier_id != modifier_id]
+            # 反向摘盾：关联件（modifier_id）或载体（shield_id）任一消失，护盾实例一并移除。
+            # InitShield 载体≠关联件（shield_id=INIT_SHIELD 载体、modifier_id=Shell 关联件），
+            # 旧只按 modifier_id 删 → 摘载体留孤儿盾（永久残留）。
+            gone = [s for s in target.shields
+                    if s.modifier_id == modifier_id or s.shield_id == modifier_id]
+            target.shields = [s for s in target.shields
+                              if s.modifier_id != modifier_id and s.shield_id != modifier_id]
             # multiple：按名摘除覆盖主实例 + 全部额外实例，逐实例 OnDestroy/事件。
             for instance in [removed, *removed.instances]:
                 payload = {
@@ -199,11 +206,20 @@ class ModifierBook:
                     "modifier_id": modifier_id, "reason": reason, "target": target.actor.actor_id,
                     "source": instance.source_id,
                     "behavior_flags": list(instance.behavior_flags)}, self._engine.state)
+            # 载体与关联件不同件时连带摘载体，不留孤儿载体（has_modifier 仍 1 但无盾）
+            for cid in {s.shield_id for s in gone if s.shield_id and s.shield_id != modifier_id}:
+                if cid in target.modifiers:
+                    self._remove_modifier(target, cid, reason)
             self._sync_speed(target)
 
     def _remove_instance(self, target: ActorState, mod: Modifier, reason: str = "expire") -> None:
-        """摘除单个实例（multiple 逐实例到期）；主实例到期且有额外实例时提升首个额外实例."""
+        """摘除单个实例（multiple 逐实例到期）；主实例到期且有额外实例时提升首个额外实例.
+
+        护盾/载体级联仅在该 modifier 组**完全摘除**时执行——组仍有存活实例（promoted
+        或额外实例）时护盾属整组共享，不能随单个到期实例删掉（否则剩存实例无盾）。
+        """
         primary = target.modifiers.get(mod.modifier_id)
+        fully_removed = False
         if primary is mod:
             if mod.instances:
                 promoted = mod.instances.pop(0)
@@ -211,11 +227,17 @@ class ModifierBook:
                 target.modifiers[mod.modifier_id] = promoted
             else:
                 target.modifiers.pop(mod.modifier_id, None)
+                fully_removed = True
         elif primary is not None and mod in primary.instances:
             primary.instances.remove(mod)
         else:
             return
-        target.shields = [s for s in target.shields if s.modifier_id != mod.modifier_id]
+        gone: List[Any] = []
+        if fully_removed:
+            gone = [s for s in target.shields
+                    if s.modifier_id == mod.modifier_id or s.shield_id == mod.modifier_id]
+            target.shields = [s for s in target.shields
+                              if s.modifier_id != mod.modifier_id and s.shield_id != mod.modifier_id]
         payload = {
             "modifier_id": mod.modifier_id, "reason": reason, "target": target.actor.actor_id,
             "source": mod.source_id, "behavior_flags": list(mod.behavior_flags),
@@ -225,6 +247,9 @@ class ModifierBook:
         self._engine.bus.emit("after_remove_modifier", {
             "modifier_id": mod.modifier_id, "reason": reason, "target": target.actor.actor_id,
             "source": mod.source_id, "behavior_flags": list(mod.behavior_flags)}, self._engine.state)
+        for cid in {s.shield_id for s in gone if s.shield_id and s.shield_id != mod.modifier_id}:
+            if cid in target.modifiers:
+                self._remove_modifier(target, cid, reason)
         self._sync_speed(target)
 
     def _tick_dots(self, actor_state: ActorState) -> None:
@@ -569,8 +594,11 @@ class ModifierBook:
         成员按获得先后 FIFO 逐扣（独立实例 = 单成员单元，逐比特退化为旧语义）。
         """
         shield_owners = [(target, shield) for shield in target.shields]
+        # F11：队伍盾只辐射真实我方战斗员；伪实体（$dark_team/$battle_event/$level，
+        # actor_id 带 $ 前缀）非敌方但不是我方可吸盾成员，二分敌我会误吸——显式排除
         team = (self._engine._light_team_state_obj
-                if not self._engine._is_enemy(target.actor) else None)
+                if not self._engine._is_enemy(target.actor)
+                and not str(target.actor.actor_id).startswith("$") else None)
         if team is not None and team is not target:
             shield_owners.extend((team, shield) for shield in team.shields)
         if amount <= 0 or not shield_owners:
@@ -600,13 +628,28 @@ class ModifierBook:
                 if left <= 0:
                     break
         for owner, shield in broken:
-            owner.shields.remove(shield)
-            self._engine.bus.emit("shield_broken", {
-                "shield_id": shield.shield_id, "source": source_id, "target": target.actor.actor_id,
-            }, self._engine.state)
-            self._emit_shield_changed(owner, shield, source_id, "break", 0.0)
-            self._engine.state.log.append(
-                f"AV{self._engine.state.clock:.1f}: {owner.actor.name} 的护盾 {shield.name} 被击破")
-            if shield.modifier_id:
-                self._remove_modifier(owner, shield.modifier_id, "shield_broken")
+            self._break_shield(owner, shield, source_id, event_target=target.actor.actor_id)
         return overflow
+
+    def _break_shield(self, owner: ActorState, shield: ShieldInstance,
+                      source_id: str = "", event_target: str = "") -> None:
+        """护盾破裂级联（单一来源）：移除实例 + shield_broken + 摘关联 modifier。
+
+        吸收归零（_absorb_with_shields）与 modify_shield 设 0（F12）共用，
+        不留活零值盾。event_target 缺省 = 持有者。
+        """
+        if shield in owner.shields:
+            owner.shields.remove(shield)
+        self._engine.bus.emit("shield_broken", {
+            "shield_id": shield.shield_id, "source": source_id,
+            "target": event_target or owner.actor.actor_id,
+        }, self._engine.state)
+        self._emit_shield_changed(owner, shield, source_id, "break", 0.0)
+        self._engine.state.log.append(
+            f"AV{self._engine.state.clock:.1f}: {owner.actor.name} 的护盾 {shield.name} 被击破")
+        # 破盾级联摘关联件（modifier_id）与载体（shield_id）——InitShield 二者不同件，
+        # 旧只摘 modifier_id → 留孤儿载体（has_modifier 仍 1 但无盾）
+        if shield.modifier_id:
+            self._remove_modifier(owner, shield.modifier_id, "shield_broken")
+        if shield.shield_id and shield.shield_id != shield.modifier_id:
+            self._remove_modifier(owner, shield.shield_id, "shield_broken")

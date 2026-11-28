@@ -131,6 +131,163 @@ class TestHookAlgebraDirect:
             "target": "self", "scope": "unique_name"}, {})
         assert eng._hooks._hook_target_states(spec, hero, {}) == [hero]
 
+    def test_private_dynamic_target_readable_by_owner(self):
+        """actor 私有动态目标绑定（per-owner，非 unique_name）须被持有者读到——
+        旧 unique_target_id 只读 $level，私有表只写不读静默空转（05_effects §actor
+        私有动态目标绑定）；他人读同名不串，全局 unique_name 回落口径不变。"""
+        eng = _mk_engine()
+        hero = eng.state.actors["hero"]
+        spec = {"pool": "unique:Priv"}
+        assert eng._hooks._hook_target_states(spec, hero, {}) == []
+        eng._hooks._run_hook_effect(hero, {
+            "effect_type": "set_dynamic_target", "dynamic_key": "Priv",
+            "target": {"pool": "enemies", "take": 1}, "owner": "self"}, {})
+        resolved = eng._hooks._hook_target_states(spec, hero, {})
+        assert [s.actor.actor_id for s in resolved] == ["e1"], "持有者读到私有绑定"
+        other = eng.state.actors["e2"]
+        assert eng._hooks._hook_target_states(spec, other, {}) == [], "私有绑定不串他人"
+
+    def test_event_targets_includes_battle_event(self):
+        """battle_event 实体不进 state.actors，$event.targets/hit_targets 须回落
+        battle_event_actor（旧只查 state.actors 丢 $battle_event:* 目标）。"""
+        eng = _mk_engine()
+        hero = eng.state.actors["hero"]
+        eng._hooks._run_hook_effect(hero, {
+            "effect_type": "create_battle_event", "event_id": 60001, "team": ""}, {})
+        ev = eng.battle_events[60001]["actor_state"]
+        for field in ("targets", "hit_targets"):
+            resolved = eng._hooks._hook_target_states(
+                f"$event.{field}", hero, {field: [ev.actor.actor_id]})
+            assert [s.actor.actor_id for s in resolved] == [ev.actor.actor_id], field
+
+    def test_modifier_namespace_battle_event_stacks(self):
+        """$modifier 命名空间对 battle_event 目标须读其实例（旧查不到 → stacks 恒 0，
+        与 stacks() 函数分叉）。"""
+        eng = _mk_engine()
+        hero = eng.state.actors["hero"]
+        eng._hooks._run_hook_effect(hero, {
+            "effect_type": "create_battle_event", "event_id": 60001, "team": ""}, {})
+        ev = eng.battle_events[60001]["actor_state"]
+        eng._apply_modifier(ev, Modifier(
+            modifier_id="m", name="m", modifier_type="debuff", duration=0, stacks=2))
+        ctx = eng._hooks._hook_ctx(hero, {"modifier_id": "m", "target": ev.actor.actor_id})
+        assert ctx["modifier"].stacks == 2, "battle_event 目标的 $modifier.stacks 须读实例"
+
+    def test_target_predicates_accept_parsed_dict(self):
+        """target_lists_intersect/target_in_selected 接受已解析 dict 规格——旧
+        json.loads(str(dict)) 把 dict 转 Python repr（单引号/True）再解析必炸。"""
+        eng = _mk_engine()
+        hero = eng.state.actors["hero"]
+        funcs = eng._hooks._hook_functions(hero, {})
+        spec = {"pool": "enemies"}
+        assert funcs["target_in_selected"](spec, "e1") == 1.0
+        assert funcs["target_in_selected"](spec, "hero") == 0.0
+        assert funcs["target_lists_intersect"](spec, {"pool": "enemies", "take": 1}) == 1.0
+        assert funcs["target_lists_intersect"]({"pool": "allies"}, {"pool": "enemies"}) == 0.0
+
+    def test_target_unselectable_battle_event_matches_pool(self):
+        """battle_event 实体：target_unselectable 谓词与 pool:'unselectable' 口径一致
+        （旧谓词读 summon_flags 默认 True 返回 0，池按 actor_type 含它 → 矛盾）。"""
+        eng = _mk_engine()
+        hero = eng.state.actors["hero"]
+        eng._hooks._run_hook_effect(hero, {
+            "effect_type": "create_battle_event", "event_id": 60001, "team": ""}, {})
+        ev = eng.battle_events[60001]["actor_state"]
+        funcs = eng._hooks._hook_functions(hero, {})
+        assert funcs["target_unselectable"](ev.actor.actor_id) == 1.0
+        pool = eng._hooks._hook_target_states({"pool": "unselectable"}, hero, {})
+        assert ev in pool, "池含 battle_event，谓词须同判不可选"
+
+    def test_include_dead_respects_exclusions(self):
+        """include_dead 仅放松存活闸——banished/系统排除旗/不可选仍排除（旧直返
+        state.actors.values() 绕过全部过滤，与常规池口径分叉）。"""
+        eng = _mk_engine()
+        hero = eng.state.actors["hero"]
+        a1 = eng.state.actors["a1"]
+        a2 = eng.state.actors["a2"]
+        a1.banished = True
+        a2.actor.system_flags = frozenset({"untargetable"})
+        hero.alive = False  # 死亡但可选 → include_dead 保留
+        ids = {s.actor.actor_id for s in eng._hooks._hook_target_states(
+            {"pool": "allies", "include_dead": True}, hero, {})}
+        assert "a1" not in ids, "banished 仍排除"
+        assert "a2" not in ids, "系统排除旗仍排除"
+        assert "hero" in ids, "死亡但可选的我方保留"
+        # 不可选（summon_flags）默认排除，include_unselectable 放松
+        a2.actor.system_flags = frozenset()
+        a2.actor.summon_flags["ally_targetable"] = False
+        ids2 = {s.actor.actor_id for s in eng._hooks._hook_target_states(
+            {"pool": "allies", "include_dead": True}, hero, {})}
+        assert "a2" not in ids2, "不可选默认排除"
+        ids3 = {s.actor.actor_id for s in eng._hooks._hook_target_states(
+            {"pool": "allies", "include_dead": True, "include_unselectable": True}, hero, {})}
+        assert "a2" in ids3, "include_unselectable 放松可选性"
+
+    def test_synthetic_frame_not_counted_as_action(self):
+        """F21：帧外 hook 链合成帧非真行动——turn_owner_has_action_in_turn 行动前不
+        误报 1，current_turn_state InsertUltraSkillExecuting 结束后不误报 1。"""
+        from hsr_nous.sim.frame import ExecutionFrame
+        eng = _mk_engine()
+        hero = eng.state.actors["hero"]
+        eng._current_turn_actor_id = "hero"
+        funcs = eng._hooks._hook_functions(hero, {})
+        assert funcs["turn_owner_has_action_in_turn"]() == 0.0  # 无帧
+        synth = ExecutionFrame(action_id="on_action_end", actor_id="hero",
+                               action_type="ultimate", insert=True, synthetic=True)
+        eng._frame_stack.append(synth)
+        assert funcs["turn_owner_has_action_in_turn"]() == 0.0, "合成帧非真行动"
+        assert funcs["current_turn_state"]("InsertUltraSkillExecuting") == 0.0
+        eng._frame_stack.pop()
+        real = ExecutionFrame(action_id="ult", actor_id="hero",
+                              action_type="ultimate", insert=True)
+        eng._frame_stack.append(real)
+        assert funcs["turn_owner_has_action_in_turn"]() == 1.0, "真行动帧计入"
+        assert funcs["current_turn_state"]("InsertUltraSkillExecuting") == 1.0
+        eng._frame_stack.pop()
+
+    def test_nested_phase_writeback_no_phantom_transition(self):
+        """F20：子帧写回原相位须见父帧覆盖层——净零转换（1→2→1）不发
+        monster_phase_changed（旧子帧读已提交态误判无变化，父帧仍发早先转换）。"""
+        from hsr_nous.sim.frame import ExecutionFrame
+        eng = _mk_engine()
+        e1 = eng.state.actors["e1"]
+        eng._enemy_policy_state.setdefault("e1", {"current_phase": 1, "dynamic_values": {}})
+        events = []
+        eng.bus.subscribe("monster_phase_changed", lambda et, p, ctx: events.append(dict(p)))
+        parent = ExecutionFrame(action_id="a", actor_id="e1")
+        eng._frame_stack.append(parent)
+        eng._hooks._h_set_dynamic_value(
+            e1, {"dynamic_key": "current_phase", "target": "self", "amount": 2}, {}, {})
+        sub = ExecutionFrame(action_id="b", actor_id="e1")
+        eng._frame_stack.append(sub)
+        eng._hooks._h_set_dynamic_value(
+            e1, {"dynamic_key": "current_phase", "target": "self", "amount": 1}, {}, {})
+        eng._frame_stack.pop()
+        eng._commit_frame(sub)
+        eng._frame_stack.pop()
+        eng._commit_frame(parent)
+        assert events == [], "净零转换（1→2→1）不应发相位变更"
+        assert eng._enemy_policy_state["e1"]["current_phase"] == 1
+
+    def test_taunt_count_respects_custom_unselectable(self):
+        """taunt 计数分支须过 _pick_ally_target 的 custom_unselectable 来源门——
+        唯一候选被滤时 count 与 effect 同判 0（旧 allow_sample 分支裸返回 pool[:1] 报 1）。"""
+        eng = _mk_engine()
+        e1 = eng.state.actors["e1"]
+        a1 = eng.state.actors["a1"]
+        a2 = eng.state.actors["a2"]
+        eng._apply_modifier(e1, Modifier(
+            modifier_id="OPP", name="OPP", modifier_type="buff", duration=0))
+        for a in (eng.state.actors["hero"], a1, a2):
+            eng._apply_modifier(a, Modifier(
+                modifier_id="BLK", name="BLK", modifier_type="buff", duration=0,
+                custom_unselectable={"OPP": ["dark"]}))
+        spec = {"pool": "enemy_targets", "take": 1, "mode": "taunt_or_random"}
+        effect = eng._hooks._hook_target_states(spec, e1, {})
+        n = eng._hooks._hook_functions(e1, {})["count_selected"](spec)
+        assert effect == [], "候选全被 custom_unselectable 滤掉 → effect 空"
+        assert n == 0.0, "count 须与 effect 一致（旧报 1）"
+
     def test_take_int_random_targets(self):
         """实例垫底（敌方 "Deals … to 3 random targets"）：take 3 + mode random——
         roll 同 seed 复现；expected 按序取前 N 不掷骰（确定化口径）."""

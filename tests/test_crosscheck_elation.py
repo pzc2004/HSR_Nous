@@ -389,7 +389,7 @@ def _opt_silver_wolf(action: str, *, cond: dict | None = None):
 # L2 火花 1501（对方 1500/Sparxie.ts 全实现）——直播态双普攻 + 笑点经济主干
 # ===========================================================================
 
-class TestSparxieDuipai:
+class TestSparxieCrosscheck:
     """火花 E0：面板回显/普通普攻/强化普攻双段/终结技三段链/欢愉技 21 段聚合
     /互动陷阱结构差——双锚+乘区读回."""
 
@@ -534,7 +534,7 @@ class TestSparxieDuipai:
 # L2 开拓者•欢愉 8009/8010（对方 8000/TrailblazerElation.ts 双子同实现）
 # ===========================================================================
 
-class TestTrailblazerElationDuipai:
+class TestTrailblazerElationCrosscheck:
     """欢愉开拓者 E0：普攻/战技双段/欢愉技 9 段聚合/终结技分支 A 代放主干/
     ATK 转化（B-EL① 对拍锚）/8010 双子巡检."""
 
@@ -680,7 +680,7 @@ class TestTrailblazerElationDuipai:
 # L2 爻光 1502（对方 1500/Yaoguang.ts 全实现）——大吉大利 actionModifier 首接
 # ===========================================================================
 
-class TestYaoguangDuipai:
+class TestYaoguangCrosscheck:
     """爻光 E0：普攻+大吉大利/欢愉技（凶星低语先挂）/结界共享/终结技额外阿哈时刻."""
 
     def test_basic_with_great_boon(self, optimizer_driver):
@@ -812,7 +812,7 @@ class TestYaoguangDuipai:
 # L2 绯英 1505（对方 1500/Evanescia.ts 全实现）——能量↔CB 互转 + 狐狸老师
 # ===========================================================================
 
-class TestEvanesciaDuipai:
+class TestEvanesciaCrosscheck:
     """绯英 E0：普攻/战技双段/终结技弹射变档/欢愉技/狐狸老师 UNIQUE."""
 
     def test_basic(self, optimizer_driver):
@@ -943,7 +943,7 @@ class TestEvanesciaDuipai:
 # L2 银狼LV.999 1506（对方 1500/SilverWolfLv999.ts 全实现）——Godmode 欢愉化
 # ===========================================================================
 
-class TestSilverWolfDuipai:
+class TestSilverWolfCrosscheck:
     """银狼999 E0：普攻/战技（MMR 联动）/Godmode 强化普攻（R-SW1 已收官——行动域隔离
     双方互对）/欢愉技/盲盒."""
 

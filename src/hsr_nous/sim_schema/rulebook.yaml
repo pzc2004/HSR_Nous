@@ -115,6 +115,7 @@ constants:
   aha_speed_weights: [0.2, 0.1, 0.05, 0.02]  # 阿哈速度权重（按有效速度降序前 4 位；V4=0.02 采米游社含演算实例版——0.025 备选待实测）
   aha_start_punchline: 1.0   # 进战每欢愉角色阿哈笑点（mechanics 08 §8.2）
   aha_start_banger: 20.0     # 进战好活当赏点数（mechanics 08 §8.1——所有欢愉角色进战获得）
+  action_distance: 10000.0   # 行动总路程（mechanics 03 §3.1：初始行动值 = 10000/速度；拉条/推条 = 10000×pct 绝对距离运算）——scheduler 距离制唯一喂入值，引擎零硬编常数
 
 # 行动默认回能表（mechanics 05 §5.1 唯一来源）：None=按 action_type 查本表；
 # Action 显式 energy_gain 优先于查表（显式 0 = 该技能不回能）

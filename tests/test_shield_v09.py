@@ -62,6 +62,35 @@ def _hit_ally(eng):
     eng._execute_action(eng.state.actors["e"], _enemy_atk())
 
 
+class TestModifyShieldBreakF12:
+    def test_set_zero_triggers_break_cascade(self):
+        """F12：modify_shield 设 0 走破裂级联——盾离场 + 关联 modifier 摘 + shield_broken."""
+        eng = _engine()
+        st = eng.state.actors["h"]
+        eng._apply_modifier_spec(st, _shield_spec("SH_X", 500.0), st)
+        broken = []
+        eng.bus.subscribe("shield_broken", lambda et, p, ctx: broken.append(dict(p)))
+        assert "SH_X" in st.modifiers and st.shields
+        eng._hooks._run_hook_effect(st, {
+            "effect_type": "modify_shield", "target": "self",
+            "modifier_ids": ["SH_X"], "amount": 0}, {})
+        assert not st.shields, "零值盾须破裂离场，不留活零值盾"
+        assert "SH_X" not in st.modifiers, "关联 modifier 级联摘除"
+        assert [p["shield_id"] for p in broken] == ["SH_X"]
+
+
+class TestTeamShieldPseudoF11:
+    def test_pseudo_entity_not_absorb_light_team_shield(self):
+        """F11：$dark_team 等伪实体非我方成员，打它不应吸我方队伍盾."""
+        eng = _engine()
+        team = eng._team_entity_state("TeamLight")
+        eng._apply_modifier_spec(team, _shield_spec("TEAM_SH", 500.0), team)
+        dark = eng._pseudo_entity_state("$dark_team")
+        overflow = eng._modifiers._absorb_with_shields(dark, 100.0, "e")
+        assert overflow == 100.0, "伪实体全额本体承伤，不吸我方队伍盾"
+        assert team.shields[0].remaining == 500.0, "我方队伍盾纹丝不动"
+
+
 class TestShieldAbsorb:
     def test_parallel_absorb_high_shield_survives(self):
         """两盾同时扣全额；低盾破高盾留，本体不掉血."""
@@ -230,3 +259,70 @@ class TestShieldFormulaBook:
                 "shield": {"scaling": {"spd": 1.0}, "flat": 100.0}}
         with pytest.raises(ValueError, match="公式外槽位"):
             eng._apply_modifier_spec(st, spec, st)
+
+
+class TestShieldCleanupMirrorF10:
+    """F10：护盾两清理路径镜像——载体（shield_id）与关联件（modifier_id）不同件时
+    （InitShield 在 modifier OnStack 内，载体永久 duration=0、盾关联到 Shell 件），
+    摘载体不留孤儿盾、破盾/摘关联件不留孤儿载体。"""
+
+    def _init_shield(self, eng, link="SH"):
+        st = eng.state.actors["h"]
+        spec = {"modifier_id": "M", "name": "InitShield", "modifier_type": "buff",
+                "duration": 0, "shield": {"flat": 500.0, "modifier_id": link}}
+        eng._apply_modifier_spec(st, spec, st)
+        return st
+
+    def _shell(self, eng):
+        st = eng.state.actors["h"]
+        eng._apply_modifier_spec(st, {"modifier_id": "SH", "name": "Shell",
+                                      "modifier_type": "buff", "duration": 3}, st)
+
+    def test_remove_linked_modifier_takes_shield_and_carrier(self):
+        eng = _engine()
+        self._shell(eng)
+        st = self._init_shield(eng)
+        assert st.shields and "M" in st.modifiers
+        eng._remove_modifier(st, "SH", "dispel")
+        assert not st.shields, "关联件 SH 消失 → 盾随消"
+        assert "M" not in st.modifiers, "载体 M 连带摘，不留孤儿载体"
+
+    def test_break_shield_removes_linked_and_carrier(self):
+        eng = _engine()
+        self._shell(eng)
+        st = self._init_shield(eng)
+        eng._absorb_with_shields(st, 600.0, "e")
+        assert not st.shields
+        assert "SH" not in st.modifiers and "M" not in st.modifiers, "破盾摘关联件与载体"
+
+    def test_remove_carrier_no_orphan_shield(self):
+        eng = _engine()
+        st = self._init_shield(eng)  # 关联件 SH 未施加（target≠holder）
+        assert st.shields
+        eng._remove_modifier(st, "M", "expire")
+        assert not st.shields, "摘载体 M → 盾随消，不留永久孤儿盾"
+
+    def test_break_shield_no_orphan_carrier(self):
+        eng = _engine()
+        st = self._init_shield(eng)  # 关联件 SH 未施加
+        eng._absorb_with_shields(st, 600.0, "e")
+        assert not st.shields
+        assert "M" not in st.modifiers, "破盾摘载体，不留孤儿载体（has_modifier 仍 1 无盾）"
+
+
+class TestMultipleInstanceShield:
+    def test_multiple_instance_promote_keeps_shield(self):
+        """multiple 实例逐个到期：主实例到期提升额外实例时，护盾随组存活不删
+        （旧 _remove_instance 无条件按 modifier_id 清盾，剩存实例无盾）。"""
+        eng = _engine()
+        st = eng.state.actors["h"]
+        spec = {"modifier_id": "MS", "name": "MS", "modifier_type": "buff",
+                "stack_mode": "multiple", "shield": {"flat": 300.0}}
+        eng._apply_modifier_spec(st, {**spec, "duration": 3}, st)
+        eng._apply_modifier_spec(st, {**spec, "duration": 5}, st)
+        primary = st.modifiers["MS"]
+        assert primary.instances, "第二次施加成额外实例"
+        assert st.shields, "初始有盾"
+        eng._modifiers._remove_instance(st, primary, "expire")  # 主实例到期 → 提升
+        assert "MS" in st.modifiers, "额外实例已提升为主"
+        assert st.shields, "护盾仍随组存活（旧被误删）"

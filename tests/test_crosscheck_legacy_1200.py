@@ -521,7 +521,7 @@ def _opt_topaz(action: str, *, cond: dict | None = None, elemental_weak: bool = 
 # L2 停云 1202（对方 1200/Tingyun.ts 全实现——BASIC/BREAK 两行动注册）——祝福增益链+附加段族
 # ===========================================================================
 
-class TestTingyunDuipai:
+class TestTingyunCrosscheck:
     """停云 E0：普攻裸发三方全等（B-TR② 收官）/自祝福链（增益 ATK 面板+附加双段
     总和）三方全等（B-TY① 收官）/teammate 增益链 ATK_P+BOOST 比等+附加段 R-TY2."""
 
@@ -623,7 +623,7 @@ class TestTingyunDuipai:
 # L2 素裳 1206（对方 1200/Sushang.ts 全实现）——剑势直伤族
 # ===========================================================================
 
-class TestSushangDuipai:
+class TestSushangCrosscheck:
     """素裳 E0：普攻/战技/终结技三方全等（B-TR② 收官——expected 剑势恒不触发双钉
     skillExtraHits=0）/终结技 ATK 窗/剑势默认档 R-SS1."""
 
@@ -711,7 +711,7 @@ class TestSushangDuipai:
 # L2 彦卿 1209（对方 1200/Yanqing.ts 全实现）——智剑连心双暴+冻结族
 # ===========================================================================
 
-class TestYanqingDuipai:
+class TestYanqingCrosscheck:
     """彦卿 E0：普攻/战技/终结技+追击+Icing 逐段三方全等（B-TR② 收官——
     elemental_weak 双钉 Icing 双方同出段）/Sync 门控双暴链/冻结附加段 R-YQ2."""
 
@@ -827,7 +827,7 @@ def _angang(eng):
     assert "ANGANG_ATK" in st.modifiers
 
 
-class TestQingqueDuipai:
+class TestQingqueCrosscheck:
     """青雀 E0：普攻/暗杠强化普攻（R-QQ0 钉法）/战技叠层 1 档三方全等+4 档比等
     （B-QQ① 收官）/终结技/E4 空段同钉."""
 
@@ -941,7 +941,7 @@ class TestQingqueDuipai:
 # L2 克拉拉 1107（对方 1100/Clara.ts 全实现）——敌方攻击驱动反击 FUA 族
 # ===========================================================================
 
-class TestClaraDuipai:
+class TestClaraCrosscheck:
     """克拉拉 E0：普攻三方全等（B-TR② 收官）/敌方驱动反击链（敌 actions[0] 必攻
     +solo 唯一目标钉克拉拉）/强化反击 R-CL1/战技标记追加段总和比等."""
 
@@ -1038,7 +1038,7 @@ class TestClaraDuipai:
 # L2 卡芙卡 1005 B1（对方 1000/KafkaB1.ts 全实现——1005b1 直呼）——触电+引爆族
 # ===========================================================================
 
-class TestKafkaDuipai:
+class TestKafkaCrosscheck:
     """卡芙卡 E0（B1 现役 11005xx 轨）：普攻/战技/终结技主段三方全等（B-TR②
     收官）/引爆三段 R-KF1 对方无落点（声明式 DoT 可引爆实证）/触电跳伤 R-KF3 收官
     （2026-09-22 双通道合并）/天赋 FUA 链/Torture 门控双档."""
@@ -1166,7 +1166,7 @@ class TestKafkaDuipai:
 # L2 托帕&账账 1112（对方 1100/Topaz.ts 全实现——双实体召唤物链）——账账挂谁侧按谁面板
 # ===========================================================================
 
-class TestTopazDuipai:
+class TestTopazCrosscheck:
     """托帕 E0：战技结算段三方全等（B-TP① 收官——PoD 易伤双通道同吃）/账账 FUA
     R-TP1 召唤物继承差/普攻 R-TP3 类型标签差/Windfall R-TP4/A4 R-TP2."""
 

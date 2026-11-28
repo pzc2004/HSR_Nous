@@ -17,5 +17,12 @@ done
 mkdir -p "$DSH_DIR"
 npm --prefix "$DSH_DIR" install --save-exact --no-audit --no-fund \
   "@deepseek-ai/dsh@$DSH_VERSION"
-"$DSH_BIN" --version
+# 功能冒烟：--version 须非空——Node < 22.18 时 import.meta.main 未定义，
+# DSH 入口静默 no-op（exit 0 零输出），只信 exit 0 会被骗过。
+dsh_version="$("$DSH_BIN" --version 2>&1)"
+if [ -z "$dsh_version" ]; then
+  echo "DSH --version 空输出：入口静默 no-op（常见于 Node < 22.18，import.meta.main 未定义）；请升级 Node >= 22.18" >&2
+  exit 1
+fi
+printf 'DSH 版本：%s\n' "$dsh_version"
 printf 'DSH 可执行文件：%s\n' "$DSH_BIN"

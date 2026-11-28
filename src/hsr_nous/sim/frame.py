@@ -1,8 +1,8 @@
 """执行帧（ExecutionFrame，裁决卡 designs/DECISIONS.md #26）：一次行动执行的瞬态上下文.
 
 帧随 `engine._execute_action` 同步调用栈生灭（进入压栈 / 正常返回提交 / 异常整帧丢弃
-——与 ConfigAI 解释器选不出技能时回滚 dynamic_values 的既有先例同口径），承载三类
-"执行内"语义：
+——与 ConfigAI 解释器选不出技能时回滚 dynamic_values 的既有先例同口径），承载以下
+"执行内"语义（条目自枚举，不写会过期的计数）：
 
 1. **写后读**——`set_dynamic_value` 在行动执行内的写入先入覆盖层，同执行内（含同窗
    事件链上后续 hook 的 condition/effect）立即可读；最外层帧提交才把覆盖层合并进
@@ -50,6 +50,10 @@ class ExecutionFrame:
     target_ids: List[str] = field(default_factory=list)  # 本行动解析出的技能目标，保留原顺序
     action_type: str = ""
     insert: bool = False
+    #: 合成帧标记（帧外 hook 链由 _run_hook_effects 自动建帧，非真行动执行）——
+    #: 行动语境谓词（turn_owner_has_action_in_turn/current_turn_state）据此排除，
+    #: 避免 on_turn_start 钩行动前误报「已在行动」、插入终结技结束后误报「执行中」
+    synthetic: bool = False
 
     def write(self, actor_id: str, key: str, value: float) -> None:
         """覆盖层写入（未提交——仅帧内读者可见，提交时才落已提交态）."""

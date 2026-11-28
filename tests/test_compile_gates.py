@@ -720,6 +720,28 @@ class TestModifierContainerTypes:
         with pytest.raises(ValueError, match="stat_effects 须为 mapping，实得 list"):
             compile_encounter(bad, _stage())
 
+    def test_behavior_flags_str_rejected(self):
+        # F08：字符串会被逐字符拆（Stealth→S,t,e…）静默失效，须编译期炸
+        bad = _build()
+        bad["build"]["team"][0]["actions"][0]["apply_modifiers"] = [
+            {"modifier_id": "M", "behavior_flags": "Stealth"}]
+        with pytest.raises(ValueError, match="behavior_flags 须为 list，实得 str"):
+            compile_encounter(bad, _stage())
+
+    def test_locked_action_types_str_rejected(self):
+        bad = _build()
+        bad["build"]["team"][0]["actions"][0]["apply_modifiers"] = [
+            {"modifier_id": "M", "locked_action_types": "ultimate"}]
+        with pytest.raises(ValueError, match="locked_action_types 须为 list，实得 str"):
+            compile_encounter(bad, _stage())
+
+    def test_custom_unselectable_value_str_rejected(self):
+        bad = _build()
+        bad["build"]["team"][0]["actions"][0]["apply_modifiers"] = [
+            {"modifier_id": "M", "custom_unselectable": {"OPPOSITE": "light"}}]
+        with pytest.raises(ValueError, match=r"custom_unselectable.*须为 list"):
+            compile_encounter(bad, _stage())
+
     def test_legal_shapes_pass(self):
         ok = _build()
         ok["build"]["team"][0]["actions"][0]["apply_modifiers"] = [
@@ -1219,3 +1241,51 @@ class TestElementVocabGate:
              "max_toughness": 30, "resistance": {"Ice": 0.4}}]
         with pytest.raises(ValueError, match="resistance 非法值 'Ice'"):
             compile_encounter(_build(), st, template_roots=TEST_TEMPLATE_ROOTS)
+
+
+class TestScalingExpressionF09:
+    """F09：倍率表达式是编译契约（build_compiler 接受、引擎 _resolve_dynamic_action_scaling
+    运行时物化，见 test_native_dynamic_damage_scaling_runs_at_action_time）——消费端须
+    保留表达式串而非 float() 炸。敌人模板经 enemy_template 引用进关卡走 stage_compiler，
+    web 预览走 _scaling_rows，两处旧 float(v) 对动态倍率敌人当场崩。"""
+
+    def test_stage_compiler_preserves_expression_scaling(self):
+        from hsr_nous.sim.compile.stage_compiler import _parse_enemy_actions
+        acts = _parse_enemy_actions([{
+            "action_id": "a", "action_type": "skill", "damage_type": "quantum",
+            "scaling": [{"atk": "resource_of($self, 'x') * 4"}],
+            "toughness_dmg": "dynamic_of($self.actor_id, '_MaxStance')",
+        }], where="t")
+        assert acts[0].scaling == [{"atk": "resource_of($self, 'x') * 4"}]
+        assert acts[0].toughness_dmg == "dynamic_of($self.actor_id, '_MaxStance')"
+
+    def test_stage_compiler_numeric_scaling_still_float(self):
+        from hsr_nous.sim.compile.stage_compiler import _parse_enemy_actions
+        acts = _parse_enemy_actions([{
+            "action_id": "a", "action_type": "skill", "damage_type": "quantum",
+            "scaling": [{"atk": "3.0"}], "toughness_dmg": 10,
+        }], where="t")
+        assert acts[0].scaling == [{"atk": 3.0}]
+        assert acts[0].toughness_dmg == 10.0
+
+    def test_web_scaling_rows_preserves_expression(self):
+        from hsr_nous.sim.web import _scaling_rows
+        rows = _scaling_rows([{"atk": "resource_of($self, 'x') * 4"}, {"atk": 2.5}])
+        assert rows == [{"atk": "resource_of($self, 'x') * 4"}, {"atk": 2.5}]
+
+
+class TestMaxActionValueDefaultF26:
+    """max_action_value 缺省单一来源 = sim_schema TerminationConfig（1500）；
+    旧 compile 450 与 schema 分叉——省略该键的关卡两路缺省须一致。"""
+
+    def test_compile_default_matches_schema(self):
+        from hsr_nous.sim.compile.compiled import CompiledStage
+        from hsr_nous.sim_schema.encounter import TerminationConfig
+        assert CompiledStage.max_action_value == float(TerminationConfig.max_action_value)
+
+    def test_stage_omitting_av_uses_schema_default(self):
+        from hsr_nous.sim_schema.encounter import TerminationConfig
+        st = _stage()
+        st["stage"]["termination"] = {"mode": "fixed_av"}  # 省略 max_action_value
+        c = compile_encounter(_build(), st, template_roots=TEST_TEMPLATE_ROOTS)
+        assert c.stage.max_action_value == float(TerminationConfig.max_action_value)

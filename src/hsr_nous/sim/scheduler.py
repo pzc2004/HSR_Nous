@@ -18,8 +18,11 @@ from typing import Dict, List, Optional, Tuple
 
 from hsr_nous.sim.avtree import AVTree
 from hsr_nous.sim_schema.actor import Actor
+from hsr_nous.sim_schema.rulebook import get_rulebook
 
-DISTANCE = 10000.0
+# 行动总路程唯一来源 = rulebook constants.action_distance（mechanics 03 §3.1）——
+# 引擎零硬编常数；旧 DISTANCE = 10000.0 硬编在调度模块放错地方（F26）。
+DISTANCE = float(get_rulebook().constants["action_distance"])
 
 # 额外回合类型
 EXTRA_NORMAL = "normal_extra"  # 吃回合事件（与普通回合 kind="normal" 区分，发射 on_extra_turn）

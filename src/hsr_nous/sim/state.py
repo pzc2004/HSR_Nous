@@ -126,7 +126,7 @@ class Modifier:
     grants_immune: List[str] = field(default_factory=list)  # 携带者免疫的 debuff 类别（字面 kind 词表——"control"等，非表达式；enable_if 条件件随启用态开关，04_modifier §4.7）
     tick_anchor: str = "owner_turn_end"  # 计时锚点（duration-1 时点）：owner_turn_end（默认，携带者回合结束）/ owner_turn_start（携带者回合开始——阮梅弦外音族）/ on_action（每次行动——行动次数型 buff 族）/ source_turn_end（施加者回合结束——04_modifier §4.14 duration.tick_on "$modifier.source" 的落地点；施加者离场后自然停走）/ source_turn_start（施加者回合开始——source_turn_end 的开始侧对称锚，长夜月 141302 忆灵光环族）
     effect_scope: str = "self"  # 数值作用范围：self（默认，仅携带者）/ team（光环——挂源辐射全队，阮梅弦外音/缇宝族；计时仍走 tick_anchor）
-    # ---- 生存三件套（受击链末段四层分工，见 engine._check_death docstring）----
+    # ---- 生存处置件（受击链末段分工，条目自枚举；详见 engine._check_death docstring）----
     hp_lock: bool = False        # 锁血：HP 不会降至 1 以下（伤害照算、致命留 1 血；区别于免死 cancel 与复活回拉）
     allow_negative_hp: bool = False  # 允许负 HP 存活：父件存在时不做真死定论
     block_damage: bool = False   # 一次性免伤 Barrier：下次受击 amount=0 并消耗，目标侧结算

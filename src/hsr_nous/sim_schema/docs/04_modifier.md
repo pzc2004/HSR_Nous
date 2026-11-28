@@ -560,7 +560,7 @@ DoT 的 `SetDynamicValueByProperty(SnapshotPropertyEntity, Attack/MaxHP)` 分别
 `$self.atk` / `$self.max_hp`。相位/引爆回调里的顺序动态赋值与双分支同键赋值折叠进跳伤表达式。
 OnCreate 在施加时也有同名读取：经 on_apply 载荷的 `$event.source` 读取施加者现值并写入携带者动态值，
 不与跳伤时的 `$snapshot` 命名空间混用。
-| `singleton_group` | string? | singleton 标签：同一目标上同组 modifier 互斥，新挂替换旧挂；加 `scope: "global" \| "team"` 升格为**跨目标单例**（师父/Bondmate"最新即唯一"族，policy: first\|latest——现状 remove(all)+apply 手写换标对收编） |
+| `singleton_group` | string? | singleton 标签：同一目标上同组 modifier 互斥，新挂替换旧挂；加 `"global:"` 前缀（`singleton_group: "global:<name>"`）升格为**跨目标全场单例**——同名组在所有单位中只保留最新一件（师父/Bondmate"最新即唯一"族，对应上游 RetainGlobalLatestUnique；语义见 §4.5、实现 `sim/modifiers.py` `global:` 前缀分支）。**无** `scope`/`policy` 键（旧文档误载，照写编译期炸） |
 
 - **唯一性**：`stack_mode: "replace"`（同 ID 重挂替换）+ `singleton_group`（跨 ID 同族互斥）——银狼重复植入换属性 = 同组替换
 - **削韧联动**：植入生效后目标弱点列表已含新属性，`toughness_scope` 闸门（`03_actor.md` §3.4）按修改后的列表判定，植入属性可正常削韧

@@ -124,6 +124,7 @@ hooks:
 | `deal_damage` / `apply_modifier` / `remove_modifier` / `gain_energy` / `consume_energy` / `gain_skill_point` / `gain_resource` / `set_hp_to_percent` / `grant_extra_turn` / `immediate_action` / `delay_action` / `trigger_action` | **已实现**（hook 通道） |
 | `barrage_damage` | **已实现**（hook 通道——右侧优先每目标一次的连续攻击；重复目标追加一段，见本节 Barrage 伤害） |
 | `random_choice` | **已实现**（hook 通道——`options` 中随机执行一个 effect；expected 取首项，roll 均匀随机） |
+| `loop_effects` | **已实现**（hook 通道——循环执行嵌套 `effects`：`count` 定次数（非负有限整数）或 `condition` 逐轮重求值二选一；安全上限 10000 轮，超限/非整数显式报错不静默截断；每轮 nested payload 带 `loop_index`；条件循环读得到帧内写后读，对应 ConditionLoopExecuteTaskList） |
 | `break_damage` / `cancel_event` / `set_resource` / `heal_self` / `adjust_stacks` | **已实现**（hook 通道；原引擎暗原语，本节补登，见下） |
 | `set_dynamic_value` | **已实现**（hook 通道——ConfigAI 动态值设值，`dynamic_key` + `amount`，见下） |
 | `create_battle_event` | **已实现**（hook 通道——创建并注册战斗事件伪实体，载荷 `actor/event_id/source/team`，不占站位或行动条，支持存档） |
@@ -135,6 +136,7 @@ hooks:
 | `heal` / `summon` / `dismiss_summon` / `trigger_dot` / `adjust_duration` / `add_toughness_bar` / `restore_toughness` / `exit_break_state` / `reset_stance` / `reduce_toughness` | **已实现**（hook 通道——2026-09 收编：heal=任意目标治疗；summon/dismiss=召唤物入离场；trigger_dot=强制结算目标 DoT 不耗 duration（scope/dot_element 选择性过滤 + ratio 引爆比例可选，缺省全结全额）；adjust_duration=时长 ±N ≠ refresh；add_toughness_bar=追加韧性条（虚韧性族，`03_actor.md` §3.10 条序模型）；restore_toughness=恢复韧性并解除击破态；exit_break_state=仅解击破态；reset_stance=仅重置韧性；reduce_toughness=固定削韧并支持 floor 保底） |
 | `trigger_stance_countdown` | **已实现**（hook 通道——逐目标发射 `on_stance_countdown`，载荷 `source` / `target` / `ignore_mute_break`；只发事件，不直接改韧性或击破状态） |
 | `trigger_break` | **已实现**（hook 通道——复用引擎 `_trigger_break`，逐目标执行完整击破链；已条尽目标跳过以防重入；`damage_type` 可用事件元素表达式；`ignore_mute_break=false` 时尊重目标 MuteBreak 行为旗标） |
+| `remove_shield` | **已实现**（hook 通道——清空目标全部护盾，`target` 选择器，`shields.clear()`；RemoveShield 节点收编） |
 | `leave_battle` | **已实现**（hook 通道——非击杀离场/逃跑，`actor_exit` 默认 `reason: "flee"`，不走死亡检查、不发 `on_kill`） |
 | `clear_protected_weakness` | **已实现**（hook 通道——按 `weak_list` 清除 Protected 元素保护，保留承载其他效果的 modifier；全七保护同时解除原全韧性锁件） |
 | `clear_attached_weakness` | **已实现**（hook 通道——按 `weak_list` 从各 modifier 的 `weakness_add` 撤销附加弱点，不动 Protected、Secret 或基底弱点） |

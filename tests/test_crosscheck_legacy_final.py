@@ -386,7 +386,7 @@ def _opt_jade(action: str, *, cond: dict | None = None):
 # 收债人链对方无建模"skill disabled"在案）——当品叠层+充能追击族
 # ===========================================================================
 
-class TestJadeDuipai:
+class TestJadeCrosscheck:
     """翡翠 E0：普攻（当品 1/50 层档）/充能追击 1.2/终结技+强化追击 2.0 三方
     全等（行迹前置已填收官）/收债人附加伤害链对方无落点（我方段 vs 手算）."""
 
@@ -552,7 +552,7 @@ def _fire_ult_yunli(eng):
 # FUA 三形态折叠：天赋反击/Cull 6.52/Slash 2.2）——敌方驱动反击+Parry 族
 # ===========================================================================
 
-class TestYunliDuipai:
+class TestYunliCrosscheck:
     """云璃 E0：普攻/战技主段三方全等（B-TR④ 收官）/敌方驱动天赋反击（R-CL1
     先例：敌 actions[0] 必攻+solo 唯一目标）/Parry-Cull 段数差在案总和全等/
     兜底 Slash/真式时序钉."""
@@ -703,7 +703,7 @@ def _opt_jiaoqiu(action: str, *, cond: dict | None = None, ehr: float = JQ_EHR):
 # 行动注册+dynamic EHR→ATK conversion）——烬煨层数易伤+灼烧 DoT 族
 # ===========================================================================
 
-class TestJiaoqiuDuipai:
+class TestJiaoqiuCrosscheck:
     """椒丘 E0：普攻/战技主段+烬煨层数逐档三方全等（B-TR④ 收官）/终结技结界
     scoped 易伤/灼烧跳伤 R-JQ1 收官（2026-09-22 双通道合并）/EHR 转攻 R-JQ2."""
 
@@ -859,7 +859,7 @@ def _opt_feixiao(action: str, *, cond: dict | None = None):
 # 行动注册+initialize 翻击破档+Formshift CD 0.36 FUA 域常驻）——飞黄+FUA 链族
 # ===========================================================================
 
-class TestFeixiaoDuipai:
+class TestFeixiaoCrosscheck:
     """飞霄 E0：普攻三方全等（B-TR④ 收官）/战技+FUA 双段链（自增伤/Boltcatch
     时序钉）/天赋 FUA 队友驱动/终结技折叠段+击破分支——Formshift CD R-FX1
     贯穿 FUA/终结技段."""
@@ -1041,7 +1041,7 @@ def _opt_lingsha(action: str, *, cond: dict | None = None):
 # ATK/OHB 双 conversion SelfAndPet）——浮元召唤+BE 转换治疗族
 # ===========================================================================
 
-class TestLingshaDuipai:
+class TestLingshaCrosscheck:
     """灵砂 E0：普攻/战技/终结技直伤三段三方全等（B-TR④ 收官——BE 转化后
     ATK 810.383805 双方同值）/战技·终结技治疗（灵砂源吃 OHB 双方同值）/
     浮元 FUA 折叠段总和全等/浮元治疗 R-LS1（已收官 2026-09-21 裁决：
@@ -1220,7 +1220,7 @@ def _sb_amounts(log, *, source="1321"):
 # 超击破+FUA 弹射族
 # ===========================================================================
 
-class TestDahliaDuipai:
+class TestDahliaCrosscheck:
     """大丽花 E0：普攻/战技/终结技直伤三方全等（行迹平铺前置收官）/WILT 减防
     自吃/FUA 弹射折叠段总和全等/击破链超击破（结界效率 ×1.5 双方同值）——
     FUA 转化 R-DH1/终结技削韧 R-DH2."""

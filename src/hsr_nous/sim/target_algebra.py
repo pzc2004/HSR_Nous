@@ -25,6 +25,7 @@ import types
 from typing import Any, Dict, List, Optional
 
 from hsr_nous.sim.pipeline import MODE_ROLL
+from hsr_nous.sim_schema.actor import TARGET_POOL_EXCLUDE_FLAGS
 
 #: 代数 dict 合法键（编译期闸与文档单一事实源）
 TARGET_ALGEBRA_KEYS = frozenset({
@@ -38,7 +39,19 @@ TARGET_ALGEBRA_MODES = frozenset({"deterministic", "random", "shuffle", "taunt_o
 UNIQUE_TARGET_PREFIX = "unique:"
 
 
-def unique_target_id(engine: Any, name: Any) -> str:
+def unique_target_id(engine: Any, name: Any, holder: Any = None) -> str:
+    """unique 名 → actor_id：持有者私有绑定优先，全局 $level 回落。
+
+    actor 私有动态目标绑定（05_effects.md §actor 私有动态目标绑定）写持有者自己的
+    _enemy_policy_state[owner].dynamic_targets；全局 unique_name 绑定写 $level。
+    旧只读 $level → 私有绑定只写不读（静默空转）。holder=读取方持有者，先读其私有表，
+    未命中回落 $level（unique_name / battle_event 全局绑定口径不变）。
+    """
+    if holder is not None:
+        rt = engine._enemy_policy_state.get(holder.actor.actor_id) or {}
+        value = (rt.get("dynamic_targets") or {}).get(str(name))
+        if value:
+            return str(value)
     runtime = engine._enemy_policy_state.get("$level") or {}
     return str((runtime.get("dynamic_targets") or {}).get(str(name)) or "")
 
@@ -51,8 +64,8 @@ def battle_event_actor(engine: Any, actor_id: Any) -> Any:
     return None
 
 
-def unique_target_actor(engine: Any, name: Any) -> Any:
-    actor_id = unique_target_id(engine, name)
+def unique_target_actor(engine: Any, name: Any, holder: Any = None) -> Any:
+    actor_id = unique_target_id(engine, name, holder)
     return engine.state.actors.get(actor_id) or battle_event_actor(engine, actor_id)
 
 
@@ -126,9 +139,25 @@ def resolve_pool(spec: Any, *, engine: Any, st: Any, payload: Dict[str, Any],
                                 include_dead=include_dead,
                                 include_unselectable=include_unselectable)
     if include_dead and spec in {"allies", "enemies", "all"}:
+        # include_dead 仅放松存活闸（22_syntax §include_dead：保留死亡实体，普通攻击/增益
+        # 不得借此绕开存活闸）——banished/系统排除旗/可选性过滤仍生效，与常规池同口径。
+        # 旧直返 state.actors.values() 只按敌我过滤，绕过 banished/排除旗/targetable。
         want_enemy = spec != "allies"
-        return [state for state in engine.state.actors.values()
-                if spec == "all" or engine._is_enemy(state.actor) == want_enemy]
+        result = []
+        for state in engine.state.actors.values():
+            is_enemy = engine._is_enemy(state.actor)
+            if spec != "all" and is_enemy != want_enemy:
+                continue
+            if state.banished:
+                continue
+            if not is_enemy and (state.actor.system_flags & TARGET_POOL_EXCLUDE_FLAGS):
+                continue
+            if not include_unselectable:
+                flag = "enemy_targetable" if is_enemy else "ally_targetable"
+                if not state.actor.summon_flags.get(flag, True):
+                    continue
+            result.append(state)
+        return result
     if spec == "enemy_targets":
         return [s for s in engine._allies_alive()
                 if include_unselectable or s.actor.summon_flags.get("enemy_targetable", True)]
@@ -145,11 +174,13 @@ def resolve_pool(spec: Any, *, engine: Any, st: Any, payload: Dict[str, Any],
                 + ([s for s in engine._enemies_alive() if not s.banished]
                    if include_unselectable else engine._hostile_target_pool(st.actor)))
     if isinstance(spec, str) and spec.startswith(UNIQUE_TARGET_PREFIX):
-        target = unique_target_actor(engine, spec[len(UNIQUE_TARGET_PREFIX):])
+        target = unique_target_actor(engine, spec[len(UNIQUE_TARGET_PREFIX):], st)
         return [target] if target is not None else []
     if isinstance(spec, str) and spec.startswith("$event."):
         if spec in ("$event.targets", "$event.hit_targets"):
-            return [s for s in (engine.state.actors.get(str(i))
+            # battle_event 实体不进 state.actors，须回落 battle_event_actor（与其他
+            # $event 字段分支同口径）——旧只查 state.actors 丢 $battle_event:* 目标
+            return [s for s in (engine.state.actors.get(str(i)) or battle_event_actor(engine, i)
                                 for i in payload.get(spec.split(".", 1)[1]) or [])
                     if s is not None and (include_dead or s.alive)]
         aid = payload.get(spec.split(".", 1)[1])
@@ -169,8 +200,13 @@ def eval_algebra(
     expr: Any,
     event_ns: Any = None,
     self_ns: Any = None,
+    allow_sample: bool = True,
 ) -> List[Any]:
     """代数求值（池已解析）：where 过滤 → order_by 全序 → index 精确选择 → take 截取 → mode.
+
+    allow_sample=False（计数/条件快照域）：禁 pre_shuffle/random/shuffle/taunt 掷骰，
+    按 expected 确定化口径取前 N——选中**个数**与 roll 全等（采样只决定选谁不决定选几个），
+    但不推进主随机流（condition 纯洁性，§23.15 分域规则）。
 
     expr：表达式编译器（cerces——ExprCompiler 实例，调用方注入与全链共享 _cache 同实例）。
     event_ns：hook 通道 `$event` 注入（与 hook condition 同 payload 命名空间——
@@ -208,7 +244,7 @@ def eval_algebra(
         existing = set(base_ids)
         pool = pool + [s for s in engine.state.actors.values()
                        if s.alive and s.actor.summoner_id in base_ids and s.actor.actor_id not in existing]
-    if spec.get("pre_shuffle") and engine.pipeline.mode == MODE_ROLL and engine.pipeline.rng is not None:
+    if allow_sample and spec.get("pre_shuffle") and engine.pipeline.mode == MODE_ROLL and engine.pipeline.rng is not None:
         pool = list(engine.pipeline.rng.sample(pool, len(pool)))
     order_src = spec.get("order_by")
     if order_src:
@@ -247,8 +283,18 @@ def eval_algebra(
     n = len(pool) if take == "all" else max(0, min(int(take), len(pool)))
     mode = spec.get("mode", "deterministic")
     if mode in {"taunt_or_random", "taunt_or_aggro"}:
-        if n != 1:
+        # 判声明的 take 而非裁剪后的 n：take:1 + 空池应返回空，不是误炸（F06）
+        if take != 1:
             raise ValueError(f"{mode} 仅支持 take: 1，得到 {take!r}")
+        if not pool:
+            return []
+        if not allow_sample:
+            # 计数域不掷骰，但须过 _pick_ally_target 的 custom_unselectable 来源门——
+            # 否则唯一候选被来源限制滤掉时 count 报 1、effect 选 0（count 与 effect 分叉）
+            owner = getattr(self_ns, "_st", None)
+            eligible = ([s for s in pool if engine._custom_targetable(owner, s)]
+                        if owner is not None else pool)
+            return eligible[:1]
         owner = getattr(self_ns, "_st", None)
         if owner is None:
             raise ValueError(f"{mode} 需要 hook 持有者作为攻击者语境")
@@ -257,7 +303,7 @@ def eval_algebra(
         return [picked] if picked is not None else []
     if mode in {"random", "shuffle"}:
         rng = engine.pipeline.rng
-        if engine.pipeline.mode == MODE_ROLL and rng is not None:
+        if allow_sample and engine.pipeline.mode == MODE_ROLL and rng is not None:
             if mode == "shuffle" or n < len(pool):
                 return list(rng.sample(pool, n))
             return list(pool)

@@ -1332,7 +1332,8 @@ def test_with_servant_remove_unselectable_suffix_order():
     for actor_id in ("selectable", "blocked"):
         eng.state.actors[actor_id].actor.summoner_id = "owner"
         eng.state.actors[actor_id].actor.actor_type = "summon"
-    blocked.summon_flags["enemy_targetable"] = False
+    # 布场 deepcopy 后引擎持私有副本，须改引擎内 actor 而非原始模板（与上两行同源）
+    eng.state.actors["blocked"].actor.summon_flags["enemy_targetable"] = False
     for actor_id in ("owner", "selectable", "blocked"):
         eng._apply_modifier(eng.state.actors[actor_id], Modifier(
             modifier_id="mark", name="mark", modifier_type="debuff"))
@@ -18611,3 +18612,15 @@ def test_real_part_entity_zero_compiles():
         assert not any(issue["node_type"] == "RPG.GameCore.ByCompareMonsterPhase"
                        and "PartEntity0" in issue["reason"]
                        for issue in out["unsupported"]), (enemy_id, out["unsupported"])
+
+
+def test_param_entity_retarget_copy_f14():
+    """F14：ParamEntity 交出 retarget 副本，调用方就地写不污染共享 ctx.retarget."""
+    from hsr_nous.adapters.enemy_ability import AbilityCompiler, _Context
+    comp = AbilityCompiler("fake", [], {})
+    ctx = _Context(mode="action", skill={}, retarget={"pool": "allies"})
+    spec = comp._hook_target("ParamEntity", ctx)
+    assert spec == {"pool": "allies"}
+    spec["where"] = "actor_alive($it)"
+    spec["include_dead"] = False
+    assert ctx.retarget == {"pool": "allies"}, "调用方就地写污染了共享 ctx.retarget"

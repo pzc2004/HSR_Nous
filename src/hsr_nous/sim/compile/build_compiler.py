@@ -1694,14 +1694,20 @@ class BuildCompiler:
         # 容器类型闸（编译期抓形状错，反馈须能被标注自愈环消费——漏到运行期就是
         # TypeError/AttributeError 谜语：1207 grants_immune:true、1504 stat_effects:list 病例）
         for k in ("stat_effects", "scaling_effects", "override_effects", "override_exprs",
-                  "shield", "dynamic_values"):
+                  "shield", "dynamic_values", "custom_unselectable"):
             v = spec.get(k)
             if v is not None and not isinstance(v, dict):
                 raise ValueError(f"{where} 的 {k} 须为 mapping，实得 {type(v).__name__}")
-        for k in ("weakness_add", "weakness_override", "secret_weakness", "protected_weakness", "grants_immune"):
+        for k in ("weakness_add", "weakness_override", "secret_weakness", "protected_weakness",
+                  "grants_immune", "behavior_flags", "locked_action_types"):
             v = spec.get(k)
             if v is not None and not isinstance(v, (list, tuple)):
                 raise ValueError(f"{where} 的 {k} 须为 list，实得 {type(v).__name__}")
+        # F08：custom_unselectable 值须 list（字符串值会被逐字符拆成阵营字母，静默失效）
+        for key, teams in (spec.get("custom_unselectable") or {}).items():
+            if not isinstance(teams, (list, tuple)):
+                raise ValueError(
+                    f"{where} 的 custom_unselectable[{key!r}] 须为 list，实得 {type(teams).__name__}")
         _check_weakness(spec.get("weakness_add"), where=f"{where} weakness_add")
         _check_weakness(spec.get("weakness_override"), where=f"{where} weakness_override")
         _check_weakness(spec.get("secret_weakness"), where=f"{where} secret_weakness")

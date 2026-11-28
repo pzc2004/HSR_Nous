@@ -1,6 +1,6 @@
 """文档 lint：把 sim_schema/docs 全部章节当代码做机械全量检查（T4 工具箱）.
 
-17 闸（全量、机械、无语义判断；闸 9 拆两个测试函数，共 18 个测试）：
+多闸（全量、机械、无语义判断；每闸一个或多个测试函数，清单见下）：
 1. **表达式闸**：文档中所有表达式字符串必须过 `ast` 白名单解析
 2. **effect_type 闸**：用法必须命中声明清单（05 + 17/19/23 章）
 3. **触发器闸**：trigger / hook 事件名必须命中 §4.8 + §23.4 清单
@@ -200,6 +200,25 @@ def test_effect_type_usage_in_inventory():
                 if t not in inventory:
                     bad.append(f"{md.name}: effect_type {t!r} 未在声明清单中")
     assert not bad, "\n".join(sorted(set(bad)))
+
+
+def test_effect_types_mirror_implementation():
+    """G4 实现↔登记派生闸：ENGINE_EFFECT_TYPES == hooks.py 分派分支集（双向）。
+
+    effect_types.py 头注「与 _run_hook_effect 分支一一对应」是可机械派生的断言，
+    不该只靠口头约定。实现了未登记→编译器拒（F15 remove_shield/trigger_break
+    四件套漏件，已复发）；登记了无实现→静默空转。集合从源现算，零维护。
+    """
+    from hsr_nous.sim_schema.effect_types import ENGINE_EFFECT_TYPES
+    src = (ROOT / "src" / "hsr_nous" / "sim" / "hooks.py").read_text(encoding="utf-8")
+    # 分派表优雅化后：实现集 = _h_<type> 方法名（getattr 分派，见 _run_hook_effect）
+    impl = set(re.findall(r'def _h_([a-z_]+)\(', src))
+    # 分派前置处理（once_per_battle 是 latch，在 inner 提前消费）
+    impl |= set(re.findall(r'eff\.get\("effect_type"\) == "([a-z_]+)"', src))
+    assert not (impl - ENGINE_EFFECT_TYPES), (
+        f"实现了但未登记（编译器会拒）: {sorted(impl - ENGINE_EFFECT_TYPES)}")
+    assert not (ENGINE_EFFECT_TYPES - impl), (
+        f"登记了但无实现（静默空转）: {sorted(ENGINE_EFFECT_TYPES - impl)}")
 
 
 def _trigger_inventory():

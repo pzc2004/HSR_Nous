@@ -640,7 +640,7 @@ def _opt_asta(action: str, *, cond: dict | None = None):
 # L2 娜塔莎 1105（对方 1100/Natasha.ts 全实现）——basic-only 治疗族
 # ===========================================================================
 
-class TestNatashaDuipai:
+class TestNatashaCrosscheck:
     """娜塔莎 E0：面板回显/普攻 1.0——行迹节点全为 HP/DEF/RES/heal 不伤攻击面板，
     无注入双方全等."""
 
@@ -673,7 +673,7 @@ class TestNatashaDuipai:
 # L2 白露 1211（对方 1200/Bailu.ts 全实现）——basic-only 治疗族
 # ===========================================================================
 
-class TestBailuDuipai:
+class TestBailuCrosscheck:
     """白露 E0：面板回显（对方 A2 折叠 hp×1.1 在案）/普攻 1.0."""
 
     def test_panel_echo(self, optimizer_driver):
@@ -706,7 +706,7 @@ class TestBailuDuipai:
 # L2 佩拉 1106（对方 1100/Pela.ts 全实现）——驱散+减防 debuff 族
 # ===========================================================================
 
-class TestPelaDuipai:
+class TestPelaCrosscheck:
     """佩拉 E0：普攻/战技三方全等（R-TR1 收官——行迹回填 fixture）/终结技 Exposed
     减防+Bash 真伤压缩链/Wipe Out 攻击窗."""
 
@@ -802,7 +802,7 @@ class TestPelaDuipai:
 # L2 杰帕德 1104（对方 1100/Gepard.ts 全实现）——Grit 防转攻族
 # ===========================================================================
 
-class TestGepardDuipai:
+class TestGepardCrosscheck:
     """杰帕德 E0：Grit 防转攻链（我方 on_turn_start 钩 vs 对方 dynamic conversion 常开）
     /普攻/战技三方全等（R-TR1 收官——def 回填经 Grit 放大进 ATK）."""
 
@@ -854,7 +854,7 @@ class TestGepardDuipai:
 # L2 希露瓦 1103（对方 1100/Serval.ts 全实现）——触电+天赋附加族
 # ===========================================================================
 
-class TestServalDuipai:
+class TestServalCrosscheck:
     """希露瓦 E0：普攻三方全等（R-TR1 收官）/战技上触电+天赋附加段逐段比等/
     终结技延长链/触电跳伤 R-SV1 收官（2026-09-22 双通道合并转三方全等）."""
 
@@ -939,7 +939,7 @@ class TestServalDuipai:
 # L2 阿兰 1008（对方 1000/Arlan.ts 全实现）——失 HP 增伤族
 # ===========================================================================
 
-class TestArlanDuipai:
+class TestArlanCrosscheck:
     """阿兰 E0：满血普攻/战技/终结技三方全等（R-TR1 收官）/天赋失血增伤 R-AR1 读法差."""
 
     def test_basic(self, optimizer_driver):
@@ -1009,7 +1009,7 @@ class TestArlanDuipai:
 # L2 艾丝妲 1009（对方 1000/Asta.ts 全实现）——弹射+蓄能叠层族
 # ===========================================================================
 
-class TestAstaDuipai:
+class TestAstaCrosscheck:
     """艾丝妲 E0：普攻 0 层档三方全等（R-TR1 收官）/战技弹射 5 段 R-AS1 段内叠层差/
     静态 5 层普攻比等/灼烧跳伤 R-AS2 收官（2026-09-22 双通道合并转三方全等）."""
 
@@ -1173,7 +1173,7 @@ def _opt_bronya(action: str, *, cond: dict | None = None):
 # L2 虎克 1109（对方 1100/Hook.ts 全实现）——强化战技+灼烧天赋族
 # ===========================================================================
 
-class TestHookDuipai:
+class TestHookCrosscheck:
     """虎克 E0：普攻三方全等（R-TR1 收官）/战技灼烧+天赋附加段逐段比等/终结技→
     强化战技链/灼烧跳伤 R-HK1 收官（2026-09-22 双通道合并转三方全等）."""
 
@@ -1269,7 +1269,7 @@ class TestHookDuipai:
 # L2 布洛妮娅 1101（对方 1100/Bronya.ts 全实现）——增益辅助族（伤害仅普攻）
 # ===========================================================================
 
-class TestBronyaDuipai:
+class TestBronyaCrosscheck:
     """布洛妮娅 E0：普攻 R-TR1 收官+R-BR1 单因子留存/终结技增益链（暴伤换算双方同值）."""
 
     def test_basic_r_tr1_closeout(self, optimizer_driver):
@@ -1448,7 +1448,7 @@ def _opt_silverwolf(action: str, *, cond: dict | None = None):
 # SP 消歧在案）
 # ===========================================================================
 
-class TestHimekoDuipai:
+class TestHimekoCrosscheck:
     """姬子 E0：普攻三方全等（R-TR1 收官）/战技/终结技 AoE/满层天赋追击 1.4/
     星火 DoT R-HM1."""
 
@@ -1520,7 +1520,7 @@ class TestHimekoDuipai:
 # L2 瓦尔特 1004（对方 1000/WeltB1.ts 全实现——B1 加强版套件，我方 fixture 同版）
 # ===========================================================================
 
-class TestWeltDuipai:
+class TestWeltCrosscheck:
     """瓦尔特 E0：普攻+审判段三方全等（R-TR1 收官）/战技弹射 5 段+审判段/终结技
     失重链/天赋附加段 R-WT2 收官（段数口径在案）/Retribution R-WT1/EHR 转换 R-WT3."""
 
@@ -1655,7 +1655,7 @@ class TestWeltDuipai:
 # 同版单轨 11006xx）
 # ===========================================================================
 
-class TestSilverWolfDuipai:
+class TestSilverWolfCrosscheck:
     """银狼 E0：普攻/战技三方全等（R-TR1+R-SW3 双收官）/终结技 AoE 减防链/抗性削
     R-SW1/天赋减防缺陷 R-SW2."""
 
@@ -1781,7 +1781,7 @@ def _opt_sampo(action: str, *, cond: dict | None = None):
 # L2 桑博 1108（对方 1100/Sampo.ts 全实现）——弹射+风化 DoT 族
 # ===========================================================================
 
-class TestSampoDuipai:
+class TestSampoCrosscheck:
     """桑博 E0：普攻三方全等（R-TR1 收官）/战技弹射 5 段/终结技 AoE/风化 tick
     R-SA1+R-SA2 收官（2026-09-22 双通道合并转三方全等）."""
 
@@ -1893,7 +1893,7 @@ def _opt_luka(action: str, *, cond: dict | None = None):
 # L2 卢卡 1111（对方 1100/Luka.ts 全实现）——战意循环+裂伤引爆族
 # ===========================================================================
 
-class TestLukaDuipai:
+class TestLukaCrosscheck:
     """卢卡 E0：普攻三方全等（R-TR1 收官）/战技/裂伤 tick 三方全等（R-LK2 已收官）/
     终结技易伤 R-LK3 时序差/强化普攻 2.0 聚合比等+引爆段 R-LK1."""
 
