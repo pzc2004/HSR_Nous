@@ -8,6 +8,7 @@ import yaml
 from hsr_nous.adapters.template_generator import generate_stage_template, write_stage_template
 from hsr_nous.sim.compile.build_compiler import DEFAULT_TEMPLATE_ROOTS
 from hsr_nous.sim.compile.stage_compiler import StageCompiler
+from hsr_nous.sim_schema.encounter import TerminationConfig
 
 
 def test_hakushin_generate_write_and_compile_with_overrides(tmp_path):
@@ -26,7 +27,11 @@ def test_hakushin_generate_write_and_compile_with_overrides(tmp_path):
         "enemy_level_overrides": {enemy_id: 95},
     }, template_roots=[str(tmp_path), *DEFAULT_TEMPLATE_ROOTS])
     assert compiled.stage_id == "custom_stage"
-    assert compiled.termination_mode == "fixed_av" and compiled.max_action_value == 450
+    # 生成的 hakushin 关卡模板不带 termination（生成器未取 floor.countdown 轮次预算，
+    # 待补——见 BACKLOG），故走编译缺省。断言缺省 = 单一来源 TerminationConfig，
+    # 不硬编具体值（缺省本身是可自由选择的便利值，不是正确性关键）。
+    assert compiled.termination_mode == "fixed_av" and \
+        compiled.max_action_value == float(TerminationConfig.max_action_value)
     assert compiled.cycle.reset_on_wave is True
     assert {index: len(wave) for index, wave in compiled.waves.items()} == {1: 3, 2: 2}
     overridden = compiled.waves[1][0]
