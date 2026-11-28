@@ -308,3 +308,21 @@ class TestShieldCleanupMirrorF10:
         eng._absorb_with_shields(st, 600.0, "e")
         assert not st.shields
         assert "M" not in st.modifiers, "破盾摘载体，不留孤儿载体（has_modifier 仍 1 无盾）"
+
+
+class TestMultipleInstanceShield:
+    def test_multiple_instance_promote_keeps_shield(self):
+        """multiple 实例逐个到期：主实例到期提升额外实例时，护盾随组存活不删
+        （旧 _remove_instance 无条件按 modifier_id 清盾，剩存实例无盾）。"""
+        eng = _engine()
+        st = eng.state.actors["h"]
+        spec = {"modifier_id": "MS", "name": "MS", "modifier_type": "buff",
+                "stack_mode": "multiple", "shield": {"flat": 300.0}}
+        eng._apply_modifier_spec(st, {**spec, "duration": 3}, st)
+        eng._apply_modifier_spec(st, {**spec, "duration": 5}, st)
+        primary = st.modifiers["MS"]
+        assert primary.instances, "第二次施加成额外实例"
+        assert st.shields, "初始有盾"
+        eng._modifiers._remove_instance(st, primary, "expire")  # 主实例到期 → 提升
+        assert "MS" in st.modifiers, "额外实例已提升为主"
+        assert st.shields, "护盾仍随组存活（旧被误删）"

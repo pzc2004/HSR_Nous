@@ -159,6 +159,27 @@ def test_state_payload_hides_secret_weakness():
     assert list(st.actor.stats.weakness) == ["thunder", "ice"], "实际弱点不变（仅显示层隐藏）"
 
 
+def test_state_payload_uses_effective_weakness_and_max_toughness():
+    """弱点/上限走有效模型（weakness_override / MaxStance override），非裸 stats。"""
+    from hsr_nous.sim.web import WebSession
+    from hsr_nous.sim.state import Modifier
+    sess = WebSession()
+    sess.load(yaml.safe_dump(HERO_YAML, allow_unicode=True),
+              yaml.safe_dump(STAGE_YAML, allow_unicode=True), "expected", None)
+    eng = sess.ctl.engine
+    eng.setup()
+    st = eng.state.actors["enemy1"]  # 基础 weakness ["fire"], max_toughness 60
+    eng._apply_modifier(st, Modifier(
+        modifier_id="wo", name="wo", modifier_type="buff", duration=0,
+        weakness_override=["quantum", "wind"]))
+    eng._apply_modifier(st, Modifier(
+        modifier_id="mt", name="mt", modifier_type="buff", duration=0,
+        override_effects={"max_toughness": 999}))
+    row = sess.state_payload()["actors"]["enemy1"]
+    assert set(row["weakness"]) == {"quantum", "wind"}, "弱点走 effective_weakness（含 override）"
+    assert row["max_toughness"] == 999.0, "上限走有效面板（含 override）"
+
+
 def test_two_phase_action_then_target():
     """两阶段流：action pending → choose index → target pending（3 怪候选）→ choose actor_id。"""
     client = TestClient(create_app())

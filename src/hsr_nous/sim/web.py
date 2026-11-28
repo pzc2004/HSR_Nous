@@ -747,6 +747,18 @@ class WebSession:
         actions = self.ctl.engine.actions_by_actor.get(actor_id, [])
         return actions[0].name if actions else None
 
+    def _display_weakness(self, st: Any) -> List[str]:
+        """弱点显示（保序）：基础序 ∩ 有效弱点 + 新增元素确定性追加 − secret_weakness.
+
+        有效弱点用 pipeline.effective_weakness（含 weakness_override/add，与伤害/削韧
+        同源）；secret 仅显示层隐藏。保基础序让 UI 稳定，新增元素按字典序确定性追加。
+        """
+        eff = self.ctl.engine.pipeline.effective_weakness(st)
+        secret = {w for m in st.all_modifiers() for w in m.secret_weakness}
+        ordered = [w for w in st.actor.stats.weakness if w in eff and w not in secret]
+        ordered += sorted(str(w) for w in eff - set(ordered) - secret)
+        return ordered
+
     def state_payload(self) -> Dict[str, Any]:
         """/api/state：field() + 终局/模式/待决策点/目标记忆，单位卡补 max_hp/能量(含显示名)/韧性/modifier 数。"""
         if self.ctl is None:
@@ -776,11 +788,14 @@ class WebSession:
                 "actor_type": st.actor.actor_type,
                 "banished": st.banished,
                 "toughness": round(st.toughness, 1),
-                "max_toughness": round(st.actor.stats.max_toughness, 1),
-                # 弱点显示排除 secret_weakness（modifier 标记的隐藏弱点——仅显示层，
-                # 实际弱点/削韧规则不变；旧直读 stats.weakness 致隐藏弱点未生效，只写不读）
-                "weakness": [w for w in st.actor.stats.weakness
-                             if not any(w in m.secret_weakness for m in st.all_modifiers())],
+                # 上限走有效面板（含 MaxStance 等 override/stat 加成，与结算同源；旧直读
+                # 裸 stats 致 UI 血条与引擎实际用的上限不符）
+                "max_toughness": round(float(
+                    self.ctl.engine.pipeline.effective_stats(st)["max_toughness"]), 1),
+                # 弱点显示 = effective_weakness（含 weakness_override/weakness_add 全模型，
+                # 与伤害/削韧同源）再减 secret_weakness（仅显示层隐藏）；保基础序（UI 稳定），
+                # 新增元素确定性追加；旧直读 stats.weakness 漏 override/add
+                "weakness": self._display_weakness(st),
                 # 抗性小徽标取数（纯展示；只下发非零项，零抗不刷屏）
                 "resistance": {k: round(float(v), 4)
                                for k, v in st.actor.stats.resistance.items() if v},

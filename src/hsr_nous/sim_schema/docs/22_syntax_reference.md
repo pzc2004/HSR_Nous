@@ -191,7 +191,7 @@ variable_bindings:
 | `current_turn_state(state)` | InsertAbilityActionPhase/InsertUltraSkillExecuting 读取当前执行帧，无执行帧为假；ModifierPhase1Begin 读取非倒计时回合的开始结算窗口，进入行动阶段前复位，供 ByCurrentTurnState 使用 | **已实现**（hook 表达式函数白名单） |
 | `turn_owner_has_action_in_turn()` | 当前回合归属者正在行动，或已完成本回合行动阶段；供 ByTurnOwnerHasActionInTurn 使用 | **已实现**（hook 表达式函数白名单） |
 | `is_top_action_delay_target(target, team="", avatar_only=False)` | 目标是否为指定阵营行动条预览的首位；team=dark/light，缺省不限阵营；avatar_only=true 时跳过非 character（召唤物/忆灵），供 AvatarNextTurnOwnerEntity；只读 scheduler.preview，不推进状态 | **已实现**（hook 表达式函数白名单） |
-| `target_unselectable(target, side="")` | 目标选择通道是否被 summon_flags 禁用；side=dark/light 分别检查 enemy_targetable/ally_targetable，缺省任一侧禁用即真；供 ByIsTargetUnselectable 与 SourceEntity 使用 | **已实现**（hook 表达式函数白名单） |
+| `target_unselectable(target, side="")` | 目标是否不可选：**battle_event 实体天然不可选**（直接真，与 `pool: "unselectable"` 按 actor_type 含它同口径）；否则读 summon_flags——side=dark/light 分别检查 enemy_targetable/ally_targetable，缺省任一侧禁用即真；供 ByIsTargetUnselectable 与 SourceEntity 使用 | **已实现**（hook 表达式函数白名单；2026-11-28 补 battle_event 口径与池一致） |
 | `monster_id_equals(target, raw_id)` | 目标的怪物模板段 ID 是否等于数值 raw_id；raw_id 取整后转字符串，与 monster_id 同归一化，供动态 TargetMonsterID 比较 | **已实现**（hook 表达式函数白名单） |
 | `stance_count_of(target)` | 目标韧性条总数：主条 + 全部声明/机制追加条；供 ByCompareStanceCount 读取 | **已实现**（hook 表达式函数白名单） |
 | `modifier_max_stacks(target, modifier_id)` | 目标持有的 modifier 的 `max_stack`（MaxLayer 读取；查无目标或 modifier 返回 `0.0`） | **已实现**（hook 表达式函数白名单） |

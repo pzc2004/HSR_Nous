@@ -1,7 +1,8 @@
 """hook effect_type 单一事实源：引擎已实现集合 + 编译期校验共用.
 
-引擎 `sim/hooks.py` `HookRuntime._run_hook_effect` 的 if-elif 链是本集合的唯一实现位
-（engine 留同名薄委托）；
+引擎 `sim/hooks.py` `HookRuntime` 的 `_h_<type>` 方法表（`_run_hook_effect` 经
+getattr 分派）是本集合的唯一实现位（engine 留同名薄委托；test_doc_lint 的 G4 闸从
+方法名派生实现集与本表双向核对）；
 编译器（`sim/compile/build_compiler.py`）与引擎同读本文件——模板写未登记的
 effect_type 编译期即炸（不允许静默吞）。文档侧登记见 `docs/05_effects.md` §5.2
 （每个 effect_type 标注 已实现 / 待收编）。

@@ -289,7 +289,12 @@ def eval_algebra(
         if not pool:
             return []
         if not allow_sample:
-            return pool[:1]  # 计数域：taunt 恒选 1，不掷骰（个数与 roll 全等）
+            # 计数域不掷骰，但须过 _pick_ally_target 的 custom_unselectable 来源门——
+            # 否则唯一候选被来源限制滤掉时 count 报 1、effect 选 0（count 与 effect 分叉）
+            owner = getattr(self_ns, "_st", None)
+            eligible = ([s for s in pool if engine._custom_targetable(owner, s)]
+                        if owner is not None else pool)
+            return eligible[:1]
         owner = getattr(self_ns, "_st", None)
         if owner is None:
             raise ValueError(f"{mode} 需要 hook 持有者作为攻击者语境")

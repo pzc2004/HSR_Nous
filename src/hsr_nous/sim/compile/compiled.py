@@ -29,7 +29,6 @@ from types import MappingProxyType
 from typing import Any, Dict, List, Mapping, Optional
 
 from hsr_nous.sim_schema.action import Action
-from hsr_nous.sim_schema.encounter import TerminationConfig
 from hsr_nous.sim_schema.actor import Actor
 from hsr_nous.sim_schema.encounter import Encounter, TerminationConfig
 

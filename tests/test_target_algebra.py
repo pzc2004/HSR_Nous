@@ -269,6 +269,25 @@ class TestHookAlgebraDirect:
         assert events == [], "净零转换（1→2→1）不应发相位变更"
         assert eng._enemy_policy_state["e1"]["current_phase"] == 1
 
+    def test_taunt_count_respects_custom_unselectable(self):
+        """taunt 计数分支须过 _pick_ally_target 的 custom_unselectable 来源门——
+        唯一候选被滤时 count 与 effect 同判 0（旧 allow_sample 分支裸返回 pool[:1] 报 1）。"""
+        eng = _mk_engine()
+        e1 = eng.state.actors["e1"]
+        a1 = eng.state.actors["a1"]
+        a2 = eng.state.actors["a2"]
+        eng._apply_modifier(e1, Modifier(
+            modifier_id="OPP", name="OPP", modifier_type="buff", duration=0))
+        for a in (eng.state.actors["hero"], a1, a2):
+            eng._apply_modifier(a, Modifier(
+                modifier_id="BLK", name="BLK", modifier_type="buff", duration=0,
+                custom_unselectable={"OPP": ["dark"]}))
+        spec = {"pool": "enemy_targets", "take": 1, "mode": "taunt_or_random"}
+        effect = eng._hooks._hook_target_states(spec, e1, {})
+        n = eng._hooks._hook_functions(e1, {})["count_selected"](spec)
+        assert effect == [], "候选全被 custom_unselectable 滤掉 → effect 空"
+        assert n == 0.0, "count 须与 effect 一致（旧报 1）"
+
     def test_take_int_random_targets(self):
         """实例垫底（敌方 "Deals … to 3 random targets"）：take 3 + mode random——
         roll 同 seed 复现；expected 按序取前 N 不掷骰（确定化口径）."""

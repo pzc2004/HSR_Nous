@@ -213,8 +213,13 @@ class ModifierBook:
             self._sync_speed(target)
 
     def _remove_instance(self, target: ActorState, mod: Modifier, reason: str = "expire") -> None:
-        """摘除单个实例（multiple 逐实例到期）；主实例到期且有额外实例时提升首个额外实例."""
+        """摘除单个实例（multiple 逐实例到期）；主实例到期且有额外实例时提升首个额外实例.
+
+        护盾/载体级联仅在该 modifier 组**完全摘除**时执行——组仍有存活实例（promoted
+        或额外实例）时护盾属整组共享，不能随单个到期实例删掉（否则剩存实例无盾）。
+        """
         primary = target.modifiers.get(mod.modifier_id)
+        fully_removed = False
         if primary is mod:
             if mod.instances:
                 promoted = mod.instances.pop(0)
@@ -222,14 +227,17 @@ class ModifierBook:
                 target.modifiers[mod.modifier_id] = promoted
             else:
                 target.modifiers.pop(mod.modifier_id, None)
+                fully_removed = True
         elif primary is not None and mod in primary.instances:
             primary.instances.remove(mod)
         else:
             return
-        gone = [s for s in target.shields
-                if s.modifier_id == mod.modifier_id or s.shield_id == mod.modifier_id]
-        target.shields = [s for s in target.shields
-                          if s.modifier_id != mod.modifier_id and s.shield_id != mod.modifier_id]
+        gone: List[Any] = []
+        if fully_removed:
+            gone = [s for s in target.shields
+                    if s.modifier_id == mod.modifier_id or s.shield_id == mod.modifier_id]
+            target.shields = [s for s in target.shields
+                              if s.modifier_id != mod.modifier_id and s.shield_id != mod.modifier_id]
         payload = {
             "modifier_id": mod.modifier_id, "reason": reason, "target": target.actor.actor_id,
             "source": mod.source_id, "behavior_flags": list(mod.behavior_flags),
